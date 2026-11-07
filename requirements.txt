@@ -6,6 +6,8 @@ requests==2.31.0
 beautifulsoup4==4.12.3
 lxml==5.3.0
 tiktoken==0.13.0
+pypdf==7.0.0
+fonttools==4.68.0
 
 # Install the PyTorch wheel separately for the intended CPU or CUDA runtime.
 sentence-transformers==5.6.0

@@ -35,8 +35,12 @@ class VectorStore:
         mode: str = "local",
         url: str | None = None,
         api_key: str | None = None,
+        collection_name: str = COLLECTION_NAME,
     ):
         """Initialize Qdrant in local persistent mode or cloud mode."""
+        if not collection_name or not isinstance(collection_name, str):
+            raise ValueError("collection_name must be a non-empty string")
+        self.collection_name = collection_name
         self.mode = mode
         if mode == "local":
             Path(path).mkdir(parents=True, exist_ok=True)
@@ -53,21 +57,34 @@ class VectorStore:
 
         raise ValueError("qdrant mode must be 'local' or 'cloud'")
 
+    @property
+    def collection_name(self) -> str:
+        """Return the configured collection while preserving legacy __new__ tests."""
+        return getattr(self, "_collection_name", COLLECTION_NAME)
+
+    @collection_name.setter
+    def collection_name(self, value: str) -> None:
+        self._collection_name = value
+
     def create_collection(self, embedding_dim: int = 768) -> None:
         """Create collection if it doesn't exist.
         If it already exists, skip — idempotent, safe to call multiple times.
         """
         existing = [c.name for c in self.client.get_collections().collections]
-        if COLLECTION_NAME in existing:
-            logger.info("Collection '%s' already exists, skipping.", COLLECTION_NAME)
+        if self.collection_name in existing:
+            logger.info("Collection '%s' already exists, skipping.", self.collection_name)
             self._ensure_payload_indexes()
             return
 
         self.client.create_collection(
-            collection_name=COLLECTION_NAME,
+            collection_name=self.collection_name,
             vectors_config=VectorParams(size=embedding_dim, distance=Distance.COSINE),
         )
-        logger.info("Created collection '%s' (dim=%d, Cosine)", COLLECTION_NAME, embedding_dim)
+        logger.info(
+            "Created collection '%s' (dim=%d, Cosine)",
+            self.collection_name,
+            embedding_dim,
+        )
         self._ensure_payload_indexes()
 
     def upsert_chunks(self, chunks: list[dict]) -> None:
@@ -76,31 +93,30 @@ class VectorStore:
         Uses a deterministic UUID derived from chunk_id, so rerunning indexing
         updates existing points instead of creating duplicates across processes.
         """
-        points = [
-            PointStruct(
-                id=self._chunk_id_to_uuid(c["chunk_id"]),
-                vector=c["embedding"],
-                payload={
-                    "chunk_id": c["chunk_id"],
-                    "ticker": c["ticker"],
-                    "section": c["section"],
-                    "accession_number": c["accession_number"],
-                    "filing_date": c["filing_date"],
-                    "report_date": c["report_date"],
-                    "chunk_index": c["chunk_index"],
-                    "token_count": c["token_count"],
-                    "text": c["text"],
-                    **({"source_url": c["source_url"]} if c.get("source_url") else {}),
-                },
+        points = []
+        for chunk in chunks:
+            if not isinstance(chunk.get("chunk_id"), str) or not chunk["chunk_id"]:
+                raise ValueError("Every chunk must have a non-empty chunk_id")
+            if "embedding" not in chunk:
+                raise ValueError(f"Chunk {chunk['chunk_id']!r} has no embedding")
+            payload = {key: value for key, value in chunk.items() if key != "embedding"}
+            points.append(
+                PointStruct(
+                    id=self._chunk_id_to_uuid(chunk["chunk_id"]),
+                    vector=chunk["embedding"],
+                    payload=payload,
+                )
             )
-            for c in chunks
-        ]
         for start in range(0, len(points), BATCH_SIZE):
             self.client.upsert(
-                collection_name=COLLECTION_NAME,
+                collection_name=self.collection_name,
                 points=points[start:start + BATCH_SIZE],
             )
-        logger.info("Upserted %d points into collection '%s'", len(points), COLLECTION_NAME)
+        logger.info(
+            "Upserted %d points into collection '%s'",
+            len(points),
+            self.collection_name,
+        )
 
     def search(
         self,
@@ -114,7 +130,7 @@ class VectorStore:
         """
         query_filter = self._build_filter(ticker=ticker, section=section)
         response = self.client.query_points(
-            collection_name=COLLECTION_NAME,
+            collection_name=self.collection_name,
             query=query_vector,
             limit=top_k,
             query_filter=query_filter,
@@ -124,7 +140,7 @@ class VectorStore:
         return [{"score": r.score, **r.payload} for r in results]
 
     def get_collection_info(self) -> dict:
-        info = self.client.get_collection(COLLECTION_NAME)
+        info = self.client.get_collection(self.collection_name)
         return {
             "vectors_count": getattr(info, "vectors_count", info.points_count),
             "indexed_vectors_count": getattr(info, "indexed_vectors_count", None),
@@ -138,7 +154,7 @@ class VectorStore:
         offset = None
         while True:
             points, next_offset = self.client.scroll(
-                collection_name=COLLECTION_NAME,
+                collection_name=self.collection_name,
                 limit=page_size,
                 offset=offset,
                 with_payload=True,
@@ -168,13 +184,13 @@ class VectorStore:
 
     def _ensure_payload_indexes(self) -> None:
         """Create keyword payload indexes needed for filtered search in Qdrant Cloud."""
-        info = self.client.get_collection(COLLECTION_NAME)
+        info = self.client.get_collection(self.collection_name)
         existing_schema = getattr(info, "payload_schema", None) or {}
         for field_name in PAYLOAD_INDEX_FIELDS:
             if field_name in existing_schema:
                 continue
             self.client.create_payload_index(
-                collection_name=COLLECTION_NAME,
+                collection_name=self.collection_name,
                 field_name=field_name,
                 field_schema=PayloadSchemaType.KEYWORD,
             )

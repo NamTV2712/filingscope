@@ -33,16 +33,33 @@ class RetrievedChunk:
     chunk_index: int | None = None
     source_url: str | None = None
     score_kind: str = "retrieval"
+    company: str | None = None
+    doc_name: str | None = None
+    page_number: int | None = None
+    dataset_id: str | None = None
 
     @classmethod
-    def from_raw(cls, raw: dict, score: float | None = None) -> "RetrievedChunk":
+    def from_raw(
+        cls,
+        raw: dict,
+        score: float | None = None,
+        score_kind: str | None = None,
+    ) -> "RetrievedChunk":
         """Create a RetrievedChunk from a raw dict, using provided score or raw['score']."""
-        section_label = raw["section"].replace("_", " ").title()
-        citation = (
-            f"{raw['ticker']} 10-K (filed {raw['filing_date']}), "
-            f"Section: {section_label}"
-        )
-        ticker = raw["ticker"]
+        section = str(raw.get("section") or "document")
+        section_label = section.replace("_", " ").title()
+        doc_name = raw.get("doc_name")
+        page_number = raw.get("page_number")
+        company = raw.get("company")
+        ticker = raw.get("ticker") or company or doc_name or "UNKNOWN"
+        filing_date = raw.get("filing_date") or raw.get("report_date") or ""
+        if doc_name is not None and isinstance(page_number, int):
+            citation = f"{doc_name}, PDF page {page_number + 1}"
+        else:
+            citation = (
+                f"{ticker} 10-K (filed {filing_date}), "
+                f"Section: {section_label}"
+            )
         accession_number = raw.get("accession_number")
         document_id = raw.get("document_id")
         if document_id is None and ticker and accession_number:
@@ -50,9 +67,9 @@ class RetrievedChunk:
         return cls(
             chunk_id=raw["chunk_id"],
             ticker=ticker,
-            section=raw["section"],
-            filing_date=raw["filing_date"],
-            score=float(score if score is not None else raw["score"]),
+            section=section,
+            filing_date=filing_date,
+            score=float(score if score is not None else raw.get("score", 0.0)),
             text=raw["text"],
             citation=citation,
             document_id=document_id,
@@ -60,7 +77,11 @@ class RetrievedChunk:
             report_date=raw.get("report_date"),
             chunk_index=raw.get("chunk_index"),
             source_url=raw.get("source_url") or raw.get("filing_url"),
-            score_kind="cross_encoder" if score is not None else "retrieval",
+            score_kind=score_kind or ("cross_encoder" if score is not None else "retrieval"),
+            company=company,
+            doc_name=doc_name,
+            page_number=page_number,
+            dataset_id=raw.get("dataset_id"),
         )
 
 

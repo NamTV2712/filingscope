@@ -170,8 +170,8 @@ class HybridRetriever:
         self._chunks_by_section: dict[str, list[dict]] = {}
         self._chunks_by_ticker_section: dict[tuple[str, str], list[dict]] = {}
         for c in all_chunks:
-            ticker = c["ticker"]
-            section = c["section"]
+            ticker = c.get("ticker") or c.get("company") or ""
+            section = c.get("section") or "document"
             if ticker not in self._chunks_by_ticker:
                 self._chunks_by_ticker[ticker] = []
             self._chunks_by_ticker[ticker].append(c)
@@ -253,6 +253,8 @@ class HybridRetriever:
         section: str | None = None,
         candidate_pool: int = 10,
         use_lexical_ladder: bool = True,
+        use_reranker: bool = True,
+        use_structured_lookup: bool = True,
     ) -> list[RetrievedChunk]:
         """Backward-compatible wrapper that embeds the query before retrieval."""
         if not query.strip():
@@ -267,9 +269,15 @@ class HybridRetriever:
             section=section,
             candidate_pool=candidate_pool,
             use_lexical_ladder=use_lexical_ladder,
+            use_reranker=use_reranker,
+            use_structured_lookup=use_structured_lookup,
         )
 
-        return self._format_results(query, reranked)
+        return self._format_results(
+            query,
+            reranked,
+            score_kind="cross_encoder" if use_reranker else "rrf",
+        )
 
     def retrieve_with_embedding(
         self,
@@ -280,6 +288,8 @@ class HybridRetriever:
         section: str | None = None,
         candidate_pool: int = 10,
         use_lexical_ladder: bool = True,
+        use_reranker: bool = True,
+        use_structured_lookup: bool = True,
     ) -> list[RetrievedChunk]:
         """Retrieve using a pre-computed query embedding.
 
@@ -297,9 +307,15 @@ class HybridRetriever:
             section=section,
             candidate_pool=candidate_pool,
             use_lexical_ladder=use_lexical_ladder,
+            use_reranker=use_reranker,
+            use_structured_lookup=use_structured_lookup,
         )
 
-        return self._format_results(query, reranked)
+        return self._format_results(
+            query,
+            reranked,
+            score_kind="cross_encoder" if use_reranker else "rrf",
+        )
 
     def inspect(
         self,
@@ -552,10 +568,12 @@ class HybridRetriever:
         section: str | None = None,
         candidate_pool: int = 10,
         use_lexical_ladder: bool = True,
+        use_reranker: bool = True,
+        use_structured_lookup: bool = True,
     ) -> list[tuple[dict, float]]:
         """Run retrieval with model lock scoped only to cross-encoder inference."""
         structured_match = None
-        if section in (None, "financial_table", "financial_statements"):
+        if use_structured_lookup and section in (None, "financial_table", "financial_statements"):
             structured_match = structured_lookup(query, ticker, self._all_chunks)
 
         # --- Stage 1: BM25 search ---
@@ -574,8 +592,8 @@ class HybridRetriever:
             # Fallback for tests that bypass __init__
             filtered_chunks = [
                 c for c in self._all_chunks
-                if (ticker is None or c["ticker"] == ticker)
-                and (section is None or c["section"] == section)
+                if (ticker is None or (c.get("ticker") or c.get("company")) == ticker)
+                and (section is None or c.get("section", "document") == section)
             ]
         bm25_candidates = sorted(
             filtered_chunks,
@@ -627,20 +645,30 @@ class HybridRetriever:
             if cid in self._chunks_by_id
         ]
 
-        # --- Stage 4: Cross-encoder re-ranking ---
-        pairs = [(query, c["text"]) for c in top_candidates]
-        with self._model_lock:
-            ce_scores = self.cross_encoder.predict(pairs, batch_size=CROSS_ENCODER_BATCH_SIZE)
+        # --- Stage 4: Optional cross-encoder re-ranking ---
+        if use_reranker:
+            pairs = [(query, c["text"]) for c in top_candidates]
+            with self._model_lock:
+                ce_scores = self.cross_encoder.predict(
+                    pairs,
+                    batch_size=CROSS_ENCODER_BATCH_SIZE,
+                )
 
-        reranked = sorted(
-            zip(top_candidates, ce_scores),
-            key=lambda x: x[1],
-            reverse=True
-        )
+            reranked = sorted(
+                zip(top_candidates, ce_scores),
+                key=lambda x: x[1],
+                reverse=True,
+            )
 
-        if reranked and reranked[0][1] > 0:
-            cutoff = reranked[0][1] * CE_RELATIVE_CUTOFF
-            reranked = [(chunk, score) for chunk, score in reranked if score >= cutoff]
+            if reranked and reranked[0][1] > 0:
+                cutoff = reranked[0][1] * CE_RELATIVE_CUTOFF
+                reranked = [(chunk, score) for chunk, score in reranked if score >= cutoff]
+        else:
+            reranked = sorted(
+                ((self._chunks_by_id[chunk_id], score) for chunk_id, score in rrf_scores.items()),
+                key=lambda item: item[1],
+                reverse=True,
+            )
 
         if (
             structured_match is not None
@@ -671,12 +699,18 @@ class HybridRetriever:
         self,
         query: str,
         reranked: list[tuple[dict, float]],
+        score_kind: str = "cross_encoder",
     ) -> list[RetrievedChunk]:
         result = []
-        for chunk, ce_score in reranked:
-            result.append(RetrievedChunk.from_raw(chunk, score=ce_score))
+        for chunk, score in reranked:
+            result.append(
+                RetrievedChunk.from_raw(chunk, score=score, score_kind=score_kind)
+            )
         logger.info(
-            "HybridRetriever: '%s...' -> %d chunks (top CE score: %.4f)",
-            query[:50], len(result), result[0].score if result else 0
+            "HybridRetriever: '%s...' -> %d chunks (top %s score: %.4f)",
+            query[:50],
+            len(result),
+            score_kind,
+            result[0].score if result else 0,
         )
         return result

@@ -16,10 +16,10 @@ Target repository: `D:\Project\filingscope`
 | `scripts/diagnostics/diagnose_all_financial_tables.py` (`find_tables_in_financial_section`) | `src/ingestion/financial_section_locator.py` | `_candidate_start_snippets`, `_find_start_node`, `_resolve_toc_link_start`, `find_tables_in_financial_section` | Moved the reusable locator into the ingestion package; replaced stdout warning with module logging. Did not copy the one-off diagnostic runner or its local filing list. | Beautiful Soup, lxml | `tests/test_table_discovery.py` |
 | `src/ingestion/table_discovery.py` | `src/ingestion/table_discovery.py` | Statement links, same-document interval, root-anchor and companion discovery | Imports the moved library locator instead of a diagnostic script. | Beautiful Soup, table extractor, companion documents | `tests/test_table_discovery.py` |
 | `scripts/add_table_chunks.py` | `scripts/add_table_chunks.py` | `_can_attempt_table_discovery`, idempotent supplemental chunk append | Uses target config. | target config, ingestion modules | `tests/test_table_discovery.py` |
-| `src/retrieval/embedder.py` | `src/retrieval/embedder.py` | `Embedder`, `resolve_torch_device`, Nomic document/query prefixes | Source revision is pinned in target settings and supplied by the embedding script. | PyTorch, Sentence Transformers | `tests/test_embedder_revision.py`, `tests/test_synthetic_retrieval_smoke.py` |
-| `src/retrieval/vector_store.py` | `src/retrieval/vector_store.py` | `VectorStore`, deterministic UUIDs, Qdrant collection/search/filter/payload methods | Local index is rebuilt independently; source data and Qdrant files are excluded. | `qdrant-client` | `tests/test_vector_store.py`, `tests/test_synthetic_retrieval_smoke.py` |
-| `src/retrieval/retriever.py` | `src/retrieval/retriever.py` | `RetrievedChunk`, `Retriever` | None in P0. | Embedder, Qdrant store | Smoke test via `HybridRetriever` |
-| `src/retrieval/hybrid_retriever.py` | `src/retrieval/hybrid_retriever.py` | `HybridRetriever.retrieve`, `retrieve_with_embedding`, `inspect`, BM25, RRF, cross-encoder | Preserved production and inspection paths separately. | rank-bm25, Sentence Transformers, retrieval modules | `tests/test_hybrid_retriever_inspect.py`, `test_hybrid_retriever_concurrency.py`, `test_hybrid_retriever_section_filter.py`, synthetic smoke |
+| `src/retrieval/embedder.py` | `src/retrieval/embedder.py` | `Embedder`, `resolve_torch_device`, Nomic document/query prefixes | Source revision is pinned in target settings and supplied by the embedding script. Added optional progress control for streaming evaluation batches; default behavior is preserved. | PyTorch, Sentence Transformers | `tests/test_embedder_revision.py`, `tests/test_synthetic_retrieval_smoke.py`, `tests/test_financebench_runner.py` |
+| `src/retrieval/vector_store.py` | `src/retrieval/vector_store.py` | `VectorStore`, deterministic UUIDs, Qdrant collection/search/filter/payload methods | Added per-instance collection names and generic metadata payloads so benchmark collections are isolated from SEC data. Default collection remains unchanged; source data and Qdrant files are excluded. | `qdrant-client` | `tests/test_vector_store.py`, `tests/test_synthetic_retrieval_smoke.py` |
+| `src/retrieval/retriever.py` | `src/retrieval/retriever.py` | `RetrievedChunk`, `Retriever` | `RetrievedChunk` supports PDF `doc_name` and zero-based page metadata while formatting human-facing pages one-based; score semantics are explicit. | Embedder, Qdrant store | Smoke test via `HybridRetriever`, `tests/test_financebench_retrieval_adapter.py` |
+| `src/retrieval/hybrid_retriever.py` | `src/retrieval/hybrid_retriever.py` | `HybridRetriever.retrieve`, `retrieve_with_embedding`, `inspect`, BM25, RRF, cross-encoder | Preserved production and inspection paths separately. Added optional company grouping and switches for reranking and structured lookup; defaults preserve the prior production path. | rank-bm25, Sentence Transformers, retrieval modules | `tests/test_hybrid_retriever_inspect.py`, `test_hybrid_retriever_concurrency.py`, `test_hybrid_retriever_section_filter.py`, synthetic smoke, `tests/test_financebench_retrieval_adapter.py` |
 | `src/retrieval/lexical_ladder.py` | `src/retrieval/lexical_ladder.py` | Lexical candidate generation and fingerprinted rules | None in P0. | Python standard library | `tests/test_lexical_ladder.py` |
 | `src/retrieval/query_shaper.py` | `src/retrieval/query_shaper.py` | Deterministic retrieval query shaping and fingerprints | None in P0. | Python standard library | `tests/test_query_shaper.py` |
 | `src/retrieval/structured_lookup.py` | `src/retrieval/structured_lookup.py` | Structured financial match parsing and ranking | None in P0. | Python standard library | `tests/test_structured_lookup.py` |
@@ -37,5 +37,12 @@ Target repository: `D:\Project\filingscope`
 | `LICENSE` | `LICENSE` | MIT license | Carried with reused source modules. | None | N/A |
 
 The target suite is the focused source regression set plus the new synthetic
-retrieval smoke. API, generation, Agent, evaluation-campaign, and frontend tests
-were not copied because their implementations are not part of P0.
+retrieval smoke. P1 adds `src/ingestion/pdf_ingestion.py`, pinned FinanceBench
+acquisition and grouped split handling in `scripts/download_financebench.py`
+and `src/evaluation/financebench_dataset.py`, the retrieval adapter and
+page-level metrics in `src/evaluation/`, and the reproducible runner in
+`scripts/run_financebench_retrieval.py`. The public data, extracted text,
+embeddings, Qdrant index, predictions, and case-level failure lists remain
+ignored local artifacts. P1's unit and full regression test results are
+recorded with the phase report. API, generation, Agent, and frontend are later
+roadmap phases.

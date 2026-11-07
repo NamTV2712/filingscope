@@ -7,10 +7,10 @@ verification, then measures each addition against a reproducible benchmark.
 
 The work is being delivered in phases. **P0 is implemented:** the project has an
 independent SEC ingestion and hybrid retrieval baseline migrated from
-`Enterprise_Document_QA`, with a synthetic Qdrant smoke test. FinanceBench,
-answer generation, the evidence decision layer, adaptive retrieval, claim
-verification, the frontend, and deployment are later phases and are not yet
-implemented.
+`Enterprise_Document_QA`, with a synthetic Qdrant smoke test. **P1 implements
+FinanceBench acquisition and retrieval baselines.** Evidence decision,
+adaptive retrieval, claim verification, the frontend, and deployment are later
+phases.
 
 ## P0 retrieval baseline
 
@@ -91,24 +91,57 @@ python -m scripts.embed_chunks --generation-id <new-generation-id>
 python -m scripts.index_chunks
 ```
 
+## FinanceBench retrieval evaluation
+
+P1 uses the public 150-case FinanceBench sample and the 84 reports referenced
+by its cases. Documents and benchmark files are downloaded locally with pinned
+source revisions and SHA verification. The raw dataset, PDFs, extracted text,
+vectors, and run outputs are git-ignored. Dataset licensing, company-grouped
+splits, evidence alignment, and metric definitions are documented in
+[`docs/DATASET_PROTOCOL.md`](docs/DATASET_PROTOCOL.md) and
+[`docs/EVALUATION_PROTOCOL.md`](docs/EVALUATION_PROTOCOL.md).
+
+After installing requirements, acquire the benchmark and run all four
+retrieval presets:
+
+```powershell
+python -m scripts.download_financebench
+python -m scripts.run_financebench_retrieval
+```
+
+The presets are BM25, dense Qdrant, hybrid reciprocal-rank fusion, and hybrid
+with cross-encoder reranking. They score retrieved document-page evidence; they
+do not evaluate generated answers. Measured results and failure analysis are
+published in [`docs/BENCHMARK_RESULTS.md`](docs/BENCHMARK_RESULTS.md) and
+[`docs/FAILURE_ANALYSIS.md`](docs/FAILURE_ANALYSIS.md) after the full run.
+
+P1's completed baseline found dense retrieval strongest on this sample
+(Recall@10 0.4167; complete evidence-page coverage at 10 of 0.3733). Hybrid RRF
+and hybrid reranking did not beat the dense baseline; the reranker improved
+hybrid MRR@10 but increased latency. See the result and failure reports for
+the full split metrics and limitations.
+
 ## Evaluation roadmap
 
 | Phase | Scope | Status |
 |---|---|---|
 | P0 | Source audit, migration, independent retrieval smoke | Complete |
-| P1 | FinanceBench acquisition, corpus coverage, retrieval baselines | Next |
+| P1 | FinanceBench acquisition, corpus coverage, retrieval baselines | Complete |
 | P2 | Evidence requirements, coverage analysis, answer/retrieve/abstain | Planned |
 | P3 | Bounded adaptive retrieval for explicit evidence gaps | Planned |
 | P4 | Claim, citation, contradiction, and numerical verification | Planned |
 | P5 | Controlled A0–A5 benchmark and failure analysis | Planned |
 | P6 | Research UI, evidence inspector, deployment, and demo | Planned |
 
-No FinanceBench scores or end-to-end answer quality claims are reported until
-those experiments have been run on a verified corpus.
+No answer quality or end-to-end agent performance claims are made by the
+retrieval-only FinanceBench benchmark.
 
 ## Limitations
 
-- Only SEC HTML ingestion is migrated. FinanceBench PDF ingestion is a P1 task.
+- FinanceBench retrieval evaluates the public 150-case sample, not the full
+  10,231-case dataset.
+- pypdf text extraction does not perform OCR; empty pages remain eligible and
+  can reduce retrieval recall.
 - Local SEC documents and Qdrant data are deliberately not included.
 - The synthetic test validates code integration, not real-model quality.
 - Evidence decision, adaptive retrieval, claim verification, API, and frontend

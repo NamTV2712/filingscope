@@ -50,14 +50,19 @@ class Embedder:
         self.dimension = self.model.get_embedding_dimension()
         self.default_document_batch_size = 64 if self.device == "cuda" else 16
 
-    def embed_documents(self, texts: list[str], batch_size: int | None = None) -> list[list[float]]:
+    def embed_documents(
+        self,
+        texts: list[str],
+        batch_size: int | None = None,
+        show_progress_bar: bool = True,
+    ) -> list[list[float]]:
         """Embed chunks for storage in the vector index."""
         batch_size = batch_size or self.default_document_batch_size
         prefixed = [DOCUMENT_PREFIX + text for text in texts]
         embeddings = self.model.encode(
             prefixed,
             batch_size=batch_size,
-            show_progress_bar=True,
+            show_progress_bar=show_progress_bar,
             convert_to_numpy=True,
             normalize_embeddings=self.normalize_embeddings,
         )
