@@ -1,0 +1,16 @@
+python-dotenv==1.0.1
+pydantic==2.10.0
+pydantic-settings==2.4.0
+numpy>=1.26.0
+requests==2.31.0
+beautifulsoup4==4.12.3
+lxml==5.3.0
+tiktoken==0.13.0
+
+# Install the PyTorch wheel separately for the intended CPU or CUDA runtime.
+sentence-transformers==5.6.0
+rank-bm25==0.2.2
+einops==0.8.2
+qdrant-client==1.18.0
+
+pytest==9.0.3

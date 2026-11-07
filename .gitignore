@@ -1,0 +1,37 @@
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+
+# Python environments and generated files
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+build/
+dist/
+
+# Private corpus, vectors, model weights and runtime outputs
+data/
+models/
+.local/
+.cache/
+.cache-huggingface/
+.huggingface/
+*.pt
+*.pth
+*.safetensors
+*.onnx
+*.sqlite3
+*.sqlite3-shm
+*.sqlite3-wal
+*.log
+
+# Frontend generated files
+node_modules/
+frontend/node_modules/
+frontend/dist/
