@@ -5,11 +5,11 @@ questions with traceable evidence. It extends a working SEC filing retrieval
 system with explicit evidence sufficiency, targeted retrieval, and claim-level
 verification, then measures each addition against a reproducible benchmark.
 
-The work is being delivered in phases. **P0–P2 are implemented:** the project
+The work is being delivered in phases. **P0–P3 are implemented:** the project
 has an independent SEC ingestion and hybrid retrieval baseline, a reproducible
-FinanceBench retrieval benchmark, and a deterministic evidence sufficiency
-decision layer. Adaptive retrieval, claim verification, the research UI, and
-deployment are later phases.
+FinanceBench retrieval benchmark, a deterministic evidence sufficiency
+decision layer, and bounded adaptive retrieval. Claim verification, the
+research UI, and deployment are later phases.
 
 ## P0 retrieval baseline
 
@@ -55,6 +55,20 @@ action and reason-code accuracy were both 100%; this controlled result is not a
 general accuracy estimate. See
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and
 [`docs/DECISION_EVALUATION.md`](docs/DECISION_EVALUATION.md).
+
+## Adaptive retrieval (P3)
+
+When P2 returns `RETRIEVE_MORE`, the bounded controller builds a targeted query
+from the missing company, metric, and reporting period, calls the migrated
+`HybridRetriever`, merges unique evidence with the initial chunks, and
+reassesses. Query fingerprints, round/query limits, an evidence-token budget,
+an elapsed-time budget, and coverage-progress checks stop repeated or
+unproductive searches. On nine fixed synthetic scenarios, action and stop
+reason accuracy were both 100%; both eligible multi-hop completion cases
+resolved (2/2). These results are controlled checks, not a real-corpus success
+estimate. The synchronous retriever's in-progress call cannot be interrupted
+by the elapsed-time budget. See
+[`docs/ADAPTIVE_RETRIEVAL_EVALUATION.md`](docs/ADAPTIVE_RETRIEVAL_EVALUATION.md).
 
 ## Local setup
 
@@ -139,7 +153,7 @@ the full split metrics and limitations.
 | P0 | Source audit, migration, independent retrieval smoke | Complete |
 | P1 | FinanceBench acquisition, corpus coverage, retrieval baselines | Complete |
 | P2 | Evidence requirements, coverage analysis, answer/retrieve/abstain | Complete |
-| P3 | Bounded adaptive retrieval for explicit evidence gaps | Planned |
+| P3 | Bounded adaptive retrieval for explicit evidence gaps | Complete |
 | P4 | Claim, citation, contradiction, and numerical verification | Planned |
 | P5 | Controlled A0–A5 benchmark and failure analysis | Planned |
 | P6 | Research UI, evidence inspector, deployment, and demo | Planned |
@@ -158,7 +172,10 @@ retrieval-only FinanceBench benchmark.
 - P2's synthetic decision evaluation validates fixed policy cases, not general
   decision accuracy or calibration. Independent labelled evaluation is planned
   for P5.
-- Adaptive retrieval, claim verification, API, and frontend are still planned.
+- P3's synthetic retrieval evaluation does not estimate FinanceBench multi-hop
+  performance. Its elapsed-time budget is cooperative around synchronous
+  retrieval calls.
+- Claim verification, API, and frontend are still planned.
 
 ## License
 

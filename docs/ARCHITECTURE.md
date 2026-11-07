@@ -1,6 +1,6 @@
 # FilingScope Architecture
 
-## Current implementation (P0–P2)
+## Current implementation (P0–P3)
 
 ### Offline document and evaluation paths
 
@@ -21,7 +21,7 @@ PDF page extraction, a corpus manifest, and an offline retrieval evaluator.
 Dataset labels remain inside the evaluation package and are not passed to the
 runtime retrieval implementation.
 
-### Evidence decision boundary
+### Evidence decision and adaptive retrieval
 
 ```text
 Question + retrieved chunks
@@ -34,7 +34,12 @@ Evidence coverage analyzer
            ↓
 Decision policy + remaining retrieval-attempt budget
   ├── ANSWER       structurally sufficient inputs
-  ├── RETRIEVE_MORE missing/conflicting slots or operation gaps
+  ├── RETRIEVE_MORE
+  │       ↓
+  │   Bounded controller plans a company/metric/period query
+  │       ↓
+  │   Existing HybridRetriever.retrieve() → merge unique evidence
+  │       └──────────────────────────────────────────→ reassess
   └── ABSTAIN      unsupported requirement or exhausted retrieval budget
 ```
 
@@ -44,14 +49,20 @@ registered evidence requirements are met; it does not assert that a generated
 answer is correct. The decision result retains requirement IDs, operation gap
 codes, evidence IDs, page/source provenance, and reason codes.
 
-The P2 evaluation uses 15 fixed synthetic scenarios. See
-[`DECISION_EVALUATION.md`](DECISION_EVALUATION.md) for its measured result and
-scope.
+`src/agent/adaptive_retrieval.py` handles only `RETRIEVE_MORE`. It derives one
+target query from a current missing/conflicted slot or operation gap, invokes
+the migrated `HybridRetriever.retrieve()`, preserves initial evidence, merges
+new chunks, and reassesses. Round, total-query, evidence-token, and cooperative
+elapsed-time limits bound the run. Query fingerprints prevent exact duplicate
+calls; coverage changes and trace outcomes make no-progress stops inspectable.
+
+The P2 evaluation uses 15 fixed synthetic scenarios. The P3 controller uses
+nine fixed synthetic scenarios plus a temporary Qdrant/HybridRetriever
+integration test. See [`DECISION_EVALUATION.md`](DECISION_EVALUATION.md) and
+[`ADAPTIVE_RETRIEVAL_EVALUATION.md`](ADAPTIVE_RETRIEVAL_EVALUATION.md) for
+measured results and limitations.
 
 ## Planned connections
 
-P3 will connect `RETRIEVE_MORE` to bounded targeted searches through existing
-retrieval tools, merge and deduplicate evidence, and reassess until evidence is
-sufficient or a budget/no-progress stop applies. P4 will verify generated
-claims, citations, and declared numerical operations. Those components are not
-part of the current P2 decision result.
+P4 will verify generated claims, citations, and declared numerical operations.
+Those components are not part of the current adaptive retrieval result.

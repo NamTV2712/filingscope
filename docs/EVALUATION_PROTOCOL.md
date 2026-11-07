@@ -90,3 +90,13 @@ gold answers and do not estimate generalization or calibration. The cases,
 metrics, reproducibility command, and measured results are documented in
 [`DECISION_EVALUATION.md`](DECISION_EVALUATION.md). Independent labelled
 decision cases belong to the end-to-end P5 evaluation.
+
+## Adaptive retrieval evaluation (P3)
+
+P3's nine-case controller evaluation measures final action and stop-reason
+accuracy, completion of cases with retrievable evidence gaps, no-progress
+detection, and targeted query count. A separate hermetic integration test
+invokes the migrated `HybridRetriever` over a synthetic Qdrant corpus. The
+cases and limitations are recorded in
+[`ADAPTIVE_RETRIEVAL_EVALUATION.md`](ADAPTIVE_RETRIEVAL_EVALUATION.md). The
+fixed scenarios do not estimate real-corpus performance.

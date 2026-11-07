@@ -37,6 +37,8 @@ Target repository: `D:\Project\filingscope`
 | `LICENSE` | `LICENSE` | MIT license | Carried with reused source modules. | None | N/A |
 | `src/company_entities.py` | `src/decision/company_catalog.py` | Company alias catalog and ticker/entity resolution concepts | Ported the stable public-company aliases into an extensible catalog; corpus company metadata adds verified names and aliases. | Python standard library | `tests/test_evidence_decision.py` |
 | `src/generation/period_value_completeness.py` | `src/decision/period_value_parser.py` | Bounded period/value table scan and unit cues | Adapted to emit period-aligned source facts, retaining currency, scale, and value kind; does not validate generated answers. | Python standard library | `tests/test_evidence_decision.py` |
+| `src/agent/research.py` | `src/agent/adaptive_retrieval.py` | `ResearchSession` patterns: query fingerprinting, evidence identity deduplication, finite search attempts, explicit no-progress outcomes | Adapted to P2 requirement gaps and `HybridRetriever`; source session's product/API observation contracts are not imported. | Python standard library, Pydantic, target retrieval modules | `tests/test_adaptive_retrieval.py`, `tests/test_adaptive_retrieval_evaluation.py` |
+| `src/agent/tools.py` | `src/agent/adaptive_retrieval.py` | Search-tool boundary and direct service invocation pattern reviewed | Source `ToolServices` depends on API `DiscoveryService` and is not copied; P3 invokes FilingScope's existing `HybridRetriever.retrieve()` directly. | Target `HybridRetriever` | `tests/test_adaptive_retrieval_integration.py` |
 
 The target suite is the focused source regression set plus the new synthetic
 retrieval smoke. P1 adds `src/ingestion/pdf_ingestion.py`, pinned FinanceBench
@@ -46,8 +48,9 @@ page-level metrics in `src/evaluation/`, and the reproducible runner in
 `scripts/run_financebench_retrieval.py`. The public data, extracted text,
 embeddings, Qdrant index, predictions, and case-level failure lists remain
 ignored local artifacts. P1's unit and full regression test results are
-recorded with the phase report. API, generation, Agent, and frontend are later
-roadmap phases.
+recorded with the phase report. P2 adds the evidence decision layer and P3 adds
+the bounded adaptive retrieval controller. Provider-backed answer generation,
+the API, and frontend remain later roadmap phases.
 
 P2 adds `src/decision/company_catalog.py`, which reuses and extends company
 aliases from source `src/company_entities.py`; `src/decision/period_value_parser.py`,
