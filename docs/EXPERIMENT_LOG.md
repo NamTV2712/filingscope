@@ -93,6 +93,32 @@ The log separates software-contract checks from answer-quality evidence.
   integrated harness for regressions; next **EXPERIMENT** is M2 retrieval
   diagnostics, then M3 candidate policy evaluation.
 
+## M1 — Nomic embedding runtime compatibility
+
+- **Hypothesis:** The pinned Nomic remote model needs a Transformers 4.x
+  runtime; an unconstrained resolver can select a newer major version that
+  breaks its custom model code.
+- **Baseline / changed variable:** Transformers 5.22.2 failed in
+  `NomicBertModel` with a missing `get_extended_attention_mask` method. Changed
+  only the Transformers version to 4.57.6; kept the embedding model revision,
+  corpus, retrieval configuration, and P1 artifacts fixed.
+- **Dataset/config:** Full pinned FinanceBench sample (150 cases), local P1
+  corpus/index, CPU PyTorch 2.15.0, Sentence Transformers 5.6.0, no provider
+  calls. Run artifact: ignored local directory
+  `data/financebench/e2e_runs/20261107T155925Z-4c0dcc3b2ef1`.
+- **Result:** The 150-case dry run completed. Dense, hybrid, and hybrid-rerank
+  replay each matched P1 for 150/150 cases. It planned 460 generation requests;
+  zero were sent. Answer-quality metrics remained unmeasured. The forecast cost
+  was $0.63396735 and is not a charge.
+- **Latency/resources:** Approximately 10 minutes wall time on this CPU
+  environment. Working set was observed at about 2.7 GiB mid-run; peak RAM was
+  not recorded.
+- **Interpretation:** The runtime pin restores the actual retrieval path
+  without changing model weights or benchmark inputs. The dry run validates
+  integration and replay parity, not answer quality.
+- **Decision:** **ADOPT** `transformers==4.57.6`; require an offline preflight
+  before changing the pin.
+
 ## Planned experiments
 
 Each planned experiment must add its exact hypothesis, baseline, changed

@@ -97,6 +97,10 @@ accuracy estimate for FinanceBench or real generated responses. See
 Use Python 3.12 or newer. Install a CPU or CUDA PyTorch wheel appropriate for
 the machine before installing the project requirements.
 
+`requirements.txt` pins Transformers 4.57.6 because the pinned Nomic embedding
+revision uses custom model APIs that are unavailable in Transformers 5. Re-run
+the offline end-to-end preflight before changing this pin.
+
 ```powershell
 python -m venv .venv
 .venv\Scripts\Activate.ps1

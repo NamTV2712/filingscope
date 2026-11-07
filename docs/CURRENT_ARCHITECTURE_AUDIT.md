@@ -1,14 +1,15 @@
 # Current architecture audit
 
-Audit date: 2026-11-07<br>
+Audit refreshed: 2026-11-07<br>
 Branch: `main`<br>
 Audited repository: `D:\Project\filingscope`<br>
-Baseline commit before this audit: `956cef412d765395b5a7f0b773f821a58686a35a`
+Audited commit: `9b87e6b5b2d93350058e98d8922aea76fb802a5a`<br>
+Initial audit baseline: `956cef412d765395b5a7f0b773f821a58686a35a`
 
-This audit reflects the repository and test suite as they exist at the start of
-the research-driven upgrade. P0–P4 are preserved. P5's A0–A5 evaluation code
-and provider run are present in the working tree and are being finalized with
-their reports. The source benchmark artifacts remain local and git-ignored.
+This refresh reflects the committed P0–P5 repository plus an M1 runtime
+compatibility check. P0–P4 behavior and the completed P5 provider benchmark
+remain preserved. Source benchmark data, model caches, and generated run
+artifacts remain local and git-ignored.
 
 ## Existing capabilities
 
@@ -122,12 +123,30 @@ their reports. The source benchmark artifacts remain local and git-ignored.
 - document parser comparison (Docling vs current pypdf) on known failures;
 - multi-agent and route ablations; local evidence-first research UI.
 
-## Immediate research recommendation
+## M1 validation update
 
-M1's offline end-to-end path is present and benchmarked, with severe
-coverage/numeric-quality failures documented. The next highest-value action is
-M2: instrument pre-fusion candidate recall, fusion inputs and outputs, pool
-sizes, metadata constraints, and reranker changes against the preserved dense
-baseline. Fixing the observed retrieval bottleneck should precede a larger
-agent graph. The detailed hypothesis and experiment sequence is in
-[`RETRIEVAL_RESEARCH.md`](RETRIEVAL_RESEARCH.md).
+The A0–A5 path connects frozen retrieval evidence to deterministic sufficiency,
+bounded adaptive retrieval, generation, and claim verification. Regression
+validation in the isolated project environment completed with 196 passed and
+3 skipped tests.
+
+The 150-case no-provider preflight initially failed when dependency resolution
+selected Transformers 5.22.2: the pinned Nomic remote model raised an
+`AttributeError` for `get_extended_attention_mask`. `requirements.txt` now pins
+Transformers 4.57.6. With that pin, the full preflight completed; A0, A1, and
+A2 retrieval replay each matched all 150 frozen P1 results. The dry run planned
+460 generation requests, made zero provider calls, and correctly marked answer
+quality as unmeasured. Its conservative modeled cost forecast was $0.63396735;
+this is not a provider charge. The generated run remains in ignored local data.
+
+The completed provider-backed P5 results remain the answer-quality baseline:
+held-out answer coverage is 44.4%/35.6%/40.0% for A0–A2 and 0% for A3–A5;
+numeric exact accuracy is 0% for all variants. The compatibility check does
+not replace or retune those results.
+
+## Next milestone recommendation
+
+M1 is validated. Continue with M2 by measuring candidate recall before fusion,
+fusion-stage survival, pool-size sensitivity, metadata filter effects, and
+reranker changes against the preserved dense baseline. The experiment sequence
+is in [`RETRIEVAL_RESEARCH.md`](RETRIEVAL_RESEARCH.md).
