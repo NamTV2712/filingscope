@@ -78,8 +78,9 @@ analysis beneath `data/financebench/runs/<index-id>/`. These files include
 case IDs and retrieved chunk IDs/scores but not gold answers or evidence text.
 All generated artifacts and local source documents are ignored by Git.
 
-The four presets measure retrieval only. They do not measure answer generation,
-abstention, claim verification, or agentic retrieval; those are later phases.
+The four presets measure retrieval only. They do not measure answer generation
+or agentic retrieval. Deterministic evidence sufficiency, adaptive retrieval,
+and claim-verification checks are evaluated separately below.
 
 ## Evidence decision evaluation (P2)
 
@@ -100,3 +101,23 @@ invokes the migrated `HybridRetriever` over a synthetic Qdrant corpus. The
 cases and limitations are recorded in
 [`ADAPTIVE_RETRIEVAL_EVALUATION.md`](ADAPTIVE_RETRIEVAL_EVALUATION.md). The
 fixed scenarios do not estimate real-corpus performance.
+
+## Claim and numerical verification evaluation (P4)
+
+P4 uses 15 hand-labeled synthetic answers with source-ordered evidence. The
+cases cover direct financial values, wrong metrics and periods, malformed,
+missing and out-of-range citations, percentage growth and period-difference
+arithmetic, topical support, partial support, conflicting cited sources, and
+fallback abstention. Run the set with:
+
+```powershell
+python -m scripts.run_verification_evaluation
+```
+
+The evaluator reports exact agreement for response disposition and labeled
+claim status, plus a disposition confusion matrix and case-level reason codes.
+The 15 cases achieved 100% disposition agreement; the 14 cases with a claim
+achieved 100% claim-status agreement. This fixture set validates expected
+control flow and deterministic checks only. It does not measure semantic
+paraphrase understanding, real generated answer accuracy, or generalization to
+FinanceBench. P5 owns the broader end-to-end benchmark.

@@ -1,9 +1,10 @@
-"""Conservative metric/period/value alignment adapted from source contracts.
+"""Conservative metric/period/value parsing adapted from source contracts.
 
 The table-header and nearby-row scan follows the tested parser in
 ``Enterprise_Document_QA/src/generation/period_value_completeness.py`` at
-``2ac043347f57e257dac4e2947a57dfced8709d97``. This P2 adapter returns source
-facts rather than checking a generated answer.
+``2ac043347f57e257dac4e2947a57dfced8709d97``. P2 uses the parser to return
+source facts; P4 also uses its answer-side numeric occurrence helper. Claim
+support and citation decisions live in ``src/verification``.
 """
 
 from __future__ import annotations
@@ -44,6 +45,15 @@ class PeriodValuePair:
     currency: str | None
     scale: str | None
     value_kind: str
+
+
+@dataclass(frozen=True)
+class PeriodValueMention:
+    """A numeric mention with its character offsets in generated prose."""
+
+    start: int
+    end: int
+    pair: PeriodValuePair
 
 
 def _normalize(value: str) -> str:
@@ -237,3 +247,39 @@ def extract_period_value_pairs(
         )
         unique.setdefault(key, pair)
     return tuple(unique.values())
+
+
+def extract_period_value_mentions(text: str) -> tuple[PeriodValueMention, ...]:
+    """Extract individual answer-side values while retaining their locations.
+
+    This uses the same conservative value and period parser as evidence facts.
+    Bare years are excluded because they describe periods rather than claimed
+    financial values.
+    """
+    mentions: list[PeriodValueMention] = []
+    years = list(_YEAR_RE.finditer(text))
+    for match in _VALUE_RE.finditer(text):
+        raw_number = match.group("number").replace(",", "")
+        if _YEAR_RE.fullmatch(raw_number):
+            continue
+        pair = _parse_value(match.group(0), text)
+        if pair is None:
+            continue
+        period = _period_at(text, match.start(), match.end())
+        if period is None and years:
+            nearest = min(
+                years,
+                key=lambda year: min(
+                    abs(year.start() - match.end()),
+                    abs(match.start() - year.end()),
+                ),
+            )
+            period = f"FY{nearest.group(0)}"
+        mentions.append(
+            PeriodValueMention(
+                start=match.start(),
+                end=match.end(),
+                pair=PeriodValuePair(**{**pair.__dict__, "period": period}),
+            )
+        )
+    return tuple(mentions)

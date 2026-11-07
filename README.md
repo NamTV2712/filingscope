@@ -5,11 +5,13 @@ questions with traceable evidence. It extends a working SEC filing retrieval
 system with explicit evidence sufficiency, targeted retrieval, and claim-level
 verification, then measures each addition against a reproducible benchmark.
 
-The work is being delivered in phases. **P0–P3 are implemented:** the project
+The work is being delivered in phases. **P0–P4 are implemented:** the project
 has an independent SEC ingestion and hybrid retrieval baseline, a reproducible
 FinanceBench retrieval benchmark, a deterministic evidence sufficiency
-decision layer, and bounded adaptive retrieval. Claim verification, the
-research UI, and deployment are later phases.
+decision layer, and bounded adaptive retrieval. The research UI and deployment
+are later phases. P4 adds citation validation,
+claim-level evidence matching, contradiction detection, and deterministic
+financial arithmetic checks.
 
 ## P0 retrieval baseline
 
@@ -69,6 +71,19 @@ resolved (2/2). These results are controlled checks, not a real-corpus success
 estimate. The synchronous retriever's in-progress call cannot be interrupted
 by the elapsed-time budget. See
 [`docs/ADAPTIVE_RETRIEVAL_EVALUATION.md`](docs/ADAPTIVE_RETRIEVAL_EVALUATION.md).
+
+## Claim and numerical verification (P4)
+
+`ClaimLevelVerifier` maps answer clauses to entity, metric, period, value, and
+canonical `[Source N]` references. It checks numeric facts only against the
+corresponding cited chunks, recomputes percentage growth and period-to-period
+differences with `Decimal`, detects contradictory cited values, and applies a
+conservative evidence policy: verified, partial, rejected, or abstain. Topical
+claims use lexical anchors and can miss valid paraphrases. The 15-case fixed
+synthetic evaluation achieved 100% disposition agreement and 100% claim-status
+agreement on 14 labeled claims. These controlled fixtures are not an answer
+accuracy estimate for FinanceBench or real generated responses. See
+[`docs/VERIFICATION_EVALUATION.md`](docs/VERIFICATION_EVALUATION.md).
 
 ## Local setup
 
@@ -154,7 +169,7 @@ the full split metrics and limitations.
 | P1 | FinanceBench acquisition, corpus coverage, retrieval baselines | Complete |
 | P2 | Evidence requirements, coverage analysis, answer/retrieve/abstain | Complete |
 | P3 | Bounded adaptive retrieval for explicit evidence gaps | Complete |
-| P4 | Claim, citation, contradiction, and numerical verification | Planned |
+| P4 | Claim, citation, contradiction, and numerical verification | Complete |
 | P5 | Controlled A0–A5 benchmark and failure analysis | Planned |
 | P6 | Research UI, evidence inspector, deployment, and demo | Planned |
 

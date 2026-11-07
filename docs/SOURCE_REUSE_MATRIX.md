@@ -36,9 +36,10 @@ Target repository: `D:\Project\filingscope`
 | `requirements.txt` | `requirements.txt` | Compatible ingestion/retrieval dependency pins | Removed unused provider, FastAPI, report-generation and frontend-adjacent requirements. | Python packages listed in file | Test suite and import compilation |
 | `LICENSE` | `LICENSE` | MIT license | Carried with reused source modules. | None | N/A |
 | `src/company_entities.py` | `src/decision/company_catalog.py` | Company alias catalog and ticker/entity resolution concepts | Ported the stable public-company aliases into an extensible catalog; corpus company metadata adds verified names and aliases. | Python standard library | `tests/test_evidence_decision.py` |
-| `src/generation/period_value_completeness.py` | `src/decision/period_value_parser.py` | Bounded period/value table scan and unit cues | Adapted to emit period-aligned source facts, retaining currency, scale, and value kind; does not validate generated answers. | Python standard library | `tests/test_evidence_decision.py` |
+| `src/generation/period_value_completeness.py` | `src/decision/period_value_parser.py` | Bounded period/value table scan and unit cues | Adapted to emit period-aligned source facts, retaining currency, scale, and value kind; P4 adds answer-side numeric mentions with character offsets for claim attribution. | Python standard library | `tests/test_evidence_decision.py`, `tests/test_claim_verifier.py` |
 | `src/agent/research.py` | `src/agent/adaptive_retrieval.py` | `ResearchSession` patterns: query fingerprinting, evidence identity deduplication, finite search attempts, explicit no-progress outcomes | Adapted to P2 requirement gaps and `HybridRetriever`; source session's product/API observation contracts are not imported. | Python standard library, Pydantic, target retrieval modules | `tests/test_adaptive_retrieval.py`, `tests/test_adaptive_retrieval_evaluation.py` |
 | `src/agent/tools.py` | `src/agent/adaptive_retrieval.py` | Search-tool boundary and direct service invocation pattern reviewed | Source `ToolServices` depends on API `DiscoveryService` and is not copied; P3 invokes FilingScope's existing `HybridRetriever.retrieve()` directly. | Target `HybridRetriever` | `tests/test_adaptive_retrieval_integration.py` |
+| `src/evaluation/answer_contract.py` | `src/verification/claim_verifier.py` | Canonical `[Source N]` citation checks, malformed legacy citation detection, out-of-range handling, fallback-answer policy | Adapted from whole-answer integrity diagnostics into per-claim source validation, then joined to the P2 entity/metric/period/value fact contract. A numeric string match alone is never treated as semantic support. | Python standard library, target P2 decision layer | `tests/test_claim_verifier.py`, `tests/test_verification_evaluation.py` |
 
 The target suite is the focused source regression set plus the new synthetic
 retrieval smoke. P1 adds `src/ingestion/pdf_ingestion.py`, pinned FinanceBench
@@ -60,4 +61,10 @@ of source `src/retrieval/structured_lookup.py`. The P2 analyzer creates
 provenance-bearing evidence facts and requirement findings, while the decision
 policy selects `ANSWER`, `RETRIEVE_MORE`, or `ABSTAIN` without using retrieval
 scores. See `tests/test_evidence_decision.py` and
-`tests/test_decision_evaluation.py`.
+`tests/test_decision_evaluation.py`. P4 adds
+`src/verification/claim_verifier.py` and
+`src/verification/numerical_verifier.py`: it checks each claim against only
+its cited chunks and uses explicit Decimal calculations for growth and period
+differences. The citation contract is adapted from the source project's
+`src/evaluation/answer_contract.py`. Fixed synthetic outcomes are documented
+in `docs/VERIFICATION_EVALUATION.md`.
