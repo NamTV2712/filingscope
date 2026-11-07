@@ -1,0 +1,268 @@
+"""Deterministic financial-question requirement extraction for P2."""
+
+from __future__ import annotations
+
+import re
+from collections.abc import Iterable, Mapping
+
+from src.decision.company_catalog import CompanyCatalog
+from src.decision.models import (
+    EvidenceEntity,
+    EvidenceRequirement,
+    MetricRequirement,
+    OperationRequirement,
+    QuestionRequirements,
+)
+
+
+_METRIC_DEFINITIONS: tuple[MetricRequirement, ...] = (
+    MetricRequirement(metric_id="revenue", display_name="revenue", aliases=(
+        "total net sales", "total revenue", "net sales", "revenues", "revenue", "sales",
+    )),
+    MetricRequirement(metric_id="operating_income", display_name="operating income", aliases=(
+        "operating income", "income from operations",
+    )),
+    MetricRequirement(metric_id="net_income", display_name="net income", aliases=(
+        "net income", "net earnings",
+    )),
+    MetricRequirement(metric_id="gross_profit", display_name="gross profit", aliases=("gross profit",)),
+    MetricRequirement(metric_id="capital_expenditures", display_name="capital expenditures", aliases=(
+        "capital expenditures", "capital expenditure", "capex",
+    )),
+    MetricRequirement(metric_id="operating_cash_flow", display_name="operating cash flow", aliases=(
+        "cash flow from operations", "operating cash flow",
+    )),
+    MetricRequirement(metric_id="free_cash_flow", display_name="free cash flow", aliases=(
+        "free cash flow", "free cashflow",
+    )),
+    MetricRequirement(metric_id="total_assets", display_name="total assets", aliases=("total assets",)),
+    MetricRequirement(metric_id="total_liabilities", display_name="total liabilities", aliases=("total liabilities",)),
+    MetricRequirement(metric_id="total_debt", display_name="total debt", aliases=(
+        "total debt", "long term debt", "long-term debt",
+    )),
+    MetricRequirement(metric_id="earnings_per_share", display_name="earnings per share", aliases=(
+        "earnings per share", "diluted eps", "basic eps", "eps",
+    ), expected_value_kind="currency_per_share"),
+    MetricRequirement(metric_id="operating_margin", display_name="operating margin", aliases=(
+        "operating margin",
+    ), expected_value_kind="percent"),
+    MetricRequirement(metric_id="gross_margin", display_name="gross margin", aliases=(
+        "gross margin",
+    ), expected_value_kind="percent"),
+    MetricRequirement(metric_id="dividends", display_name="dividends", aliases=(
+        "dividend distributions", "dividend payments", "dividends", "dividend",
+    )),
+    MetricRequirement(metric_id="industry", display_name="industry", aliases=("industry",), quantitative=False, expected_value_kind="topic"),
+    MetricRequirement(metric_id="business_segments", display_name="business segments", aliases=(
+        "business segments", "reportable segments", "segments",
+    ), quantitative=False, expected_value_kind="topic"),
+    MetricRequirement(metric_id="customers", display_name="customers", aliases=(
+        "primary customers", "customer base", "customers", "customer",
+    ), quantitative=False, expected_value_kind="topic"),
+    MetricRequirement(metric_id="risk_factors", display_name="risk factors", aliases=(
+        "risk factors", "risk exposure", "risks", "risk",
+    ), quantitative=False, expected_value_kind="topic"),
+    MetricRequirement(metric_id="products", display_name="products", aliases=(
+        "product categories", "products and services", "products", "product portfolio",
+    ), quantitative=False, expected_value_kind="topic"),
+)
+
+_YEAR_RE = re.compile(r"(?<!\d)((?:19|20)\d{2})(?!\d)")
+_QUARTER_RE = re.compile(r"\bQ([1-4])\s*(?:FY\s*)?((?<!\d)(?:19|20)\d{2})(?!\d)", re.I)
+_RELATIVE_PERIOD_RE = re.compile(
+    r"\b(?:last|past|previous|prior|latest|current|most recent)\s+(?:\d+\s+)?"
+    r"(?:fiscal\s+)?years?\b",
+    re.I,
+)
+_GROWTH_RE = re.compile(
+    r"\b(?:growth|grow(?:s|th|ing)?|increas(?:e|ed|ing)|decreas(?:e|ed|ing)|"
+    r"trend|year.over.year|yoy|cagr)\b",
+    re.I,
+)
+_COMPARE_RE = re.compile(
+    r"\b(?:compar(?:e|es|ed|ing)|versus|vs\.?|which\s+(?:company|one)|"
+    r"faster|slower|higher|lower)\b",
+    re.I,
+)
+_OPERATION_RE = {
+    "difference": re.compile(r"\b(?:difference|differ by|how much more|how much less)\b", re.I),
+    "ratio": re.compile(r"\b(?:ratio|times as much|multiple)\b", re.I),
+    "average": re.compile(r"\b(?:average|mean)\b", re.I),
+    "explain": re.compile(r"\b(?:why|what drove|what caused|explain)\b", re.I),
+}
+
+
+def _periods(question: str) -> tuple[str, ...]:
+    quarters = {
+        match.start(): f"Q{match.group(1)} FY{match.group(2)}"
+        for match in _QUARTER_RE.finditer(question)
+    }
+    result: list[str] = []
+    for match in _YEAR_RE.finditer(question):
+        quarter = next(
+            (period for start, period in quarters.items() if start <= match.start() < start + 14),
+            None,
+        )
+        period = quarter or f"FY{match.group(1)}"
+        if period not in result:
+            result.append(period)
+    return tuple(result)
+
+
+def _metrics(question: str) -> tuple[MetricRequirement, ...]:
+    folded = question.casefold().replace("’", "'")
+    found: dict[str, tuple[int, int]] = {}
+    aliases = sorted(
+        [
+            (alias, metric)
+            for metric in _METRIC_DEFINITIONS
+            for alias in metric.aliases
+        ],
+        key=lambda pair: (-len(pair[0]), pair[0]),
+    )
+    for alias, metric in aliases:
+        pattern = re.compile(rf"(?<![\w]){re.escape(alias)}(?![\w])", re.I)
+        match = pattern.search(folded)
+        if match is None:
+            continue
+        current = found.get(metric.metric_id)
+        candidate = (match.start(), -len(alias))
+        if current is None or candidate < current:
+            found[metric.metric_id] = candidate
+    ordered_ids = [
+        metric_id
+        for metric_id, _ in sorted(found.items(), key=lambda item: (item[1], item[0]))
+    ]
+    return tuple(
+        next(metric for metric in _METRIC_DEFINITIONS if metric.metric_id == metric_id)
+        for metric_id in ordered_ids
+    )
+
+
+class EvidenceRequirementExtractor:
+    """Extract explicit entities, metrics, periods, operations, and evidence slots.
+
+    The default path is intentionally rule-based and bounded. Callers can pass
+    company aliases from a verified corpus so supported entities are not
+    limited to the small source-project alias catalog.
+    """
+
+    def __init__(self, catalog: CompanyCatalog | None = None):
+        self.catalog = catalog or CompanyCatalog()
+
+    @classmethod
+    def from_document_rows(
+        cls,
+        rows: Iterable[Mapping[str, object]],
+        *,
+        base_aliases: Mapping[str, Iterable[str]] | None = None,
+    ) -> "EvidenceRequirementExtractor":
+        return cls(CompanyCatalog.from_document_rows(rows, base=base_aliases))
+
+    def extract(self, question: str) -> QuestionRequirements:
+        if not question.strip():
+            return QuestionRequirements(
+                question=question,
+                supported=False,
+                unsupported_reasons=("empty_question",),
+            )
+
+        matches = self.catalog.identify(question)
+        entities = tuple(
+            EvidenceEntity(
+                entity_id=match.entity_id,
+                canonical_name=match.canonical_name,
+                matched_alias=match.matched_alias,
+            )
+            for match in matches
+        )
+        metrics = _metrics(question)
+        periods = _periods(question)
+        if len(periods) == 1 and re.search(r"\b(?:year.over.year|yoy)\b", question, re.I):
+            period_year = re.search(r"\d{4}", periods[0])
+            if period_year is not None:
+                year = int(period_year.group(0))
+                prior_period = (
+                    f"{periods[0].split()[0]} FY{year - 1}"
+                    if periods[0].startswith("Q")
+                    else f"FY{year - 1}"
+                )
+                periods = (prior_period, periods[0])
+        relative_period = bool(_RELATIVE_PERIOD_RE.search(question))
+
+        operations: list[str] = []
+        quantitative = any(metric.quantitative for metric in metrics)
+        if _GROWTH_RE.search(question):
+            operations.append("growth")
+        if len(entities) > 1 or _COMPARE_RE.search(question):
+            operations.append("compare")
+        for name, pattern in _OPERATION_RE.items():
+            if pattern.search(question):
+                operations.append(name)
+        if not operations:
+            operations.append("lookup")
+        operations = list(dict.fromkeys(operations))
+
+        unsupported_reasons: list[str] = []
+        if not entities:
+            unsupported_reasons.append("company_not_resolved")
+        if not metrics:
+            unsupported_reasons.append("metric_not_recognized")
+        if relative_period:
+            unsupported_reasons.append("relative_period_not_supported")
+        if any(operation in {"growth", "difference", "ratio", "average"} for operation in operations) and len(periods) == 1:
+            unsupported_reasons.append("insufficient_period_scope")
+
+        evidence: list[EvidenceRequirement] = []
+        if not unsupported_reasons:
+            minimum_observations = (
+                2 if any(operation in {"growth", "difference", "ratio", "average"} for operation in operations) else 1
+            )
+            for entity in entities:
+                for metric in metrics:
+                    if periods:
+                        for period in periods:
+                            evidence.append(
+                                EvidenceRequirement(
+                                    requirement_id=f"{entity.entity_id}:{metric.metric_id}:{period.replace(' ', '_')}",
+                                    entity_id=entity.entity_id,
+                                    metric_id=metric.metric_id,
+                                    period=period,
+                                    quantitative=metric.quantitative,
+                                )
+                            )
+                    else:
+                        evidence.append(
+                            EvidenceRequirement(
+                                requirement_id=f"{entity.entity_id}:{metric.metric_id}:observations",
+                                entity_id=entity.entity_id,
+                                metric_id=metric.metric_id,
+                                minimum_observations=minimum_observations,
+                                quantitative=metric.quantitative,
+                            )
+                        )
+
+        operation_requirements = tuple(
+            OperationRequirement(
+                operation=operation,
+                metric_id=metrics[0].metric_id if len(metrics) == 1 else None,
+                requires_period_alignment=(
+                    quantitative and (operation == "compare" or operation in {"growth", "difference", "ratio", "average"})
+                ),
+                requires_unit_compatibility=(
+                    quantitative and operation in {"compare", "growth", "difference", "ratio", "average"}
+                ),
+            )
+            for operation in operations
+        )
+        return QuestionRequirements(
+            question=question,
+            entities=entities,
+            companies=tuple(entity.entity_id for entity in entities),
+            metrics=metrics,
+            periods=periods,
+            operations=operation_requirements,
+            evidence=tuple(evidence),
+            supported=not unsupported_reasons,
+            unsupported_reasons=tuple(unsupported_reasons),
+        )

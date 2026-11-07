@@ -5,12 +5,11 @@ questions with traceable evidence. It extends a working SEC filing retrieval
 system with explicit evidence sufficiency, targeted retrieval, and claim-level
 verification, then measures each addition against a reproducible benchmark.
 
-The work is being delivered in phases. **P0 is implemented:** the project has an
-independent SEC ingestion and hybrid retrieval baseline migrated from
-`Enterprise_Document_QA`, with a synthetic Qdrant smoke test. **P1 implements
-FinanceBench acquisition and retrieval baselines.** Evidence decision,
-adaptive retrieval, claim verification, the frontend, and deployment are later
-phases.
+The work is being delivered in phases. **P0–P2 are implemented:** the project
+has an independent SEC ingestion and hybrid retrieval baseline, a reproducible
+FinanceBench retrieval benchmark, and a deterministic evidence sufficiency
+decision layer. Adaptive retrieval, claim verification, the research UI, and
+deployment are later phases.
 
 ## P0 retrieval baseline
 
@@ -44,6 +43,18 @@ BM25 + dense Qdrant + lexical candidates → RRF → cross-encoder reranking
 The `HybridRetriever.inspect()` method exposes a provider-free diagnostic
 trace. It is not the production retrieval method and is not used to claim
 retrieval accuracy. P0 has no benchmark dataset or measured retrieval scores.
+
+## Evidence sufficiency decision (P2)
+
+The decision layer maps a question into entity, metric, period, and operation
+requirements, aligns retrieved evidence to those slots, checks provenance and
+numeric consistency, then returns `ANSWER`, `RETRIEVE_MORE`, or `ABSTAIN` with
+reason codes and evidence gaps. It does not use a single retrieval-score
+threshold and does not generate an answer. On 15 fixed synthetic scenarios,
+action and reason-code accuracy were both 100%; this controlled result is not a
+general accuracy estimate. See
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and
+[`docs/DECISION_EVALUATION.md`](docs/DECISION_EVALUATION.md).
 
 ## Local setup
 
@@ -127,7 +138,7 @@ the full split metrics and limitations.
 |---|---|---|
 | P0 | Source audit, migration, independent retrieval smoke | Complete |
 | P1 | FinanceBench acquisition, corpus coverage, retrieval baselines | Complete |
-| P2 | Evidence requirements, coverage analysis, answer/retrieve/abstain | Planned |
+| P2 | Evidence requirements, coverage analysis, answer/retrieve/abstain | Complete |
 | P3 | Bounded adaptive retrieval for explicit evidence gaps | Planned |
 | P4 | Claim, citation, contradiction, and numerical verification | Planned |
 | P5 | Controlled A0–A5 benchmark and failure analysis | Planned |
@@ -144,8 +155,10 @@ retrieval-only FinanceBench benchmark.
   can reduce retrieval recall.
 - Local SEC documents and Qdrant data are deliberately not included.
 - The synthetic test validates code integration, not real-model quality.
-- Evidence decision, adaptive retrieval, claim verification, API, and frontend
-  are not part of the current P0 baseline.
+- P2's synthetic decision evaluation validates fixed policy cases, not general
+  decision accuracy or calibration. Independent labelled evaluation is planned
+  for P5.
+- Adaptive retrieval, claim verification, API, and frontend are still planned.
 
 ## License
 

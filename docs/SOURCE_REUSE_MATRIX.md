@@ -22,7 +22,7 @@ Target repository: `D:\Project\filingscope`
 | `src/retrieval/hybrid_retriever.py` | `src/retrieval/hybrid_retriever.py` | `HybridRetriever.retrieve`, `retrieve_with_embedding`, `inspect`, BM25, RRF, cross-encoder | Preserved production and inspection paths separately. Added optional company grouping and switches for reranking and structured lookup; defaults preserve the prior production path. | rank-bm25, Sentence Transformers, retrieval modules | `tests/test_hybrid_retriever_inspect.py`, `test_hybrid_retriever_concurrency.py`, `test_hybrid_retriever_section_filter.py`, synthetic smoke, `tests/test_financebench_retrieval_adapter.py` |
 | `src/retrieval/lexical_ladder.py` | `src/retrieval/lexical_ladder.py` | Lexical candidate generation and fingerprinted rules | None in P0. | Python standard library | `tests/test_lexical_ladder.py` |
 | `src/retrieval/query_shaper.py` | `src/retrieval/query_shaper.py` | Deterministic retrieval query shaping and fingerprints | None in P0. | Python standard library | `tests/test_query_shaper.py` |
-| `src/retrieval/structured_lookup.py` | `src/retrieval/structured_lookup.py` | Structured financial match parsing and ranking | None in P0. | Python standard library | `tests/test_structured_lookup.py` |
+| `src/retrieval/structured_lookup.py` | `src/retrieval/structured_lookup.py` | `structured_lookup`, `StructuredMatch`, canonical financial row matching | P2 calls the migrated matcher against the retrieved chunk only; it parses the matched row with its explicit period header. | Python standard library | `tests/test_structured_lookup.py`, `tests/test_evidence_decision.py` |
 | `src/retrieval/chunk_loader.py` | `src/retrieval/chunk_loader.py` | Local/cloud retrieval payload loading | None in P0. | Qdrant payload types at runtime | `tests/test_chunk_loader.py` |
 | `src/retrieval/canonical_json.py` | `src/retrieval/canonical_json.py` | `canonical_json_bytes` | None in P0. | Python standard library | `tests/test_index_manifest.py`, `test_embedding_generation.py` |
 | `src/retrieval/index_manifest.py` | `src/retrieval/index_manifest.py` | Corpus/vector fingerprints, manifest build/validate/read/write | None in P0. | Python standard library | `tests/test_index_manifest.py`, `test_index_chunks.py` |
@@ -35,6 +35,8 @@ Target repository: `D:\Project\filingscope`
 | `configs/offline_guard.py`, `tests/conftest.py`, `pytest.ini` | Same target paths | Hermetic test socket guard and marker policy | Kept default tests offline. | pytest | Entire P0 test suite |
 | `requirements.txt` | `requirements.txt` | Compatible ingestion/retrieval dependency pins | Removed unused provider, FastAPI, report-generation and frontend-adjacent requirements. | Python packages listed in file | Test suite and import compilation |
 | `LICENSE` | `LICENSE` | MIT license | Carried with reused source modules. | None | N/A |
+| `src/company_entities.py` | `src/decision/company_catalog.py` | Company alias catalog and ticker/entity resolution concepts | Ported the stable public-company aliases into an extensible catalog; corpus company metadata adds verified names and aliases. | Python standard library | `tests/test_evidence_decision.py` |
+| `src/generation/period_value_completeness.py` | `src/decision/period_value_parser.py` | Bounded period/value table scan and unit cues | Adapted to emit period-aligned source facts, retaining currency, scale, and value kind; does not validate generated answers. | Python standard library | `tests/test_evidence_decision.py` |
 
 The target suite is the focused source regression set plus the new synthetic
 retrieval smoke. P1 adds `src/ingestion/pdf_ingestion.py`, pinned FinanceBench
@@ -46,3 +48,13 @@ embeddings, Qdrant index, predictions, and case-level failure lists remain
 ignored local artifacts. P1's unit and full regression test results are
 recorded with the phase report. API, generation, Agent, and frontend are later
 roadmap phases.
+
+P2 adds `src/decision/company_catalog.py`, which reuses and extends company
+aliases from source `src/company_entities.py`; `src/decision/period_value_parser.py`,
+which adapts the tested bounded period/value scan from source
+`src/generation/period_value_completeness.py`; and a retrieved-chunk-scoped use
+of source `src/retrieval/structured_lookup.py`. The P2 analyzer creates
+provenance-bearing evidence facts and requirement findings, while the decision
+policy selects `ANSWER`, `RETRIEVE_MORE`, or `ABSTAIN` without using retrieval
+scores. See `tests/test_evidence_decision.py` and
+`tests/test_decision_evaluation.py`.

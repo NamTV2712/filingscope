@@ -80,3 +80,13 @@ All generated artifacts and local source documents are ignored by Git.
 
 The four presets measure retrieval only. They do not measure answer generation,
 abstention, claim verification, or agentic retrieval; those are later phases.
+
+## Evidence decision evaluation (P2)
+
+P2 uses a separate 15-case controlled synthetic evaluation for exact action and
+reason-code correctness. It covers complete, missing, conflicting, unsupported,
+and budget-exhausted evidence bundles. These fixtures do not use FinanceBench
+gold answers and do not estimate generalization or calibration. The cases,
+metrics, reproducibility command, and measured results are documented in
+[`DECISION_EVALUATION.md`](DECISION_EVALUATION.md). Independent labelled
+decision cases belong to the end-to-end P5 evaluation.
