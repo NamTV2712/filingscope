@@ -105,8 +105,11 @@ or presented as new measurements.
 
 ## Excluded from P0
 
-Generation and provider policy, Agent orchestration and persistence, FastAPI,
+Generation and provider policy, agent orchestration and persistence, FastAPI,
 frontend, historical evaluation artifacts, FinanceBench, local SEC data,
-`.env`, local Qdrant files, model caches, and generated runtime artifacts are
-not part of this migration. Their inclusion will be decided from actual P1–P6
-requirements rather than copied wholesale.
+`.env`, local Qdrant files, model caches, and generated runtime artifacts were
+excluded from the original P0 migration. Later phases selectively added a
+budgeted generation adapter and P1/P5 evaluation code; they did not copy the
+source API or frontend wholesale. The current research milestones and remaining
+application work are tracked in `RESEARCH_AGENDA.md`; cloud deployment is out
+of scope.

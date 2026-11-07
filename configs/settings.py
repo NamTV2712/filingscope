@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     qdrant_cloud_url: str = ""
     qdrant_cloud_api_key: SecretStr = SecretStr("")
 
+    # Optional generation provider credential. It is read only by the explicit
+    # Groq benchmark path and must never be logged or included in artifacts.
+    groq_api_key: SecretStr = SecretStr("")
+
     embedding_model_id: str = "nomic-ai/nomic-embed-text-v1.5"
     embedding_model_revision: str = "e9b6763023c676ca8431644204f50c2b100d9aab"
     reranker_model_id: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"

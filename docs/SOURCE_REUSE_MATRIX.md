@@ -36,6 +36,7 @@ Target repository: `D:\Project\filingscope`
 | `requirements.txt` | `requirements.txt` | Compatible ingestion/retrieval dependency pins | Removed unused provider, FastAPI, report-generation and frontend-adjacent requirements. | Python packages listed in file | Test suite and import compilation |
 | `LICENSE` | `LICENSE` | MIT license | Carried with reused source modules. | None | N/A |
 | `src/company_entities.py` | `src/decision/company_catalog.py` | Company alias catalog and ticker/entity resolution concepts | Ported the stable public-company aliases into an extensible catalog; corpus company metadata adds verified names and aliases. | Python standard library | `tests/test_evidence_decision.py` |
+| `src/generation/generator.py`, `src/generation/prompt_contracts.py` | `src/generation/answer_generator.py` | Evidence-only system prompt, canonical `[Source N]` labels, exact insufficient-evidence fallback, and numeric pair rules | Adapted to consume P1 retrieved chunk mappings; sends one request per answer with no SDK retry or source `answer_completion.py` correction request so P5 call limits stay auditable. Groq credential is injected only by the explicit P5 CLI path. | `groq`, tiktoken, P5 config | `tests/test_answer_generator.py`, `tests/test_end_to_end_evaluation.py` |
 | `src/generation/period_value_completeness.py` | `src/decision/period_value_parser.py` | Bounded period/value table scan and unit cues | Adapted to emit period-aligned source facts, retaining currency, scale, and value kind; P4 adds answer-side numeric mentions with character offsets for claim attribution. | Python standard library | `tests/test_evidence_decision.py`, `tests/test_claim_verifier.py` |
 | `src/agent/research.py` | `src/agent/adaptive_retrieval.py` | `ResearchSession` patterns: query fingerprinting, evidence identity deduplication, finite search attempts, explicit no-progress outcomes | Adapted to P2 requirement gaps and `HybridRetriever`; source session's product/API observation contracts are not imported. | Python standard library, Pydantic, target retrieval modules | `tests/test_adaptive_retrieval.py`, `tests/test_adaptive_retrieval_evaluation.py` |
 | `src/agent/tools.py` | `src/agent/adaptive_retrieval.py` | Search-tool boundary and direct service invocation pattern reviewed | Source `ToolServices` depends on API `DiscoveryService` and is not copied; P3 invokes FilingScope's existing `HybridRetriever.retrieve()` directly. | Target `HybridRetriever` | `tests/test_adaptive_retrieval_integration.py` |
@@ -49,9 +50,12 @@ page-level metrics in `src/evaluation/`, and the reproducible runner in
 `scripts/run_financebench_retrieval.py`. The public data, extracted text,
 embeddings, Qdrant index, predictions, and case-level failure lists remain
 ignored local artifacts. P1's unit and full regression test results are
-recorded with the phase report. P2 adds the evidence decision layer and P3 adds
-the bounded adaptive retrieval controller. Provider-backed answer generation,
-the API, and frontend remain later roadmap phases.
+recorded with the phase report. P2 adds the evidence decision layer, P3 adds
+the bounded adaptive retrieval controller, and P5 adapts the source generator's
+evidence and citation contract to a budgeted benchmark adapter. The current
+system has no request-facing API or UI; a local evidence-first interface is
+planned for M15 after backend contracts stabilize. Cloud deployment is out of
+scope.
 
 P2 adds `src/decision/company_catalog.py`, which reuses and extends company
 aliases from source `src/company_entities.py`; `src/decision/period_value_parser.py`,

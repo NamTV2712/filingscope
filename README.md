@@ -5,13 +5,20 @@ questions with traceable evidence. It extends a working SEC filing retrieval
 system with explicit evidence sufficiency, targeted retrieval, and claim-level
 verification, then measures each addition against a reproducible benchmark.
 
-The work is being delivered in phases. **P0–P4 are implemented:** the project
-has an independent SEC ingestion and hybrid retrieval baseline, a reproducible
-FinanceBench retrieval benchmark, a deterministic evidence sufficiency
-decision layer, and bounded adaptive retrieval. The research UI and deployment
-are later phases. P4 adds citation validation,
-claim-level evidence matching, contradiction detection, and deterministic
-financial arithmetic checks.
+The migrated baseline and P0–P4 evidence components are implemented. P5 now
+adds a provider-backed A0–A5 FinanceBench end-to-end evaluation and an honest
+failure report. Its results are weak: answer coverage is low, held-out numeric
+exact accuracy is zero, and evidence-aware variants often abstain. That result
+is preserved as a baseline for the research roadmap rather than presented as a
+quality success. See [`docs/BENCHMARK_RESULTS.md`](docs/BENCHMARK_RESULTS.md).
+
+The next work follows the research milestones in
+[`docs/RESEARCH_AGENDA.md`](docs/RESEARCH_AGENDA.md), beginning with retrieval
+stage diagnostics. The target design separates a Research Plane, which finds
+and prepares information, from an Evidence Control Plane, which makes the
+deterministic acceptance, sufficiency, verification, and answer-release
+decisions. A local evidence-first interface is a later milestone. **No cloud
+deployment is planned.**
 
 ## P0 retrieval baseline
 
@@ -152,14 +159,61 @@ python -m scripts.run_financebench_retrieval
 The presets are BM25, dense Qdrant, hybrid reciprocal-rank fusion, and hybrid
 with cross-encoder reranking. They score retrieved document-page evidence; they
 do not evaluate generated answers. Measured results and failure analysis are
-published in [`docs/BENCHMARK_RESULTS.md`](docs/BENCHMARK_RESULTS.md) and
-[`docs/FAILURE_ANALYSIS.md`](docs/FAILURE_ANALYSIS.md) after the full run.
+published in [`docs/RETRIEVAL_BENCHMARK_RESULTS.md`](docs/RETRIEVAL_BENCHMARK_RESULTS.md) and
+[`docs/RETRIEVAL_FAILURE_ANALYSIS.md`](docs/RETRIEVAL_FAILURE_ANALYSIS.md).
 
 P1's completed baseline found dense retrieval strongest on this sample
 (Recall@10 0.4167; complete evidence-page coverage at 10 of 0.3733). Hybrid RRF
 and hybrid reranking did not beat the dense baseline; the reranker improved
 hybrid MRR@10 but increased latency. See the result and failure reports for
 the full split metrics and limitations.
+
+## End-to-end answer benchmark (P5)
+
+P5 compares A0 dense retrieval, A1 hybrid retrieval, A2 reranked hybrid
+retrieval, A3 evidence sufficiency decisions, A4 adaptive retrieval, and A5
+claim verification. The full run uses the same 150 cases and pinned P1 corpus.
+Gold answers stay in the evaluation layer and are never passed into the
+generator. The raw per-case answers and metrics are written under the ignored
+`data/financebench/e2e_runs/` directory.
+
+First run the full local preflight. It loads the pinned P1 index, estimates the
+provider request count and conservative token cost, makes no API calls, and
+does not require an API key:
+
+```powershell
+python -m scripts.run_end_to_end_benchmark
+```
+
+After approving a maximum call count and spend cap, set `GROQ_API_KEY` only in
+the local FilingScope environment and run with both limits:
+
+```powershell
+python -m scripts.run_end_to_end_benchmark `
+  --provider-run `
+  --max-provider-calls <preflight-count> `
+  --max-cost-usd <approved-usd-cap>
+python -m scripts.summarize_end_to_end_benchmark `
+  data/financebench/e2e_runs/<run-id>/results.json
+```
+
+The answer generator uses Groq's `openai/gpt-oss-120b` model with one request
+per generated variant, temperature zero, and a 1,024-token output cap. Frozen
+price inputs and the 25% prompt-token estimation margin are recorded in the
+run manifest. Modeled costs use reported tokens and the published [Groq model
+rates](https://console.groq.com/docs/model/openai/gpt-oss-120b); they are not
+provider invoices. Dry-run estimates are forecasts only and are never reported
+as answer quality. The deterministic text metrics measure lexical agreement,
+not semantic equivalence; numeric exactness, citation validity, and claim
+support are reported separately.
+
+The completed provider run generates
+[`docs/BENCHMARK_RESULTS.md`](docs/BENCHMARK_RESULTS.md),
+[`docs/ABLATION_STUDY.md`](docs/ABLATION_STUDY.md),
+[`docs/FAILURE_ANALYSIS.md`](docs/FAILURE_ANALYSIS.md), and three SVG charts in
+`docs/assets/`. See the
+[`P5 evaluation protocol`](docs/END_TO_END_EVALUATION_PROTOCOL.md) for variant,
+metric, leakage, and reproduction details.
 
 ## Evaluation roadmap
 
@@ -170,8 +224,11 @@ the full split metrics and limitations.
 | P2 | Evidence requirements, coverage analysis, answer/retrieve/abstain | Complete |
 | P3 | Bounded adaptive retrieval for explicit evidence gaps | Complete |
 | P4 | Claim, citation, contradiction, and numerical verification | Complete |
-| P5 | Controlled A0–A5 benchmark and failure analysis | Planned |
-| P6 | Research UI, evidence inspector, deployment, and demo | Planned |
+| P5 | Controlled A0–A5 benchmark and failure analysis | Complete |
+| M1 | End-to-end retrieval, decision, adaptive retrieval, generation, and verification baseline | Complete as an offline evaluation path |
+| M2 | Retrieval stage diagnostics | Next |
+| M3–M14 | Evidence policy, corpus-aware planning, routing, ledger, specialists, structured facts, verification, and retrieval research | Planned; see research agenda |
+| M15 | Local evidence-first research UX | Planned; no deployment |
 
 No answer quality or end-to-end agent performance claims are made by the
 retrieval-only FinanceBench benchmark.
@@ -190,7 +247,11 @@ retrieval-only FinanceBench benchmark.
 - P3's synthetic retrieval evaluation does not estimate FinanceBench multi-hop
   performance. Its elapsed-time budget is cooperative around synchronous
   retrieval calls.
-- Claim verification, API, and frontend are still planned.
+- A persistent evidence ledger, SEC XBRL path, research planner/router,
+  production request API, and local research UI are not implemented yet.
+- The current A0–A5 path is an offline evaluation pipeline, not a deployed
+  application. Its strict evidence checks expose useful failure modes but do
+  not yet produce useful coverage on much of the held-out sample.
 
 ## License
 

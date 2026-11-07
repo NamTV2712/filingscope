@@ -255,12 +255,17 @@ class HybridRetriever:
         use_lexical_ladder: bool = True,
         use_reranker: bool = True,
         use_structured_lookup: bool = True,
+        timing_sink: dict[str, float] | None = None,
     ) -> list[RetrievedChunk]:
         """Backward-compatible wrapper that embeds the query before retrieval."""
         if not query.strip():
             return []
 
+        total_started = time.perf_counter()
+        stage_started = time.perf_counter()
         query_embedding = self.embed_query(query)
+        if timing_sink is not None:
+            timing_sink["query_embedding_ms"] = max(0.0, (time.perf_counter() - stage_started) * 1000)
         reranked = self._retrieve_with_embedding(
             query=query,
             query_embedding=query_embedding,
@@ -271,13 +276,18 @@ class HybridRetriever:
             use_lexical_ladder=use_lexical_ladder,
             use_reranker=use_reranker,
             use_structured_lookup=use_structured_lookup,
+            timing_sink=timing_sink,
         )
-
-        return self._format_results(
+        stage_started = time.perf_counter()
+        results = self._format_results(
             query,
             reranked,
             score_kind="cross_encoder" if use_reranker else "rrf",
         )
+        if timing_sink is not None:
+            timing_sink["result_formatting_ms"] = max(0.0, (time.perf_counter() - stage_started) * 1000)
+            timing_sink["retrieval_total_ms"] = max(0.0, (time.perf_counter() - total_started) * 1000)
+        return results
 
     def retrieve_with_embedding(
         self,
@@ -290,6 +300,7 @@ class HybridRetriever:
         use_lexical_ladder: bool = True,
         use_reranker: bool = True,
         use_structured_lookup: bool = True,
+        timing_sink: dict[str, float] | None = None,
     ) -> list[RetrievedChunk]:
         """Retrieve using a pre-computed query embedding.
 
@@ -299,6 +310,7 @@ class HybridRetriever:
         if not query.strip():
             return []
 
+        total_started = time.perf_counter()
         reranked = self._retrieve_with_embedding(
             query=query,
             query_embedding=query_embedding,
@@ -309,13 +321,18 @@ class HybridRetriever:
             use_lexical_ladder=use_lexical_ladder,
             use_reranker=use_reranker,
             use_structured_lookup=use_structured_lookup,
+            timing_sink=timing_sink,
         )
-
-        return self._format_results(
+        stage_started = time.perf_counter()
+        results = self._format_results(
             query,
             reranked,
             score_kind="cross_encoder" if use_reranker else "rrf",
         )
+        if timing_sink is not None:
+            timing_sink["result_formatting_ms"] = max(0.0, (time.perf_counter() - stage_started) * 1000)
+            timing_sink["retrieval_total_ms"] = max(0.0, (time.perf_counter() - total_started) * 1000)
+        return results
 
     def inspect(
         self,
@@ -570,13 +587,22 @@ class HybridRetriever:
         use_lexical_ladder: bool = True,
         use_reranker: bool = True,
         use_structured_lookup: bool = True,
+        timing_sink: dict[str, float] | None = None,
     ) -> list[tuple[dict, float]]:
         """Run retrieval with model lock scoped only to cross-encoder inference."""
+        total_started = time.perf_counter()
+        def record_stage(name: str, started: float) -> None:
+            if timing_sink is not None:
+                timing_sink[name] = max(0.0, (time.perf_counter() - started) * 1000)
+
+        stage_started = time.perf_counter()
         structured_match = None
         if use_structured_lookup and section in (None, "financial_table", "financial_statements"):
             structured_match = structured_lookup(query, ticker, self._all_chunks)
+        record_stage("structured_lookup_ms", stage_started)
 
         # --- Stage 1: BM25 search ---
+        stage_started = time.perf_counter()
         bm25_scores = self.bm25.get_scores(_tokenize(query))
         # Apply filter using pre-built indexes for O(1) lookup when available
         if hasattr(self, "_chunks_by_ticker_section"):
@@ -600,7 +626,9 @@ class HybridRetriever:
             key=lambda c: bm25_scores[self._chunk_index_map[c["chunk_id"]]],
             reverse=True
         )[:candidate_pool]
+        record_stage("bm25_ms", stage_started)
 
+        stage_started = time.perf_counter()
         semantic_results = self.store.search(
             query_vector=query_embedding,
             top_k=candidate_pool,
@@ -608,7 +636,9 @@ class HybridRetriever:
             section=section,
         )
         semantic_ids = [r["chunk_id"] for r in semantic_results]
+        record_stage("dense_search_ms", stage_started)
 
+        stage_started = time.perf_counter()
         lexical_ids: list[str] = []
         if use_lexical_ladder:
             hints = shape_retrieval_query(query)
@@ -625,8 +655,10 @@ class HybridRetriever:
                     max_candidates=candidate_pool,
                 )
             ]
+        record_stage("lexical_ladder_ms", stage_started)
 
         # --- Stage 3: RRF merge ---
+        stage_started = time.perf_counter()
         bm25_ids = [c["chunk_id"] for c in bm25_candidates]
         rrf_scores: dict[str, float] = {}
 
@@ -644,8 +676,10 @@ class HybridRetriever:
             for cid in top_candidates_ids
             if cid in self._chunks_by_id
         ]
+        record_stage("fusion_ms", stage_started)
 
         # --- Stage 4: Optional cross-encoder re-ranking ---
+        stage_started = time.perf_counter()
         if use_reranker:
             pairs = [(query, c["text"]) for c in top_candidates]
             with self._model_lock:
@@ -669,7 +703,12 @@ class HybridRetriever:
                 key=lambda item: item[1],
                 reverse=True,
             )
+        if use_reranker:
+            record_stage("reranking_ms", stage_started)
+        elif timing_sink is not None:
+            timing_sink["reranking_ms"] = 0.0
 
+        stage_started = time.perf_counter()
         if (
             structured_match is not None
             and section is not None
@@ -693,6 +732,8 @@ class HybridRetriever:
             )
 
         reranked = reranked[:top_k]
+        record_stage("structured_promotion_ms", stage_started)
+        record_stage("retrieval_compute_ms", total_started)
         return reranked
 
     def _format_results(

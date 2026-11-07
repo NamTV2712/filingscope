@@ -53,13 +53,21 @@ def test_company_document_corpus_supports_hybrid_rrf_without_reranker(monkeypatc
     )
     adapter = FinanceBenchRetrievalAdapter(retriever, top_k=2, candidate_pool=2)
 
+    timings = {}
     results = adapter.retrieve(
         "What was revenue?",
         preset="hybrid",
         query_embedding=[1.0, 0.0],
+        timing_sink=timings,
     )
 
     assert results
     assert results[0]["doc_name"] == "SYNTHETIC_2024_10K"
     assert results[0]["score_kind"] == "rrf"
     assert results[0]["page_number"] in {0, 1}
+    assert timings["reranking_ms"] == 0.0
+    assert timings["total_ms"] >= 0.0
+    assert all(
+        timings[name] >= 0.0
+        for name in ("bm25_ms", "dense_search_ms", "lexical_ladder_ms", "fusion_ms")
+    )

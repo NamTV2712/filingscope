@@ -1,6 +1,6 @@
 # FilingScope Architecture
 
-## Current implementation (P0–P4)
+## Current implementation (P0–P5)
 
 ### Offline document and evaluation paths
 
@@ -98,8 +98,57 @@ contains 15 synthetic cases and is not a semantic benchmark or a real-response
 accuracy estimate. Results and failure categories are in
 [`VERIFICATION_EVALUATION.md`](VERIFICATION_EVALUATION.md).
 
-## Planned connections
+## P5 offline end-to-end evaluation
 
-P5 will evaluate complete A0–A5 answer and retrieval variants, with a
-labelled end-to-end report and ablations. P6 will deliver the research UI,
-evidence inspector, deployment workflow, and reproducible demo.
+`src/evaluation/end_to_end_evaluation.py` joins the frozen P1 retrieval
+artifacts to the runtime decision layer, bounded adaptive controller, grounded
+answer generator, and claim verifier. A0–A2 compare retrieval variants; A3
+gates generation on evidence sufficiency; A4 adds bounded targeted retrieval;
+A5 applies claim verification as the final answer gate. The harness also checks
+replay parity and records per-stage timing, usage, and per-case checkpoints.
+This is a reproducible batch evaluation path, not a public request API or
+interactive research application.
+
+The provider-backed run completed for 150 FinanceBench cases. Held-out answer
+coverage was 44.4%, 35.6%, and 40.0% for A0–A2 and 0% for A3–A5; numeric exact
+accuracy was 0% for every variant on held-out cases. The strict decision and
+verification components therefore work as controls but currently reject or
+abstain on too many cases. These are failure findings, not a demonstrated
+end-user quality gain. See [`BENCHMARK_RESULTS.md`](BENCHMARK_RESULTS.md) and
+[`FAILURE_ANALYSIS.md`](FAILURE_ANALYSIS.md).
+
+## Target: separate logical planes
+
+```text
+RESEARCH PLANE
+question → intent/risk → bounded route → corpus-aware tasks → retrieval paths
+        → specialist observations linked to evidence IDs
+                                  │
+                                  ▼
+                       shared Evidence Ledger
+                                  │
+                                  ▼
+EVIDENCE CONTROL PLANE
+provenance + entity/metric/period + source authority + numeric consistency
+        → candidate policy → sufficiency/gaps → calculations → claim support
+        → deterministic ANSWER / PARTIAL / ABSTAIN / REJECTED release policy
+```
+
+The target is a roadmap, not implemented architecture. The current repository
+has neither a persistent Evidence Ledger nor a corpus map, XBRL fact path,
+complexity router, specialist graph, or request-facing UI. The existing
+`src/decision/`, `src/verification/`, and `src/agent/adaptive_retrieval.py`
+remain the starting point; they will be extended instead of replaced by broad
+framework abstractions. See [`CURRENT_ARCHITECTURE_AUDIT.md`](CURRENT_ARCHITECTURE_AUDIT.md)
+and [`RESEARCH_AGENDA.md`](RESEARCH_AGENDA.md).
+
+## Research milestone sequence
+
+M1 is complete as the offline end-to-end evaluation path. M2 is retrieval stage
+diagnostics, with the existing dense result kept as the permanent baseline.
+M3 introduces a versioned candidate Evidence Policy Engine and independent
+decision benchmark. Corpus-aware planning, bounded routing, a shared ledger,
+specialist work, parallel research, SEC XBRL, document parser comparisons,
+advanced verification, hard negatives, and agent ablations follow in M4–M14.
+M15 may add a local evidence-first interface. Cloud deployment is out of scope
+unless explicitly requested.
