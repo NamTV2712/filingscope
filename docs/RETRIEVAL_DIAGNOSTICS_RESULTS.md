@@ -173,6 +173,7 @@ lexical ladder 930/981 ms. Cross-encoder p50/p95 was 285/331 ms for 10 pairs,
   for later evidence-policy work. No default changes are justified.
 - **DEFER** CIK and section routing until ingestion provides discriminative
   metadata; doc_type is the only available form proxy in P1.
-- Continue with M3, the versioned Evidence Policy Engine and independent
-  decision benchmark. Hard-negative retrieval work remains M12; structural
+- M3, the versioned Evidence Policy Engine and independent synthetic decision
+  benchmark, is complete. Continue with M4, the runtime Corpus Map and
+  corpus-aware planner. Hard-negative retrieval work remains M12; structural
   retrieval remains a later experiment.

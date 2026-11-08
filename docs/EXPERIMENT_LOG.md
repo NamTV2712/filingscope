@@ -19,7 +19,7 @@ The log separates software-contract checks from answer-quality evidence.
 - **Interpretation:** Fusion may dilute dense candidates or pool composition
   may be weak; stage-level cause is unknown.
 - **Decision:** **KEEP** dense baseline; run the R1–R3/R5 diagnostics in M2
-  (completed below), then continue with M3. R4 and R6 remain later work.
+  (completed below). R4 and R6 remain later work.
 
 ## P2 — Evidence sufficiency rules
 
@@ -32,8 +32,8 @@ The log separates software-contract checks from answer-quality evidence.
 - **Latency/resources:** Provider-free; per-run resource usage not measured.
 - **Interpretation:** Confirms expected rule behavior only; no calibration or
   real-corpus accuracy claim.
-- **Decision:** **KEEP** as current safety layer; **EXPERIMENT** with a separate
-  labeled policy benchmark in M3.
+- **Decision:** **KEEP** as current safety layer; M3 adds a separate candidate
+  policy benchmark. P2 remains the requirement-slot sufficiency path.
 
 ## P3 — Bounded adaptive retrieval
 
@@ -48,8 +48,8 @@ The log separates software-contract checks from answer-quality evidence.
 - **Latency/resources:** No provider calls; synchronous retrieval cannot be
   interrupted mid-call by cooperative elapsed-time limit.
 - **Interpretation:** Tests control flow, not FinanceBench success.
-- **Decision:** **KEEP** bounded behavior; **EXPERIMENT** against P5 evidence
-  gaps after retrieval diagnostics.
+- **Decision:** **KEEP** bounded behavior; evaluate against P5 evidence gaps
+  after corpus-aware planning and candidate-policy integration mature.
 
 ## P4 — Claim and numerical verification
 
@@ -64,7 +64,7 @@ The log separates software-contract checks from answer-quality evidence.
 - **Interpretation:** Lexical topical checks may miss paraphrases; not a
   semantic benchmark.
 - **Decision:** **KEEP** fail-closed baseline; **EXPERIMENT** with atomic claim
-  IDs and calibrated policy only with separate labels.
+  IDs and separately labeled claim-support decisions in M11.
 
 ## P5/M1 — End-to-end A0–A5 benchmark
 
@@ -92,8 +92,8 @@ The log separates software-contract checks from answer-quality evidence.
   end-user quality win.
 - **Decision:** **KEEP** all baselines and the negative result; **ADAPT** the
   integrated harness for regressions; the next experiment at that point was
-  M2 retrieval diagnostics, completed below. M3 candidate policy evaluation
-  now follows.
+  M2 retrieval diagnostics, completed below. M3 now adds a separate candidate
+  policy contract and benchmark.
 
 ## M1 — Nomic embedding runtime compatibility
 
@@ -161,7 +161,41 @@ The log separates software-contract checks from answer-quality evidence.
 - **Decision:** **KEEP** dense as the permanent baseline; **ADAPT** the
   query-derived company/period filters as dense-only opt-in diagnostics;
   **DEFER** production filter promotion until paired latency and false-filter
-  analysis. No fusion or reranker default changes. M3 is next.
+  analysis. No fusion or reranker default changes. M4 is next.
+
+## M3 — Candidate Evidence Policy Engine
+
+- **Hypothesis:** Typed alignment, support, provenance, revision, table,
+  numeric-consistency, and contradiction observations with deterministic hard
+  rules will avoid candidate false accepts that a semantic-score threshold
+  cannot distinguish.
+- **Baseline / changed variable:** Compared a semantic-relevance-only
+  threshold against policy v1.0.0 with `ACCEPT`/`WEAK`/`REJECT` dispositions
+  and reason codes. Score thresholds only demote candidates; categorical hard
+  constraints cannot be overridden by high scores.
+- **Dataset/config:** 60 hand-authored synthetic candidates (20 per
+  disposition), development/validation/held-out 24/18/18, balanced per split.
+  Both threshold choices use development only. This is not an independently
+  annotated financial corpus. Full report:
+  `EVIDENCE_POLICY_EVALUATION.md`.
+- **Result:** Policy disposition and reason-code agreement were 100% on every
+  split, with 0% candidate false-accept and false-reject rates on the fixtures.
+  The score-only baseline's held-out accuracy was 61.1%, false-accept rate
+  16.67%, and false-reject rate 83.33%. These values verify fixed rules, not
+  real-document accuracy.
+- **Latency/resources:** Policy-only p50/p95 0.0023/0.0030 ms across 60
+  in-process calls; zero provider calls, tokens, or provider cost. Peak memory
+  not measured. No probabilistic backend was evaluated, so Brier/ECE are not
+  applicable.
+- **Interpretation:** Typed hard constraints represent the synthetic
+  wrong-entity/period/metric/provenance and support cases that a scalar score
+  cannot represent. Labels and feature scenarios are hand-authored together;
+  external financial-data validation is required before runtime promotion.
+- **Decision:** **ADOPT** the deterministic schema and policy v1.0.0 as the
+  candidate-decision contract; **EXPERIMENT** on independently annotated
+  financial evidence before wiring into the P5 answer path. No Jev or other
+  probabilistic backend is adopted. Code commit:
+  `3ac21fed877627bbe93a61a0978b3b12d1a0856b`.
 
 ## Planned experiments
 

@@ -134,22 +134,26 @@ provenance + entity/metric/period + source authority + numeric consistency
         → deterministic ANSWER / PARTIAL / ABSTAIN / REJECTED release policy
 ```
 
-The target is a roadmap, not implemented architecture. The current repository
-has neither a persistent Evidence Ledger nor a corpus map, XBRL fact path,
-complexity router, specialist graph, or request-facing UI. The existing
-`src/decision/`, `src/verification/`, and `src/agent/adaptive_retrieval.py`
-remain the starting point; they will be extended instead of replaced by broad
-framework abstractions. See [`CURRENT_ARCHITECTURE_AUDIT.md`](CURRENT_ARCHITECTURE_AUDIT.md)
+This is still a target architecture. M3 adds `src/policy/` as an independent,
+typed candidate-decision component with a deterministic policy, but it is not
+yet connected to P5 retrieval or final answer release. The repository has no
+persistent Evidence Ledger, runtime Corpus Map, XBRL fact path, complexity
+router, specialist graph, or request-facing UI. `src/decision/`,
+`src/verification/`, and `src/agent/adaptive_retrieval.py` remain the starting
+points; extend them instead of replacing them with broad framework
+abstractions. See [`CURRENT_ARCHITECTURE_AUDIT.md`](CURRENT_ARCHITECTURE_AUDIT.md)
 and [`RESEARCH_AGENDA.md`](RESEARCH_AGENDA.md).
 
 ## Research milestone sequence
 
 M1 is complete as the offline end-to-end evaluation path. M2 retrieval stage
 diagnostics are complete; dense remains the permanent baseline because no
-fusion or reranking variant beat it on the held-out cohort. M3 introduces a
-versioned candidate Evidence Policy Engine and independent decision benchmark.
-Corpus-aware planning, bounded routing, a shared ledger,
+fusion or reranking variant beat it on the held-out cohort. M3's deterministic
+candidate policy and separate 60-case synthetic benchmark are complete, with
+the limitation that the policy is not yet part of the P5 answer path and its
+fixtures do not measure financial-document accuracy. M4 is next: runtime
+Corpus Map and corpus-aware planning. Bounded routing, a shared ledger,
 specialist work, parallel research, SEC XBRL, document parser comparisons,
-advanced verification, hard negatives, and agent ablations follow in M4–M14.
+advanced verification, hard negatives, and agent ablations follow in M5–M14.
 M15 may add a local evidence-first interface. Cloud deployment is out of scope
 unless explicitly requested.

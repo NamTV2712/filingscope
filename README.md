@@ -11,14 +11,19 @@ failure report. Its results are weak: answer coverage is low, held-out numeric
 exact accuracy is zero, and evidence-aware variants often abstain. That result
 is preserved as a baseline for the research roadmap rather than presented as a
 quality success. See [`docs/BENCHMARK_RESULTS.md`](docs/BENCHMARK_RESULTS.md).
+M3 adds a deterministic candidate Evidence Policy Engine and a separate
+60-case synthetic decision benchmark. Its results validate fixed policy
+behavior only; they are not financial-document accuracy or calibration
+results. See
+[`docs/EVIDENCE_POLICY_EVALUATION.md`](docs/EVIDENCE_POLICY_EVALUATION.md).
 
 The next work follows the research milestones in
-[`docs/RESEARCH_AGENDA.md`](docs/RESEARCH_AGENDA.md), beginning with retrieval
-stage diagnostics. The target design separates a Research Plane, which finds
-and prepares information, from an Evidence Control Plane, which makes the
-deterministic acceptance, sufficiency, verification, and answer-release
-decisions. A local evidence-first interface is a later milestone. **No cloud
-deployment is planned.**
+[`docs/RESEARCH_AGENDA.md`](docs/RESEARCH_AGENDA.md), beginning with a runtime
+Corpus Map and corpus-aware planning. The target design separates a Research
+Plane, which finds and prepares information, from an Evidence Control Plane,
+which makes the deterministic acceptance, sufficiency, verification, and
+answer-release decisions. A local evidence-first interface is a later
+milestone. **No cloud deployment is planned.**
 
 ## P0 retrieval baseline
 
@@ -234,8 +239,9 @@ metric, leakage, and reproduction details.
 | P5 | Controlled A0–A5 benchmark and failure analysis | Complete |
 | M1 | End-to-end retrieval, decision, adaptive retrieval, generation, and verification baseline | Complete as an offline evaluation path |
 | M2 | Retrieval stage diagnostics | Complete; dense baseline retained |
-| M3 | Candidate Evidence Policy Engine and independent decision benchmark | Next |
-| M4–M14 | Corpus-aware planning, routing, ledger, specialists, structured facts, verification, and further retrieval research | Planned; see research agenda |
+| M3 | Candidate Evidence Policy Engine and independent decision benchmark | Complete; synthetic behavior benchmark only |
+| M4 | Runtime Corpus Map and corpus-aware planner | Next |
+| M5–M14 | Routing, ledger, specialists, structured facts, verification, and further retrieval research | Planned; see research agenda |
 | M15 | Local evidence-first research UX | Planned; no deployment |
 
 No answer quality or end-to-end agent performance claims are made by the
@@ -249,9 +255,9 @@ retrieval-only FinanceBench benchmark.
   can reduce retrieval recall.
 - Local SEC documents and Qdrant data are deliberately not included.
 - The synthetic test validates code integration, not real-model quality.
-- P2's synthetic decision evaluation validates fixed policy cases, not general
-  decision accuracy or calibration. Independent labelled evaluation is planned
-  for P5.
+- P2 and M3 use synthetic decision cases. M3's 60-case candidate benchmark
+  verifies hand-authored rules and does not estimate general accuracy. There is
+  no probability-producing backend or measured calibration result.
 - P3's synthetic retrieval evaluation does not estimate FinanceBench multi-hop
   performance. Its elapsed-time budget is cooperative around synchronous
   retrieval calls.

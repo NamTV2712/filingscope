@@ -3,13 +3,13 @@
 Audit refreshed: 2026-11-08<br>
 Branch: `main`<br>
 Audited repository: `D:\Project\filingscope`<br>
-Audited commit: `c0c887df6128e3720d68fac09b2f91adb5f74948`<br>
+Audited commit: `3ac21fed877627bbe93a61a0978b3b12d1a0856b`<br>
 Initial audit baseline: `956cef412d765395b5a7f0b773f821a58686a35a`
 
 This refresh reflects the committed P0–P5 repository, M1 runtime compatibility
-check, and M2 retrieval diagnostics. P0–P4 behavior and the completed P5
-provider benchmark remain preserved. Source benchmark data, model caches, and
-generated run artifacts remain local and git-ignored.
+check, M2 retrieval diagnostics, and M3 candidate policy. P0–P4 behavior and
+the completed P5 provider benchmark remain preserved. Source benchmark data,
+model caches, and generated run artifacts remain local and git-ignored.
 
 ## Existing capabilities
 
@@ -31,6 +31,10 @@ generated run artifacts remain local and git-ignored.
 - Claim/citation/numerical verification: `src/verification/` validates
   canonical citations, maps claims to evidence, detects contradictions, and
   recomputes supported financial operations with `Decimal`.
+- Candidate policy: `src/policy/` defines a versioned observation schema,
+  deterministic `ACCEPT`/`WEAK`/`REJECT` rules, stable reason codes, backend
+  protocols, and a separate synthetic benchmark. It is not yet called by the
+  P5 A0–A5 evaluation pipeline.
 - Generation and evaluation: `src/generation/` contains a provider-agnostic
   answer interface plus a Groq adapter; `src/evaluation/` includes P1
   retrieval metrics and the P5 A0–A5 pipeline, lexical/numeric answer metrics,
@@ -46,6 +50,7 @@ generated run artifacts remain local and git-ignored.
 | Retrieval | `Retriever.retrieve(query, top_k)` and `HybridRetriever.retrieve(...)` | Evidence is a mapping/chunk; no shared policy-owned candidate record yet. |
 | Retrieval inspection | `HybridRetriever.inspect(...)` | Diagnostic only; not an answer-quality result. |
 | Decision | `EvidenceDecisionLayer.assess/decide(question, chunks, budget)` | Deterministic slot coverage, not calibrated probability or general semantic support. |
+| Candidate policy | `DeterministicDecisionBackend.decide(features)` | Typed observations and hard rules; synthetic cases only; not integrated into P5. |
 | Adaptive retrieval | `AdaptiveRetrievalController.run(question, initial_chunks, budget)` | One bounded flow over the existing retriever; no planner/corpus map. |
 | Generation | `AnswerGenerator.generate(question, evidence_chunks)` | Provider call is not itself the evidence authority. |
 | Verification | `ClaimLevelVerifier.verify(question, answer, evidence_chunks)` | Lexical topical anchors and deterministic number parsing can miss paraphrases or valid facts. |
@@ -67,7 +72,7 @@ generated run artifacts remain local and git-ignored.
 - P5 reuses a small public benchmark and an existing P1 corpus. It does not yet
   include hard-negative annotations, prompt-injection cases, multi-company
   comparative cohorts, or cross-document provenance labels.
-- P2/P3/P4 decision and verification accuracy is measured with small fixed
+- P2/P3/P4 and M3 decision/verification accuracy is measured with small fixed
   synthetic scenario sets; those results are software behavior checks, not
   calibration or real-world decision accuracy.
 - The provider-backed P5 run had interrupted attempts before the completed
@@ -79,10 +84,11 @@ generated run artifacts remain local and git-ignored.
 1. **Evidence identity and provenance.** Chunks carry document/page fields, but
    there is no canonical `EvidenceRecord`, request-scoped ledger, source
    revision policy, or deterministic cross-path merge contract.
-2. **Policy boundary.** P2 sufficiency and P4 claim verification each use
-   related extractors/parsers, but candidate acceptance features (source
-   authority, filing/form alignment, table integrity, revision validity) are
-   not centralized or versioned as a policy schema.
+2. **Policy integration.** M3 now centralizes candidate observations and
+   decisions in a versioned schema, but callers must still supply features;
+   there is no real-candidate feature observer or runtime adapter. P2
+   sufficiency, candidate acceptance, and P4 claim verification remain separate
+   decisions rather than one evidence-control flow.
 3. **Financial facts.** Table extraction exists; SEC XBRL facts do not. There
    is no tag drift, duration/instant, unit, accession, amendment, or
    restatement-aware fact model.
@@ -93,9 +99,10 @@ generated run artifacts remain local and git-ignored.
    and creates local claim IDs, but no durable claim graph joins claims,
    calculation objects, and evidence IDs. Atomic semantic verification and a
    bounded correction pass do not exist.
-6. **Decision calibration.** No labelled decision-point benchmark, probabilistic
-   backend, Brier score, expected calibration error, or risk-coverage curve is
-   implemented.
+6. **Decision calibration.** M3 has a 60-case hand-authored synthetic
+   candidate benchmark. It is a policy contract check rather than external
+   accuracy evidence. No probabilistic backend, measured Brier/ECE, or
+   risk-coverage curve is implemented.
 7. **Application surface.** There is no user request API or local research UI.
    Trace events, evidence coverage, calculations, and an inspectable “why this
    answer” view remain planned. No cloud deployment is in scope.
@@ -114,7 +121,8 @@ generated run artifacts remain local and git-ignored.
 
 ## Missing vertical integrations
 
-- versioned Evidence Policy Engine and independent decision benchmark;
+- Evidence Policy Engine integration with a real-candidate observer and the
+  end-to-end evaluation path;
 - runtime Corpus Map and corpus-aware planner;
 - explicit FAST/STANDARD/DEEP complexity routing and budget profiles;
 - shared Evidence Ledger and specialist task/result contracts;
@@ -165,10 +173,25 @@ The full regression suite after M2 implementation passed with 203 passed and
 3 skipped tests. The source and P1 result provenance are recorded in the
 diagnostics report.
 
+## M3 validation update
+
+Policy v1.0.0 and a fixed 60-case candidate benchmark are implemented. On the
+synthetic development/validation/held-out splits (24/18/18), policy disposition
+and reason-code agreement were 100%, with 0% false acceptance and rejection.
+The score-only baseline had 61.1% held-out accuracy, 16.67% false-accept rate,
+and 83.33% false-reject rate. These fixture results do not estimate accuracy
+on financial documents. No probability-producing backend was evaluated, so
+Brier/ECE are not applicable. The policy is not wired into the P5 answer path.
+See [`EVIDENCE_POLICY_EVALUATION.md`](EVIDENCE_POLICY_EVALUATION.md).
+
+The full regression suite after M3 implementation passed with 227 passed and
+3 skipped tests.
+
 ## Next milestone recommendation
 
-M1 and M2 are validated. Continue with M3: define the versioned candidate
-Evidence Policy Engine and its independent decision benchmark. Preserve the
-dense retrieval baseline; keep query-derived company/period filtering
-diagnostic-only until paired latency and false-filter analysis is complete.
-The sequence is in [`RESEARCH_AGENDA.md`](RESEARCH_AGENDA.md).
+M1–M3 are validated. Continue with M4: construct a runtime Corpus Map from
+available corpus metadata and measure corpus-conditioned planning against
+question-only planning. Preserve the dense retrieval baseline; keep
+query-derived company/period filtering diagnostic-only until paired latency
+and false-filter analysis is complete. The sequence is in
+[`RESEARCH_AGENDA.md`](RESEARCH_AGENDA.md).
