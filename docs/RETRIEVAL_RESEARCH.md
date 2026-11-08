@@ -3,26 +3,39 @@
 ## Preserved evidence
 
 P1's pinned 150-case evaluation measured dense retrieval at Recall@10 0.4167
-and full evidence-page coverage@10 0.3733. Dense outperformed current RRF and
-hybrid reranking on the aggregate sample. The P5 replay matched P1 chunk IDs on
-100% of cases for A0/A1/A2. The reason dense wins is still a hypothesis; do not
-assume that hybrid search or reranking is better.
+and full evidence-page coverage@10 0.3733. M2 found dense to be the strongest
+individual candidate producer; unioning all three sources at 50 candidates
+adds some gold-page recall, but tested fusion and reranking still trail dense.
+The P5 and M2 replays matched frozen P1 chunk IDs on all 150 cases. Keep dense
+as the baseline and require measured gains before promoting hybrid variants.
 
-## M2 stage diagnostics
+## M2 stage diagnostics — complete
 
-Use the same cases, corpus, split, and query embedding where possible. Record
-per-question candidate IDs, retrieval method, score/rank, metadata filters,
-latency, token/candidate budget, and gold-page coverage. Gold labels stay in the
-evaluation layer.
+The full 150-case diagnostics explain why the current hybrid path trails dense:
+dense Recall@10 is 0.4167 and full evidence coverage@10 is 0.3733; equal RRF
+falls to 0.3167 / 0.2600. Weighted RRF recovers some quality (0.3800 / 0.3267)
+but remains below dense in development, validation, and held-out. Candidate
+union at 50 per source raises gold-page recall from dense's 0.6989 to 0.7256,
+while lexical candidates alone recover none of the annotated gold pages. The
+loss is therefore primarily in fusion/ranking rather than the complete absence
+of complementary candidates.
+
+Query-derived company and reporting-period filters improve dense retrieval on
+their eligible cohorts, including held-out cases; the same filters hurt RRF.
+They remain diagnostic-only pending paired latency and false-filter analysis.
+The P1 corpus has no CIK, ticker, or form_type metadata, and its sole section
+value is document. The available doc_type field is used as a form proxy. Full
+tables, provenance, cohort results, latency, resource measurements, and source
+fingerprint are in [M2 diagnostics results](RETRIEVAL_DIAGNOSTICS_RESULTS.md).
 
 | ID | Experiment | Main measurement | Status |
 |---|---|---|---|
-| R1 | Candidate recall before fusion and reranking | Dense/BM25/lexical candidate recall and union recall at each pool size | Planned |
-| R2 | Fusion ablation | BM25, dense, current RRF, weighted RRF, dense-preserving fusion, route-aware fusion | Planned |
-| R3 | Independent pool sizes | Dense, lexical, rerank candidate counts and final-k sweep | Planned |
-| R4 | Hard negatives | Same company/wrong year; same metric/wrong company; wrong metric; similar wording/wrong disclosure; restated vs as-reported | Planned; benchmark work M12 |
-| R5 | Metadata routing | Company, CIK, period, form, and section filters independently and jointly | Planned |
-| R6 | Structure-aware retrieval | Section-aware, table-aware, parent-child and small-to-big expansion | Planned |
+| R1 | Candidate recall before fusion and reranking | Dense, BM25, lexical, and union gold-page recall at each pool size | Complete; dense dominates individual sources |
+| R2 | Fusion ablation | Equal/weighted RRF, dense-preserving, route-aware, rerank | Complete; dense remains ahead on held-out |
+| R3 | Independent pool sizes | Dense, BM25, lexical, fusion, rerank candidate counts and final-k sweep | Complete; no hybrid setting beats dense |
+| R4 | Hard negatives | Same company/wrong year; same metric/wrong company; wrong metric; similar wording/wrong disclosure; restated vs as-reported | Deferred to M12 |
+| R5 | Metadata routing | Company, CIK, period, form, and section filters independently and jointly | Complete for available fields; CIK absent and section not discriminative |
+| R6 | Structure-aware retrieval | Section-aware, table-aware, parent-child and small-to-big expansion | Planned with M10 document-structure work |
 | R7 | Late interaction | ColBERT/Qdrant multivectors after R1–R6 | Deferred to M14 |
 
 ## Experiment controls

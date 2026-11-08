@@ -16,8 +16,10 @@ consistency, sufficiency, verification, abstention, and release.
 - M1 is complete as an offline vertical evaluation path connecting retrieval,
   evidence decision, adaptive retrieval, generation, and verification. A
   request-facing API and persistent ledger are not part of that path.
-- M2, retrieval stage diagnostics, is next. Dense remains the measured
-  retrieval baseline until an ablation demonstrates improvement.
+- M2 retrieval stage diagnostics are complete. Dense remains the measured
+  retrieval baseline: no fusion or reranking variant beat it on the held-out
+  cohort. Query-derived company and period filters improved dense retrieval on
+  eligible queries and remain opt-in research. M3 is next.
 - Deployment is explicitly out of scope. M15 may deliver a local research UI.
 
 ## Milestones
@@ -25,7 +27,7 @@ consistency, sufficiency, verification, abstention, and release.
 | Milestone | Deliverable | Status |
 |---|---|---|
 | M1 | Connected, reproducible retrieval → decision → adaptive retrieval → generation → verification baseline | Complete as offline P5 evaluation |
-| M2 | Candidate recall, fusion, pool-size, metadata, and reranker diagnostics | Next |
+| M2 | Candidate recall, fusion, pool-size, metadata, and reranker diagnostics | Complete; dense baseline retained |
 | M3 | Versioned Evidence Policy Engine and separate decision benchmark | Planned |
 | M4 | Runtime Corpus Map and corpus-aware task planner | Planned |
 | M5 | Finite complexity router with FAST/STANDARD/DEEP budgets | Planned |

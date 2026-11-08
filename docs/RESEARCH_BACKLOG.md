@@ -6,8 +6,8 @@ tested work only; design notes are not completion evidence.
 | Priority | Work | Status / dependency | Completion evidence |
 |---|---|---|---|
 | M1 | Offline vertical retrieval → decision → adaptive retrieval → generation → verification | Complete in P5 evaluation harness | Reproducible 150-case run, tests, per-split results and failure analysis |
-| M2 | Explain dense over hybrid with stage diagnostics | Next | Candidate recall/fusion/pool/filter/reranker report and dense comparison |
-| M3 | Candidate Evidence Policy Engine and decision benchmark | After M2 | Versioned schemas, hard constraints, labeled decision metrics and replay tests |
+| M2 | Explain dense over hybrid with stage diagnostics | Complete | [150-case report](RETRIEVAL_DIAGNOSTICS_RESULTS.md): candidate recall, fusion/pool/filter/reranker metrics, split results, latency, resources, and provenance |
+| M3 | Candidate Evidence Policy Engine and decision benchmark | Next | Versioned schemas, hard constraints, labeled decision metrics and replay tests |
 | M4 | Runtime Corpus Map and corpus-aware planning | After stable candidate contracts | Query-only vs map-conditioned study; no benchmark label leakage |
 | M5 | Finite complexity/cost routing | After M4 | Router correctness, unnecessary research rate, quality/cost/latency study |
 | M6 | Shared Evidence Ledger | After policy and planning contracts | Stable IDs, deterministic merge/dedup, provenance and derived-fact tests |
@@ -16,7 +16,7 @@ tested work only; design notes are not completion evidence.
 | M9 | SEC XBRL and fact normalization | Can be researched with M7 | Company/tag/period/unit/accession/amendment fixture coverage |
 | M10 | Docling and structure-aware parsing experiment | After failure subset selection | pypdf comparison with fidelity, retrieval, time, RAM, disk measurements |
 | M11 | Atomic claims and bounded correction | After ledger | claim/evidence/calculation graph, verifier benchmark, one bounded correction |
-| M12 | Provenance-sensitive hard negatives | Can be prepared during M2 | Frozen company/year/context-confusable test cohort |
+| M12 | Provenance-sensitive hard negatives | Seed from M2 diagnostic misses | Frozen company/year/context-confusable test cohort |
 | M13 | Multi-agent and router ablation | After M5–M9 | B0–B5 compared on quality, provenance, cost, calls and latency |
 | M14 | ColBERT/multivectors/GraphRAG/HippoRAG/LightRAG | Only after R1–R6 | Retain only measured improvements against dense baseline |
 | M15 | Local evidence-first research UX | After API/ledger contracts | inspectable answer/sources/coverage/calculation/verification/trace flow |

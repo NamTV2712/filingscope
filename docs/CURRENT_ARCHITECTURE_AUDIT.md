@@ -1,15 +1,15 @@
 # Current architecture audit
 
-Audit refreshed: 2026-11-07<br>
+Audit refreshed: 2026-11-08<br>
 Branch: `main`<br>
 Audited repository: `D:\Project\filingscope`<br>
-Audited commit: `9b87e6b5b2d93350058e98d8922aea76fb802a5a`<br>
+Audited commit: `c0c887df6128e3720d68fac09b2f91adb5f74948`<br>
 Initial audit baseline: `956cef412d765395b5a7f0b773f821a58686a35a`
 
-This refresh reflects the committed P0–P5 repository plus an M1 runtime
-compatibility check. P0–P4 behavior and the completed P5 provider benchmark
-remain preserved. Source benchmark data, model caches, and generated run
-artifacts remain local and git-ignored.
+This refresh reflects the committed P0–P5 repository, M1 runtime compatibility
+check, and M2 retrieval diagnostics. P0–P4 behavior and the completed P5
+provider benchmark remain preserved. Source benchmark data, model caches, and
+generated run artifacts remain local and git-ignored.
 
 ## Existing capabilities
 
@@ -144,9 +144,31 @@ held-out answer coverage is 44.4%/35.6%/40.0% for A0–A2 and 0% for A3–A5;
 numeric exact accuracy is 0% for all variants. The compatibility check does
 not replace or retune those results.
 
+## M2 validation update
+
+The 150-case stage diagnostic replayed the frozen P1 corpus and matched BM25,
+dense, hybrid, and hybrid-rerank top-10 chunk IDs on all 150 cases. Dense
+Recall@10 / full evidence coverage@10 was 0.4167 / 0.3733, versus equal RRF at
+0.3167 / 0.2600. Weighted RRF recovered some quality but remained below dense.
+Dense candidate gold-page recall at 50 was 0.6989; union recall at 50 per
+source was 0.7256. The reranker raised MRR at some pool sizes but not recall or
+full-evidence coverage over dense.
+
+Question-derived company and period filters improved dense retrieval on
+eligible validation and held-out cases, but the same filters hurt RRF. CIK,
+ticker, and form_type are absent from P1 metadata; section contains only the
+generic value document. These filters remain opt-in diagnostics. Full split
+metrics and latency/resource measurements are in
+[`RETRIEVAL_DIAGNOSTICS_RESULTS.md`](RETRIEVAL_DIAGNOSTICS_RESULTS.md).
+
+The full regression suite after M2 implementation passed with 203 passed and
+3 skipped tests. The source and P1 result provenance are recorded in the
+diagnostics report.
+
 ## Next milestone recommendation
 
-M1 is validated. Continue with M2 by measuring candidate recall before fusion,
-fusion-stage survival, pool-size sensitivity, metadata filter effects, and
-reranker changes against the preserved dense baseline. The experiment sequence
-is in [`RETRIEVAL_RESEARCH.md`](RETRIEVAL_RESEARCH.md).
+M1 and M2 are validated. Continue with M3: define the versioned candidate
+Evidence Policy Engine and its independent decision benchmark. Preserve the
+dense retrieval baseline; keep query-derived company/period filtering
+diagnostic-only until paired latency and false-filter analysis is complete.
+The sequence is in [`RESEARCH_AGENDA.md`](RESEARCH_AGENDA.md).

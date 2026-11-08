@@ -144,10 +144,11 @@ and [`RESEARCH_AGENDA.md`](RESEARCH_AGENDA.md).
 
 ## Research milestone sequence
 
-M1 is complete as the offline end-to-end evaluation path. M2 is retrieval stage
-diagnostics, with the existing dense result kept as the permanent baseline.
-M3 introduces a versioned candidate Evidence Policy Engine and independent
-decision benchmark. Corpus-aware planning, bounded routing, a shared ledger,
+M1 is complete as the offline end-to-end evaluation path. M2 retrieval stage
+diagnostics are complete; dense remains the permanent baseline because no
+fusion or reranking variant beat it on the held-out cohort. M3 introduces a
+versioned candidate Evidence Policy Engine and independent decision benchmark.
+Corpus-aware planning, bounded routing, a shared ledger,
 specialist work, parallel research, SEC XBRL, document parser comparisons,
 advanced verification, hard negatives, and agent ablations follow in M4–M14.
 M15 may add a local evidence-first interface. Cloud deployment is out of scope

@@ -18,7 +18,8 @@ The log separates software-contract checks from answer-quality evidence.
   values. Peak RAM was not recorded.
 - **Interpretation:** Fusion may dilute dense candidates or pool composition
   may be weak; stage-level cause is unknown.
-- **Decision:** **KEEP** dense baseline; **EXPERIMENT** with R1–R6 in M2.
+- **Decision:** **KEEP** dense baseline; run the R1–R3/R5 diagnostics in M2
+  (completed below), then continue with M3. R4 and R6 remain later work.
 
 ## P2 — Evidence sufficiency rules
 
@@ -90,8 +91,9 @@ The log separates software-contract checks from answer-quality evidence.
   requirement parsing likely need separate diagnosis. Do not describe M1 as an
   end-user quality win.
 - **Decision:** **KEEP** all baselines and the negative result; **ADAPT** the
-  integrated harness for regressions; next **EXPERIMENT** is M2 retrieval
-  diagnostics, then M3 candidate policy evaluation.
+  integrated harness for regressions; the next experiment at that point was
+  M2 retrieval diagnostics, completed below. M3 candidate policy evaluation
+  now follows.
 
 ## M1 — Nomic embedding runtime compatibility
 
@@ -118,6 +120,48 @@ The log separates software-contract checks from answer-quality evidence.
   integration and replay parity, not answer quality.
 - **Decision:** **ADOPT** `transformers==4.57.6`; require an offline preflight
   before changing the pin.
+
+## M2 — Retrieval stage diagnostics
+
+- **Hypothesis:** Dense outperforms hybrid because candidate producers fail to
+  retrieve evidence, fusion dilutes useful candidates, pool settings are poor,
+  metadata is underused, or reranking changes evidence order.
+- **Baseline / changed variable:** Replayed P1 BM25, dense, equal-RRF, and
+  hybrid-rerank top-10 results, then varied candidate source/pool sizes, RRF
+  weights, dense-preserving fusion, query-derived metadata filters, and
+  cross-encoder pool sizes while holding the 150 questions and P1 corpus fixed.
+- **Dataset/config:** FinanceBench 150 cases (60/45/45 development,
+  validation, held-out), 28,849 P1 chunks, candidate ceiling 50, final k 5/10,
+  Nomic embedding revision `e9b6763023c676ca8431644204f50c2b100d9aab`,
+  MiniLM cross-encoder revision `233902d25c440f23af6f7d6e94d2946bac0bee0a`.
+  Full metrics and command are in `RETRIEVAL_DIAGNOSTICS_RESULTS.md`; raw
+  per-case artifact remains ignored local data.
+- **Result:** Replay parity was 150/150 for BM25, dense, hybrid, and reranked
+  hybrid. Dense Recall@10 / full evidence coverage@10 was 0.4167 / 0.3733;
+  equal RRF was 0.3167 / 0.2600; weighted RRF was 0.3800 / 0.3267. Dense
+  candidate recall at 50 was 0.6989; union recall at 50/source was 0.7256.
+  Query-derived company-plus-period filtering improved dense Recall@10 from
+  0.4420 to 0.5625 and full evidence coverage from 0.3839 to 0.5000 on 112
+  eligible cases; held-out Recall@10 rose from 0.4756 to 0.5244. It reduced RRF
+  Recall@10 from 0.3259 to 0.2009 on the same cases.
+- **Latency/resources:** Zero provider calls. Full run wall time 790 seconds on
+  Windows 11, Intel i7-14650HX, CPU-only PyTorch 2.15.0. Stage p50/p95: query
+  embedding 36/62 ms, BM25 220/429 ms, dense 75/102 ms, lexical ladder
+  930/981 ms. Cross-encoder p50/p95: 285/331 ms for 10 pairs, 701/806 ms for
+  25 pairs, 1,413/1,616 ms for 50 pairs. One-second process sampling observed
+  2,954,768,384 bytes maximum working set (2.95 GB decimal); this is a sampled
+  maximum rather than an exact OS peak. Filter-profile latency is listed in
+  the detailed report.
+- **Interpretation:** Dense generates better candidates and preserves better
+  top-10 evidence than the tested fusion paths. Weighted RRF improves over
+  equal RRF but still loses to dense on every split. Metadata routing is
+  promising for dense when exact company/period values occur in the question;
+  available form cohorts are too small, CIK/ticker/form_type are absent, and
+  section has one value. The route-aware profile did not activate on any case.
+- **Decision:** **KEEP** dense as the permanent baseline; **ADAPT** the
+  query-derived company/period filters as dense-only opt-in diagnostics;
+  **DEFER** production filter promotion until paired latency and false-filter
+  analysis. No fusion or reranker default changes. M3 is next.
 
 ## Planned experiments
 

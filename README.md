@@ -169,8 +169,11 @@ published in [`docs/RETRIEVAL_BENCHMARK_RESULTS.md`](docs/RETRIEVAL_BENCHMARK_RE
 P1's completed baseline found dense retrieval strongest on this sample
 (Recall@10 0.4167; complete evidence-page coverage at 10 of 0.3733). Hybrid RRF
 and hybrid reranking did not beat the dense baseline; the reranker improved
-hybrid MRR@10 but increased latency. See the result and failure reports for
-the full split metrics and limitations.
+hybrid MRR@10 but increased latency. M2 stage diagnostics then confirmed that
+the candidate union adds a small amount of recall while tested fusion and
+reranking still trail dense. See the
+[`M2 retrieval diagnostics`](docs/RETRIEVAL_DIAGNOSTICS_RESULTS.md) report and
+the result/failure reports for full split metrics and limitations.
 
 ## End-to-end answer benchmark (P5)
 
@@ -230,8 +233,9 @@ metric, leakage, and reproduction details.
 | P4 | Claim, citation, contradiction, and numerical verification | Complete |
 | P5 | Controlled A0–A5 benchmark and failure analysis | Complete |
 | M1 | End-to-end retrieval, decision, adaptive retrieval, generation, and verification baseline | Complete as an offline evaluation path |
-| M2 | Retrieval stage diagnostics | Next |
-| M3–M14 | Evidence policy, corpus-aware planning, routing, ledger, specialists, structured facts, verification, and retrieval research | Planned; see research agenda |
+| M2 | Retrieval stage diagnostics | Complete; dense baseline retained |
+| M3 | Candidate Evidence Policy Engine and independent decision benchmark | Next |
+| M4–M14 | Corpus-aware planning, routing, ledger, specialists, structured facts, verification, and further retrieval research | Planned; see research agenda |
 | M15 | Local evidence-first research UX | Planned; no deployment |
 
 No answer quality or end-to-end agent performance claims are made by the
