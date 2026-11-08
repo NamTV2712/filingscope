@@ -118,3 +118,31 @@ def test_inspect_serializes_selected_candidate_outside_first_producer_pool(monke
     assert selected["selected"] is True
     assert selected["final_rank"] == 1
     assert selected["fusion_rank"] == 2
+
+
+def test_inspect_reuses_query_embedding_and_pushes_metadata_filter(monkeypatch) -> None:
+    monkeypatch.setattr(hybrid_module, "lexical_ladder_candidates", lambda *_args, **_kwargs: [])
+    retriever = _retriever()
+    observed = {}
+
+    def search(**kwargs):
+        observed.update(kwargs)
+        return []
+
+    retriever.store.search = search
+    retriever.embedder.embed_query = lambda _query: (_ for _ in ()).throw(
+        AssertionError("a supplied embedding should be reused")
+    )
+
+    trace = retriever.inspect(
+        "What was Acme revenue in FY2023?",
+        preset="hybrid",
+        query_embedding=[0.1, 0.2],
+        metadata_filters={"company": ("Acme Inc.",)},
+    )
+
+    assert observed["query_vector"] == [0.1, 0.2]
+    assert observed["metadata_filters"] == {"company": ("Acme Inc.",)}
+    embedding_stage = next(stage for stage in trace["stages"] if stage["name"] == "embedding")
+    assert embedding_stage["status"] == "reused"
+    assert embedding_stage["elapsed_ms"] == 0.0

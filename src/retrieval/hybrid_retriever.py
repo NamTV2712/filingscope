@@ -14,7 +14,7 @@ import logging
 import re
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
 
 from rank_bm25 import BM25Okapi
 from sentence_transformers import CrossEncoder
@@ -343,6 +343,8 @@ class HybridRetriever:
         candidate_pool: int = 10,
         preset: str = "hybrid_rerank",
         chunk_filter: Callable[[dict], bool] | None = None,
+        query_embedding: list[float] | None = None,
+        metadata_filters: Mapping[str, str | Sequence[str]] | None = None,
     ) -> dict:
         """Return a provider-free trace of the retrieval stages.
 
@@ -351,10 +353,10 @@ class HybridRetriever:
         confidence value. The production path remains byte-compatible because
         this method does not alter ``retrieve_with_embedding``.
 
-        ``chunk_filter`` optionally narrows the eligible pool (the document and
-        date restrictions the catalog defines) *before* the stages run, so the
-        reported ranks describe the scope the reader actually asked about
-        instead of a wider pool that was later trimmed.
+        ``metadata_filters`` are pushed into the Qdrant dense query and applied
+        to the local BM25/lexical candidate pool. ``chunk_filter`` supports
+        additional in-memory restrictions; dense results for that predicate
+        are filtered after Qdrant returns its requested pool.
         """
         allowed_presets = {"bm25", "dense", "hybrid", "hybrid_rerank"}
         if preset not in allowed_presets:
@@ -373,8 +375,13 @@ class HybridRetriever:
         top_k = max(1, min(top_k, 10))
         candidate_pool = max(top_k, min(candidate_pool, 50))
         trace_started = time.perf_counter()
-        query_embedding = self.embed_query(query)
-        embedding_ms = (time.perf_counter() - trace_started) * 1000
+        embedding_reused = query_embedding is not None
+        if query_embedding is None:
+            query_embedding = self.embed_query(query)
+            embedding_ms = (time.perf_counter() - trace_started) * 1000
+        else:
+            query_embedding = list(query_embedding)
+            embedding_ms = 0.0
 
         if ticker and section:
             filtered_chunks = self._chunks_by_ticker_section.get((ticker, section), [])
@@ -384,6 +391,23 @@ class HybridRetriever:
             filtered_chunks = self._chunks_by_section.get(section, [])
         else:
             filtered_chunks = self._all_chunks
+        if metadata_filters:
+            def matches_metadata(chunk: dict) -> bool:
+                for field, raw_values in metadata_filters.items():
+                    expected = (raw_values,) if isinstance(raw_values, str) else raw_values
+                    chunk_value = chunk.get(field)
+                    observed = (
+                        (chunk_value,)
+                        if isinstance(chunk_value, str)
+                        else chunk_value
+                        if isinstance(chunk_value, (list, tuple, set))
+                        else ()
+                    )
+                    if not set(expected).intersection(observed):
+                        return False
+                return True
+
+            filtered_chunks = [chunk for chunk in filtered_chunks if matches_metadata(chunk)]
         if chunk_filter is not None:
             filtered_chunks = [chunk for chunk in filtered_chunks if chunk_filter(chunk)]
 
@@ -398,17 +422,19 @@ class HybridRetriever:
         bm25_ms = (time.perf_counter() - stage_started) * 1000
 
         stage_started = time.perf_counter()
-        semantic_results = self.store.search(
-            query_vector=query_embedding,
-            top_k=candidate_pool,
-            ticker=ticker,
-            section=section,
-        )
+        dense_search_args = {
+            "query_vector": query_embedding,
+            "top_k": candidate_pool,
+            "ticker": ticker,
+            "section": section,
+        }
+        if metadata_filters:
+            dense_search_args["metadata_filters"] = metadata_filters
+        semantic_results = self.store.search(**dense_search_args)
         if chunk_filter is not None:
-            # The store lookup is filtered by ticker/section only, so an
-            # inspection document/date restriction has to be applied to its
-            # results too; otherwise the dense stage would report candidates
-            # outside the scope the reader asked about.
+            # An in-memory predicate cannot be translated to a Qdrant filter,
+            # so apply it to dense results too. For candidate-recall studies,
+            # use metadata_filters to push exact fields down before top-k.
             semantic_results = [
                 result
                 for result in semantic_results
@@ -482,11 +508,6 @@ class HybridRetriever:
         dense_rank = {chunk_id: rank + 1 for rank, chunk_id in enumerate(dense_ids)}
         fusion_rank = {chunk_id: rank + 1 for rank, chunk_id in enumerate(fusion_order)}
         final_rank = {chunk_id: rank + 1 for rank, chunk_id in enumerate(final_ids)}
-        all_ids = list(dict.fromkeys((*bm25_ids, *dense_ids, *lexical_ids, *hybrid_ids)))
-        bm25_rank = {chunk_id: rank + 1 for rank, chunk_id in enumerate(bm25_ids)}
-        dense_rank = {chunk_id: rank + 1 for rank, chunk_id in enumerate(dense_ids)}
-        fusion_rank = {chunk_id: rank + 1 for rank, chunk_id in enumerate(fusion_order)}
-        final_rank = {chunk_id: rank + 1 for rank, chunk_id in enumerate(final_ids)}
         reranked_pool = {chunk["chunk_id"] for chunk in hybrid_chunks}
 
         def dropped_reason(chunk_id: str) -> str | None:
@@ -540,7 +561,11 @@ class HybridRetriever:
             "trace_version": TRACE_VERSION,
             "preset": preset,
             "query": query,
-            "filters": {"ticker": ticker, "section": section},
+            "filters": {
+                "ticker": ticker,
+                "section": section,
+                "metadata": dict(metadata_filters or {}),
+            },
             "top_k": top_k,
             "candidate_pool": candidate_pool,
             "models": {
@@ -551,7 +576,11 @@ class HybridRetriever:
             "score_semantics": _score_semantics(preset),
             "production_parity": _production_parity(),
             "stages": [
-                {"name": "embedding", "elapsed_ms": round(embedding_ms, 3), "status": "executed"},
+                {
+                    "name": "embedding",
+                    "elapsed_ms": round(embedding_ms, 3),
+                    "status": "reused" if embedding_reused else "executed",
+                },
                 {"name": "bm25", "elapsed_ms": round(bm25_ms, 3), "status": "executed"},
                 {"name": "dense", "elapsed_ms": round(dense_ms, 3), "status": "executed"},
                 {"name": "lexical_ladder", "elapsed_ms": round(lexical_ms, 3), "status": "executed"},

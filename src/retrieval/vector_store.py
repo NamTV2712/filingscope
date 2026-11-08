@@ -7,6 +7,7 @@ simply by changing initialization parameters, without modifying business logic.
 
 import logging
 import uuid
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from qdrant_client import QdrantClient
@@ -14,6 +15,7 @@ from qdrant_client.models import (
     Distance,
     FieldCondition,
     Filter,
+    MatchAny,
     MatchValue,
     PayloadSchemaType,
     PointStruct,
@@ -25,7 +27,8 @@ logger = logging.getLogger(__name__)
 COLLECTION_NAME = "sec_filings"
 BATCH_SIZE = 100
 SCROLL_PAGE_SIZE = 256
-PAYLOAD_INDEX_FIELDS = ("ticker", "section")
+METADATA_FILTER_FIELDS = frozenset({"company", "doc_type", "reporting_periods"})
+PAYLOAD_INDEX_FIELDS = ("ticker", "section", "company", "doc_type", "reporting_periods")
 
 
 class VectorStore:
@@ -124,11 +127,16 @@ class VectorStore:
         top_k: int = 5,
         ticker: str | None = None,
         section: str | None = None,
+        metadata_filters: Mapping[str, str | Sequence[str]] | None = None,
     ) -> list[dict]:
         """Semantic search supports filtering by ticker and/or section.
             Returns a list dict with the fields 'score' (0-1), 'text', and all metadata.
         """
-        query_filter = self._build_filter(ticker=ticker, section=section)
+        query_filter = self._build_filter(
+            ticker=ticker,
+            section=section,
+            metadata_filters=metadata_filters,
+        )
         response = self.client.query_points(
             collection_name=self.collection_name,
             query=query_vector,
@@ -198,11 +206,34 @@ class VectorStore:
 
     @staticmethod
     def _build_filter(
-        ticker: str | None, section: str | None
+        ticker: str | None,
+        section: str | None,
+        metadata_filters: Mapping[str, str | Sequence[str]] | None = None,
     ) -> Filter | None:
         conditions = []
         if ticker:
             conditions.append(FieldCondition(key="ticker", match=MatchValue(value=ticker)))
         if section:
             conditions.append(FieldCondition(key="section", match=MatchValue(value=section)))
+        filters = metadata_filters or {}
+        unknown_fields = set(filters) - METADATA_FILTER_FIELDS
+        if unknown_fields:
+            raise ValueError(
+                f"unsupported metadata filter field(s): {', '.join(sorted(unknown_fields))}"
+            )
+        for field, raw_values in filters.items():
+            if isinstance(raw_values, str):
+                values = (raw_values,)
+            elif isinstance(raw_values, Sequence) and not isinstance(raw_values, (bytes, bytearray)):
+                values = tuple(raw_values)
+            else:
+                raise ValueError(f"metadata filter {field!r} must be a string or sequence of strings")
+            if not values or any(not isinstance(value, str) or not value for value in values):
+                raise ValueError(f"metadata filter {field!r} must contain non-empty strings")
+            match = (
+                MatchValue(value=values[0])
+                if len(values) == 1
+                else MatchAny(any=list(values))
+            )
+            conditions.append(FieldCondition(key=field, match=match))
         return Filter(must=conditions) if conditions else None
