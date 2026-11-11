@@ -69,6 +69,7 @@ def test_planner_comparison_keeps_gold_labels_in_the_evaluator(monkeypatch):
     assert calls["question_only"][0] == cases[0].question
     assert calls["corpus_aware"][0] == cases[0].question
     assert result["dataset"]["gold_labels_passed_to_planners"] is False
+    assert len(result["dataset"]["evaluation_case_set_sha256"]) == 64
     assert result["case_count"] == 1
     assert result["comparison"]["corpus_aware"]["retrieval_metrics"]["overall"]["Recall@10"] == 1.0
     assert result["comparison"]["corpus_aware"]["gold_source_document_target_rate"] == 1.0
@@ -79,3 +80,4 @@ def test_planner_comparison_keeps_gold_labels_in_the_evaluator(monkeypatch):
     assert result["corpus_map"]["serialized_size_bytes"] > 0
     assert result["resource_use"]["python_peak_allocated_bytes"] > 0
     assert result["provider_calls"] == 0
+    assert isinstance(result["source_provenance"]["working_tree_dirty"], bool)

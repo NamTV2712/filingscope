@@ -95,7 +95,7 @@ def _source_provenance() -> dict[str, Any]:
         digest.update(b"\0")
     try:
         status = subprocess.run(
-            ["git", "status", "--porcelain"],
+            ["git", "status", "--porcelain", "--", *_SOURCE_FILES],
             check=True,
             capture_output=True,
             text=True,
@@ -108,6 +108,23 @@ def _source_provenance() -> dict[str, Any]:
         "source_fingerprint_sha256": digest.hexdigest(),
         "working_tree_dirty": bool(status.strip()) if status != "unknown" else None,
     }
+
+
+def _case_set_fingerprint(cases: Sequence[FinanceBenchCase]) -> str:
+    digest = hashlib.sha256()
+    for case in sorted(cases, key=lambda item: item.case_id):
+        row = {
+            "case_id": case.case_id,
+            "company": case.company,
+            "doc_name": case.doc_name,
+            "question": case.question,
+            "gold_pages": case.gold_pages,
+            "question_type": case.question_type,
+            "split": case.split,
+        }
+        digest.update(json.dumps(row, sort_keys=True, ensure_ascii=False).encode("utf-8"))
+        digest.update(b"\n")
+    return digest.hexdigest()
 
 
 def _rank_plan(
@@ -424,6 +441,7 @@ def evaluate_corpus_aware_planning(
         "dataset": {
             "name": "FinanceBench public open-source sample",
             "case_count": len(cases),
+            "evaluation_case_set_sha256": _case_set_fingerprint(cases),
             "gold_labels_passed_to_planners": False,
         },
         "corpus_map": {
