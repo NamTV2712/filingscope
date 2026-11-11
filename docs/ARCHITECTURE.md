@@ -150,6 +150,18 @@ names explain the high unsupported share. Answer quality and actual agent
 invocations were not measured. See
 [`COMPLEXITY_ROUTING.md`](COMPLEXITY_ROUTING.md).
 
+## M6 shared Evidence Ledger
+
+`src/ledger/` provides immutable evidence/fact/calculation/claim/verification
+records and a mutable request-scoped `EvidenceLedger` that emits validated,
+deterministically sorted snapshots. Evidence IDs derive from request/source
+identity. Merges stage and validate the full reference graph before commit,
+coalesce duplicate discoveries, and reject incompatible stable task/claim or
+verification records. `DERIVED_FACT` rows point to a calculation and retain
+all ordered input evidence IDs. The ledger is in memory only; it does not
+replace or connect the P2, M3, or P4 decision authority, and P5 does not yet
+use it. See [`EVIDENCE_LEDGER.md`](EVIDENCE_LEDGER.md).
+
 ## Target: separate logical planes
 
 ```text
@@ -172,9 +184,10 @@ typed candidate-decision component with a deterministic policy, but it is not
 yet connected to P5 retrieval or final answer release. M4 adds `src/research/`
 with a standalone runtime Corpus Map and corpus-aware task planner. M5 adds a
 standalone finite complexity router that prepares those plans but does not
-execute retrieval or generation. Neither M4 nor M5 is wired into P5. The
-repository has no persistent Evidence Ledger, XBRL fact path, specialist
-worker graph, or request-facing UI. `src/decision/`,
+execute retrieval or generation. M6 adds a request-scoped in-memory Evidence
+Ledger. None of these components is wired into P5. The repository has no
+persistent ledger, XBRL fact path, specialist worker graph, or request-facing
+UI. `src/decision/`,
 `src/verification/`, and `src/agent/adaptive_retrieval.py` remain the starting
 points; extend them instead of replacing them with broad framework
 abstractions. See [`CURRENT_ARCHITECTURE_AUDIT.md`](CURRENT_ARCHITECTURE_AUDIT.md)
@@ -191,8 +204,9 @@ fixtures do not measure financial-document accuracy. M4's standalone
 Corpus-Map-conditioned planner is complete and measured; dense remains the
 retrieval baseline, and P5 integration is deferred pending downstream
 evaluation. M5's deterministic router and route-budget contract are complete
-but are not connected to retrieval, generation, or P5. M6's shared ledger,
-specialist work, parallel research, SEC XBRL, parser comparisons, advanced
-verification, hard negatives, and agent ablations follow in M6–M14.
+but are not connected to retrieval, generation, or P5. M6's in-memory shared
+ledger and deterministic merge contract are complete, but snapshots do not
+persist. Specialist work, parallel research, SEC XBRL, parser comparisons,
+advanced verification, hard negatives, and agent ablations follow in M7–M14.
 M15 may add a local evidence-first interface. Cloud deployment is out of scope
 unless explicitly requested.

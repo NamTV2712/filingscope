@@ -132,7 +132,7 @@ clean source working tree.
 **ADOPT** the finite deterministic route contract and typed budgets as the
 entry point for M6. **KEEP** unsupported requests at zero retrieval/model
 budget and preserve the dense P1 baseline. Do not claim an answer-quality or
-multi-agent invocation improvement: this graph does not run workers. M6 will
-add the shared Evidence Ledger; later execution milestones must enforce the
-remaining candidate, context, concurrency, wall-time, and cost limits before
-the research route can perform work.
+multi-agent invocation improvement: this graph does not run workers. M6 has
+added the shared in-memory Evidence Ledger; later execution milestones must
+enforce the remaining candidate, context, concurrency, wall-time, and cost
+limits before the research route can perform work.

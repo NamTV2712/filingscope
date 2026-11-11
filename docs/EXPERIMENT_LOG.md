@@ -292,6 +292,40 @@ The log separates software-contract checks from answer-quality evidence.
   `db6a2cadc922512bae188d6ced044c35c803c9a8f6febd33715d2f713f6c1f57`; the
   fingerprinted source tree was clean. No deployment performed.
 
+## M6 — Shared Evidence Ledger
+
+- **Hypothesis:** A request-scoped blackboard with stable source IDs and
+  deterministic merge semantics lets later specialists share evidence and
+  derived artifacts by reference while preserving provenance and refusing
+  dangling or cross-request links.
+- **Baseline / changed variable:** No shared request ledger existed. M6 adds
+  immutable Pydantic records and an in-memory `EvidenceLedger`; it does not
+  replace the P2 evidence analyzer, M3 candidate policy, P4 verifier, or call
+  P5.
+- **Dataset/config:** Eight focused tests cover stable evidence IDs, duplicate
+  discoveries across retrieval methods/tasks, merge order and idempotency,
+  atomic conflict rejection, fact deduplication, derived calculation/input
+  links, generated claim/verification links, and invalid source/request
+  rejection. This is a software contract suite, not a labeled quality set.
+- **Result:** All eight focused tests passed. Duplicate source evidence
+  coalesces while preserving worker, task, requirement, and retrieval
+  observations. `DERIVED_FACT` records require a calculation and all ordered
+  input evidence IDs. Facts, claims, and verification results retain their
+  ledger links. Conflicting task IDs fail without partially changing the
+  ledger. The full repository suite passed with 255 passed and 3 skipped.
+- **Latency/resources:** No timing or memory benchmark was run; the ledger is
+  currently an in-memory software contract. No external service, retrieval,
+  model, provider, token, or cost usage.
+- **Interpretation:** M6 establishes a referential boundary for later workers
+  and preserves deterministic merge behavior. It does not establish the
+  correctness of financial facts, arithmetic, source revision validity, or
+  generated claims. Persistence, retention rules, and connection to P5 remain
+  out of scope for this milestone.
+- **Decision:** **ADOPT** the typed in-memory ledger API for M7 specialist
+  contracts. **DEFER** persistence and answer-path integration until later
+  execution and privacy requirements are defined. See the M6 validation in
+  `CURRENT_ARCHITECTURE_AUDIT.md` for its source revision.
+
 ## Planned experiments
 
 Each planned experiment must add its exact hypothesis, baseline, changed

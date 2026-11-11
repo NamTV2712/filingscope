@@ -31,9 +31,11 @@ budgets. Its hand-authored 56-case behavior fixture passes, while the unlabeled
 150-question FinanceBench pass shows 104 requests remain unsupported under the
 current metric/period vocabulary. The router does not execute retrieval,
 generation, or agents, so answer quality is unmeasured. M6 adds the shared
-Evidence Ledger. The target design separates a Research Plane from an Evidence
-Control Plane that decides evidence acceptance, sufficiency, verification,
-and answer release. A local evidence-first interface is a later milestone.
+Evidence Ledger as a request-scoped in-memory blackboard with deterministic
+IDs and merges; it is not persistent or connected to P5. The target design
+separates a Research Plane from an Evidence Control Plane that decides evidence
+acceptance, sufficiency, verification, and answer release. A local
+evidence-first interface is a later milestone.
 **No cloud deployment is planned.**
 
 ## P0 retrieval baseline
@@ -253,7 +255,8 @@ metric, leakage, and reproduction details.
 | M3 | Candidate Evidence Policy Engine and independent decision benchmark | Complete; synthetic behavior benchmark only |
 | M4 | Runtime Corpus Map and corpus-aware planner | Complete; standalone evaluation component |
 | M5 | Finite complexity router and bounded FAST/RESEARCH/UNSUPPORTED routes | Complete; deterministic behavior fixture and unlabeled FinanceBench route distribution |
-| M6–M14 | Evidence Ledger, specialists, structured facts, verification, and further retrieval research | Planned; see research agenda |
+| M6 | Shared Evidence Ledger | Complete; in-memory typed records and deterministic merge |
+| M7–M14 | Specialists, structured facts, verification, and further retrieval research | Planned; see research agenda |
 | M15 | Local evidence-first research UX | Planned; no deployment |
 
 No answer quality or end-to-end agent performance claims are made by the
@@ -273,8 +276,8 @@ retrieval-only FinanceBench benchmark.
 - P3's synthetic retrieval evaluation does not estimate FinanceBench multi-hop
   performance. Its elapsed-time budget is cooperative around synchronous
   retrieval calls.
-- A persistent evidence ledger, SEC XBRL path, router integration into the
-  answer path, retrieval/generation execution inside the research graph,
+- A persistent evidence ledger, SEC XBRL path, router/ledger integration into
+  the answer path, retrieval/generation execution inside the research graph,
   production request API, and local research UI are not implemented yet.
 - The current A0–A5 path is an offline evaluation pipeline, not a deployed
   application. Its strict evidence checks expose useful failure modes but do

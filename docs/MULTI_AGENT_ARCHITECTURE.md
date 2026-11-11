@@ -8,7 +8,8 @@ path, not a supervisor/worker system. M2 diagnostics and M3 policy contracts
 are complete. M4 adds a standalone corpus-aware planner and typed task
 contract. M5 adds a finite LangGraph classifier with FAST, RESEARCH, and
 UNSUPPORTED branches, but it does not call workers or connect to P5. M6 adds
-the shared Evidence Ledger before specialist graph work.
+the request-scoped in-memory Evidence Ledger and deterministic merge contract;
+specialist graph work is next in M7.
 
 ## Current M5 route graph
 
@@ -22,6 +23,17 @@ a bounded M4 plan. It invokes no retriever, provider, LLM, or agent. The
 quality evidence. On 150 unlabeled FinanceBench questions, the Corpus Map
 selected 36 FAST, 10 RESEARCH, and 104 UNSUPPORTED routes. Details and the
 high unsupported rate are in [`COMPLEXITY_ROUTING.md`](COMPLEXITY_ROUTING.md).
+
+## Current M6 ledger
+
+The blackboard in `src/ledger/` links question requirements, M4 task IDs,
+metadata-only evidence records, normalized facts, calculations, generated
+claims, and P4 verification results. Evidence and calculation IDs are stable;
+duplicate discovery merges provenance observations, while malformed or
+cross-request references fail before snapshots are committed. A `DERIVED_FACT`
+must carry its calculation ID and all ordered input evidence IDs. The ledger
+is in-memory and is not yet used by the router, P5, or a specialist worker.
+See [`EVIDENCE_LEDGER.md`](EVIDENCE_LEDGER.md).
 
 ## Target planes
 

@@ -37,6 +37,11 @@ consistency, sufficiency, verification, abstention, and release.
   Corpus Map selected 36 FAST, 10 RESEARCH, and 104 UNSUPPORTED routes. No
   retrieval or answer quality was measured. See
   [`COMPLEXITY_ROUTING.md`](COMPLEXITY_ROUTING.md).
+- M6 adds a request-scoped in-memory Evidence Ledger linking P2 requirements,
+  M4 tasks, provenance records, financial facts, derived calculations,
+  generated claims, and P4 verification. Stable evidence IDs and staged,
+  deterministic merges are validated; snapshots are not persisted and M6 is
+  not wired into P5. See [`EVIDENCE_LEDGER.md`](EVIDENCE_LEDGER.md).
 - Deployment is explicitly out of scope. M15 may deliver a local research UI.
 
 ## Milestones
@@ -48,7 +53,7 @@ consistency, sufficiency, verification, abstention, and release.
 | M3 | Versioned Evidence Policy Engine and separate decision benchmark | Complete; synthetic contract only |
 | M4 | Runtime Corpus Map and corpus-aware task planner | Complete; measured, not integrated into P5 |
 | M5 | Finite complexity router with FAST/RESEARCH/UNSUPPORTED budgets | Complete; standalone route and plan only |
-| M6 | Deterministically merged shared Evidence Ledger | Planned |
+| M6 | Deterministically merged shared Evidence Ledger | Complete; in-memory contract, no persistence |
 | M7 | Filing, XBRL, table, evidence, and financial reasoning capabilities | Planned |
 | M8 | Bounded parallel fan-out/fan-in for independent work | Planned |
 | M9 | SEC XBRL concepts, periods, units, accessions, amendments, and restatements | Planned |

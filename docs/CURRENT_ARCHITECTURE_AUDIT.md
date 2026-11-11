@@ -3,12 +3,13 @@
 Audit refreshed: 2026-11-11<br>
 Branch: `main`<br>
 Audited repository: `D:\Project\filingscope`<br>
-Audited source commit: `0fffebc0d5d0a6b88532e3c3b0969a9f3246509f`<br>
+Audited source commit: `706af9a86e8090dd7dca86400f007ce395185a55`<br>
 Initial audit baseline: `956cef412d765395b5a7f0b773f821a58686a35a`
 
 This refresh reflects the committed P0–P5 repository, M1 runtime compatibility
 check, M2 retrieval diagnostics, M3 candidate policy, M4 corpus-aware
-planning, and M5 finite complexity routing. P0–P4 behavior and
+planning, M5 finite complexity routing, and M6's in-memory Evidence Ledger.
+P0–P4 behavior and
 the completed P5 provider benchmark remain preserved. Source benchmark data,
 model caches, and generated run artifacts remain local and git-ignored.
 
@@ -36,6 +37,10 @@ model caches, and generated run artifacts remain local and git-ignored.
   deterministic `ACCEPT`/`WEAK`/`REJECT` rules, stable reason codes, backend
   protocols, and a separate synthetic benchmark. It is not yet called by the
   P5 A0–A5 evaluation pipeline.
+- Evidence Ledger: `src/ledger/` provides a request-scoped in-memory blackboard
+  linking requirements, tasks, evidence, facts, calculations, claims, and
+  verification. Stable IDs and deterministic merge behavior are tested; there
+  is no persistence or P5 integration.
 - Corpus-aware planning: `src/research/` builds a metadata-only runtime Corpus
   Map and emits bounded, typed research tasks from question requirements.
   Missing versus unknown source states are kept explicit. The planner is not
@@ -62,6 +67,7 @@ model caches, and generated run artifacts remain local and git-ignored.
 | Candidate policy | `DeterministicDecisionBackend.decide(features)` | Typed observations and hard rules; synthetic cases only; not integrated into P5. |
 | Research planning | `QuestionOnlyPlanner.plan(question)` / `CorpusAwarePlanner.plan(question)` | Standalone M4 component; map is metadata-only and planner is not yet connected to a retriever or answer flow. |
 | Complexity routing | `ComplexityRouter.route(question)` | Standalone M5 graph; deterministic rules, no retrieval/generation execution, and not integrated into P5. |
+| Evidence ledger | `EvidenceLedger` registration/add/merge/snapshot API | Request-scoped and in-memory; not yet consumed by P5, the router, or specialist workers. |
 | Adaptive retrieval | `AdaptiveRetrievalController.run(question, initial_chunks, budget)` | One bounded flow over the existing retriever; no planner/corpus map. |
 | Generation | `AnswerGenerator.generate(question, evidence_chunks)` | Provider call is not itself the evidence authority. |
 | Verification | `ClaimLevelVerifier.verify(question, answer, evidence_chunks)` | Lexical topical anchors and deterministic number parsing can miss paraphrases or valid facts. |
@@ -95,15 +101,21 @@ model caches, and generated run artifacts remain local and git-ignored.
   selected 36 FAST, 10 RESEARCH, and 104 UNSUPPORTED paths. Unknown metrics,
   incomplete periods, and unresolved companies remain common. No answer or
   agent quality was measured; see [`COMPLEXITY_ROUTING.md`](COMPLEXITY_ROUTING.md).
+- M6's eight focused ledger tests cover stable IDs, idempotent/commutative
+  merge, provenance aggregation, financial-fact deduplication, derived-fact
+  input links, claim verification, and atomic conflict handling. This validates
+  the data contract, not financial accuracy; see
+  [`EVIDENCE_LEDGER.md`](EVIDENCE_LEDGER.md).
 - The provider-backed P5 run had interrupted attempts before the completed
   run. Completed case outputs and reported usage are preserved; prior-run token
   usage was unavailable and is represented by a conservative upper bound.
 
 ## Technical debt
 
-1. **Evidence identity and provenance.** Chunks carry document/page fields, but
-   there is no canonical `EvidenceRecord`, request-scoped ledger, source
-   revision policy, or deterministic cross-path merge contract.
+1. **Evidence identity and provenance.** M6 adds canonical metadata-only
+   `EvidenceRecord`s and deterministic request-scoped merges, but snapshots do
+   not persist. Source revision validity policy and cross-process storage are
+   still missing.
 2. **Policy integration.** M3 now centralizes candidate observations and
    decisions in a versioned schema, but callers must still supply features;
    there is no real-candidate feature observer or runtime adapter. P2
@@ -118,9 +130,10 @@ model caches, and generated run artifacts remain local and git-ignored.
    on the current company, metric, and period vocabulary, with 104/150
    FinanceBench questions routed unsupported under the map-aware run.
 5. **Generation/verification.** The verifier splits answer text into clauses
-   and creates local claim IDs, but no durable claim graph joins claims,
-   calculation objects, and evidence IDs. Atomic semantic verification and a
-   bounded correction pass do not exist.
+   and creates local claim IDs. M6 can join request-scoped claims, calculation
+   objects, and evidence IDs in memory, but P5 does not consume that ledger and
+   no durable claim graph exists. Atomic semantic verification and a bounded
+   correction pass do not exist.
 6. **Decision calibration.** M3 has a 60-case hand-authored synthetic
    candidate benchmark. It is a policy contract check rather than external
    accuracy evidence. No probabilistic backend, measured Brier/ECE, or
@@ -139,7 +152,8 @@ model caches, and generated run artifacts remain local and git-ignored.
   resolver.
 - P5 maps chunk IDs from frozen retrieval results back to chunk text and calls
   decision and verification independently. The result is auditable per case,
-  but there is no persistent ledger to carry IDs through reasoning and output.
+  but it does not use M6's in-memory ledger to carry IDs through reasoning
+  and output, and no persistent ledger exists.
 
 ## Missing vertical integrations
 
@@ -148,7 +162,8 @@ model caches, and generated run artifacts remain local and git-ignored.
 - corpus-aware planner integration into the answer and retrieval path;
 - execute the FAST/RESEARCH route within its declared budgets and evaluate
   request-level outcomes;
-- shared Evidence Ledger and specialist task/result contracts;
+- persistence and P5/router integration for the Evidence Ledger, plus
+  specialist task/result contracts;
 - SEC company-facts/submissions path with provenance and fiscal normalization;
 - deterministic calculation objects consumed by the report writer;
 - document parser comparison (Docling vs current pypdf) on known failures;
@@ -249,10 +264,27 @@ metrics and limitations are in [`COMPLEXITY_ROUTING.md`](COMPLEXITY_ROUTING.md).
 The full regression suite passed with 247 passed and 3 skipped tests; `uv pip
 check` reported no incompatible installed packages.
 
+## M6 validation update
+
+`src/ledger/` adds deterministic evidence/fact/calculation IDs and a mutable
+request-scoped ledger that returns immutable, sorted snapshots. It enforces
+requirement/task/evidence/calculation/claim/verification references, merges
+duplicate retrieval discoveries without losing worker or retrieval provenance,
+and stages merges so a conflict leaves the target ledger unchanged. Derived
+calculations automatically create a `DERIVED_FACT` record linked to the
+calculation and every ordered input evidence ID. LLM-generated text cannot be
+registered as primary evidence. The ledger is not persistent and is not wired
+to P5 or M5.
+
+Eight focused ledger tests passed. The full regression suite passed with 255
+passed and 3 skipped tests, and `uv pip check` reported no incompatible
+packages. These are ledger/data-contract checks; no retrieval, answer-quality,
+or financial-calculation accuracy benchmark was run.
+
 ## Next milestone recommendation
 
-M1–M5 are validated. Continue with M6: a deterministic shared Evidence Ledger
-over the M3 policy, M4 planning, and M5 route contracts. Preserve the dense
-retrieval baseline; keep routing outside P5 until its downstream quality and
-budget effects are measured. The sequence is in
+M1–M6 are validated. Continue with M7: define bounded filing, table, evidence,
+and financial-reasoning specialist interfaces over the existing ledger.
+Preserve the dense retrieval baseline; keep the router and ledger outside P5
+until downstream quality and budget effects are measured. The sequence is in
 [`RESEARCH_AGENDA.md`](RESEARCH_AGENDA.md).
