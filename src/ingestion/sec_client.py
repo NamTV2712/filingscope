@@ -79,6 +79,7 @@ class SECEdgarClient:
 
     TICKER_MAP_URL = "https://www.sec.gov/files/company_tickers.json"
     SUBMISSIONS_URL_TEMPLATE = "https://data.sec.gov/submissions/CIK{cik}.json"
+    COMPANY_FACTS_URL_TEMPLATE = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json"
     MIN_REQUEST_INTERVAL_SECONDS = 0.5
 
     def __init__(self, user_agent: str, ticker_cik_overrides: dict[str, int] | None = None):
@@ -93,10 +94,25 @@ class SECEdgarClient:
         self.session = requests.Session()
         self.session.headers.update({"User-Agent": user_agent})
         self._last_request_time: float = 0.0
+        self._request_count = 0
         self._ticker_to_cik: Optional[dict[str, int]] = None  # Cache, load once
         self._ticker_cik_overrides = {
             ticker.upper(): cik for ticker, cik in (ticker_cik_overrides or {}).items()
         }
+
+    @property
+    def request_count(self) -> int:
+        """Number of HTTP requests attempted by this client instance."""
+        return self._request_count
+
+    def estimated_company_facts_requests(self, ticker: str) -> int:
+        """Return a conservative request estimate for ticker resolution + facts."""
+        normalized = ticker.upper()
+        if normalized in self._ticker_cik_overrides:
+            return 1
+        if self._ticker_to_cik is not None and normalized in self._ticker_to_cik:
+            return 1
+        return 2
 
     def _throttled_get(self, url: str, timeout: int = 15) -> requests.Response:
         """All outgoing requests MUST go through this function — do not call
@@ -107,6 +123,7 @@ class SECEdgarClient:
             time.sleep(self.MIN_REQUEST_INTERVAL_SECONDS - elapsed)
 
         logger.debug("GET %s", url)
+        self._request_count += 1
         response = self.session.get(url, timeout=timeout)
         self._last_request_time = time.monotonic()
 
@@ -165,6 +182,14 @@ class SECEdgarClient:
                 f"Resource not found: No filings of type '{form_type}' for {ticker}"
             )
         return results
+
+    def get_company_facts(self, cik: int | str) -> dict:
+        """Fetch the official SEC Company Facts JSON for one filer."""
+        cik_digits = str(cik).strip()
+        if not cik_digits.isdigit():
+            raise ValueError("cik must contain only digits")
+        url = self.COMPANY_FACTS_URL_TEMPLATE.format(cik=cik_digits.zfill(10))
+        return self._throttled_get(url).json()
 
     def download_filing(self, filing: FilingMetadata, save_path: Path) -> Path:
         response = self._throttled_get(filing.filing_url)

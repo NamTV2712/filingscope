@@ -83,6 +83,34 @@ def test_get_cik_parses_apple_cik_and_requests_map_url(monkeypatch) -> None:
     assert "timeout" in get_mock.call_args.kwargs
 
 
+def test_get_company_facts_uses_official_api_and_zero_pads_cik(monkeypatch) -> None:
+    payload = {"cik": 320193, "entityName": "Apple Inc.", "facts": {}}
+    client, get_mock = _client_spying_on_get(_fake_response(payload), monkeypatch)
+
+    assert client.get_company_facts("320193") == payload
+    get_mock.assert_called_once_with(
+        "https://data.sec.gov/api/xbrl/companyfacts/CIK0000320193.json",
+        timeout=15,
+    )
+    assert client.request_count == 1
+
+
+def test_company_facts_cik_must_be_numeric() -> None:
+    client = SECEdgarClient(user_agent=USER_AGENT)
+
+    with pytest.raises(ValueError, match="cik"):
+        client.get_company_facts("AAPL")
+
+
+def test_company_facts_request_estimate_accounts_for_ticker_map_cache() -> None:
+    client = SECEdgarClient(user_agent=USER_AGENT)
+
+    assert client.estimated_company_facts_requests("AAPL") == 2
+
+    client._ticker_to_cik = {"AAPL": 320193}
+    assert client.estimated_company_facts_requests("AAPL") == 1
+
+
 def test_ticker_map_is_cached_after_first_download(monkeypatch) -> None:
     client, get_mock = _client_spying_on_get(
         _fake_response(TICKER_MAP_PAYLOAD), monkeypatch
