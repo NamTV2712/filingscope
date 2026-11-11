@@ -1,6 +1,6 @@
 # FilingScope Architecture
 
-## Current implementation (P0–P5 and M1–M7)
+## Current implementation (P0–P5 and M1–M8)
 
 ### Offline document and evaluation paths
 
@@ -184,6 +184,14 @@ live SEC request, provider call, P5 integration, answer-quality benchmark,
 parallel fan-out, persistence, or deployment is part of M7. Details and
 limitations are in [`SPECIALIST_RESEARCH_GRAPH.md`](SPECIALIST_RESEARCH_GRAPH.md).
 
+## M8 parallel filing research
+
+The RESEARCH supervisor dispatches independent filing tasks with LangGraph
+Send. Each worker receives a bounded assignment and keeps source text in
+private runtime storage. The next stage merges the worker ledgers and
+records failures before running the SEC worker. The existing evidence
+analyst consumes the merged sources. [M8 validation](PARALLEL_RESEARCH.md)
+
 ## Target: separate logical planes
 
 ```text
@@ -208,8 +216,8 @@ with a standalone runtime Corpus Map and corpus-aware task planner. M5 adds a
 finite complexity router; M7 executes its route through a finite sequential
 specialist graph and an in-memory M6 ledger. These components remain outside
 P5. The XBRL worker only supports a narrow standard-tag path; M9 owns advanced
-fact reconciliation. The repository has no persistent ledger, fan-out graph,
-or request-facing UI. `src/decision/`,
+fact reconciliation. M8 adds filing fan-out for adapters that support
+concurrent retrieval. `src/decision/`,
 `src/verification/`, and `src/agent/adaptive_retrieval.py` remain the starting
 points; extend them instead of replacing them with broad framework
 abstractions. See [`CURRENT_ARCHITECTURE_AUDIT.md`](CURRENT_ARCHITECTURE_AUDIT.md)
@@ -229,7 +237,8 @@ evaluation. M5's deterministic router and route-budget contract are complete
 but are not connected to retrieval, generation, or P5. M6's in-memory shared
 ledger and deterministic merge contract are complete, but snapshots do not
 persist. M7 adds a bounded sequential specialist graph and a narrow SEC Company
-Facts path; M8 parallel research, M9 advanced XBRL reconciliation, parser
-comparisons, advanced verification, hard negatives, and agent ablations remain.
+Facts path. M8 adds bounded parallel filing searches. M9 advances XBRL
+reconciliation, followed by parser comparisons, verification, hard negatives
+and agent ablations.
 M15 may add a local evidence-first interface. Cloud deployment is out of scope
 unless explicitly requested.

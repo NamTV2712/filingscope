@@ -12,7 +12,7 @@ tested work only; design notes are not completion evidence.
 | M5 | Finite complexity/cost routing | Complete; standalone router, no workers invoked | [Routing report](COMPLEXITY_ROUTING.md): 56 authored fixtures, budget checks, and 150 unlabeled FinanceBench route distribution; downstream answer quality remains unmeasured |
 | M6 | Shared Evidence Ledger | Complete; request-scoped in-memory blackboard | [Ledger report](EVIDENCE_LEDGER.md): stable IDs, atomic/idempotent merge and dedup, provenance links, financial facts, derived-fact inputs, claims and verification relations |
 | M7 | Specialist research graph | Complete; sequential, bounded workflow | [Specialist graph report](SPECIALIST_RESEARCH_GRAPH.md): filing/table/XBRL/evidence/reasoner/writer/verifier contracts; 4-node FAST, 8-node RESEARCH, 1-node UNSUPPORTED paths; 20 focused tests, no answer-quality benchmark |
-| M8 | Bounded parallel independent tasks | After sequential graph works | Concurrency, budget, duplicate work and failure isolation tests |
+| M8 | Bounded parallel independent tasks | Complete | [M8 report](PARALLEL_RESEARCH.md) covers concurrency, budgets, duplicate work, failure isolation and a controlled latency comparison |
 | M9 | SEC XBRL and fact normalization | Can be researched with M7 | Company/tag/period/unit/accession/amendment fixture coverage |
 | M10 | Docling and structure-aware parsing experiment | After failure subset selection | pypdf comparison with fidelity, retrieval, time, RAM, disk measurements |
 | M11 | Atomic claims and bounded correction | After ledger | claim/evidence/calculation graph, verifier benchmark, one bounded correction |

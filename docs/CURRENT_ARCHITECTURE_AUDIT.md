@@ -1,15 +1,15 @@
 # Current architecture audit
 
-Audit refreshed: 2026-11-11<br>
+Audit refreshed: 2026-11-12<br>
 Branch: `main`<br>
 Audited repository: `D:\Project\filingscope`<br>
-Audited source commit: `eb3654113823240d93d043e714647f4b69f22910`<br>
+Audited source commit: `2131e3cda186874b5bd1dc17a516454256437b99`<br>
 Initial audit baseline: `956cef412d765395b5a7f0b773f821a58686a35a`
 
 This refresh reflects P0–P5, M1 runtime compatibility, M2 retrieval
 diagnostics, M3 candidate policy, M4 corpus-aware planning, M5 finite
-complexity routing, M6's in-memory Evidence Ledger, and M7's sequential
-specialist graph with a narrow Company Facts path. P0–P4 behavior and the
+complexity routing, M6's in-memory Evidence Ledger, M7's specialist graph
+and narrow Company Facts path, and M8's bounded filing fan-out. P0–P4 behavior and the
 completed P5 provider benchmark remain preserved. Source benchmark data,
 model caches, and generated run artifacts remain local and git-ignored.
 
@@ -73,7 +73,7 @@ model caches, and generated run artifacts remain local and git-ignored.
 | Candidate policy | `DeterministicDecisionBackend.decide(features)` | Typed observations and hard rules; synthetic cases only; not integrated into P5. |
 | Research planning | `QuestionOnlyPlanner.plan(question)` / `CorpusAwarePlanner.plan(question)` | Standalone M4 component; map is metadata-only and planner is not yet connected to a retriever or answer flow. |
 | Complexity routing | `ComplexityRouter.route(question)` → `SpecialistResearchGraph.run(question)` | Deterministic M5 routing plus M7 finite execution; not integrated into P5. |
-| Specialist graph | `SpecialistResearchGraph.run(question, request_id, route, ledger)` | Sequential only; requires injected retriever/client for those paths; no parallel fan-out or answer-quality benchmark. |
+| Specialist graph | `SpecialistResearchGraph.run(question, request_id, route, ledger)` | RESEARCH supports concurrent filing searches with a compatible adapter. Answer quality remains unmeasured. |
 | Evidence ledger | `EvidenceLedger` registration/add/merge/snapshot API | Request-scoped and in-memory; consumed by M7 workers, not persisted or consumed by P5. |
 | Adaptive retrieval | `AdaptiveRetrievalController.run(question, initial_chunks, budget)` | One bounded flow over the existing retriever; no planner/corpus map. |
 | Generation | `AnswerGenerator.generate(question, evidence_chunks)` | Provider call is not itself the evidence authority. |
@@ -300,9 +300,8 @@ or financial-calculation accuracy benchmark was run.
 
 ## Next milestone recommendation
 
-M1–M7 are validated. M7 source commit: `eb3654113823240d93d043e714647f4b69f22910`.
-Continue with M8: add safe fan-out/fan-in only for
-independent tasks, with deterministic ledger merging, bounded concurrency,
-failure isolation, and duplicate-work tests. Preserve dense retrieval and do
-not connect the graph to P5 until downstream quality and budget effects are
-measured. The sequence is in [`RESEARCH_AGENDA.md`](RESEARCH_AGENDA.md).
+M1–M8 are validated. M8's synthetic run measures concurrent scheduling at
+equal call volume and tests ledger merge order and worker isolation.
+Continue with M9 using official SEC Company Facts fixtures that exercise
+concepts, duration, fiscal periods, units and filing revisions.
+[Research agenda](RESEARCH_AGENDA.md)

@@ -62,7 +62,7 @@ consistency, sufficiency, verification, abstention, and release.
 | M5 | Finite complexity router with FAST/RESEARCH/UNSUPPORTED budgets | Complete; standalone route and plan only |
 | M6 | Deterministically merged shared Evidence Ledger | Complete; in-memory contract, no persistence |
 | M7 | Filing, narrow XBRL, table, evidence, and financial reasoning capabilities | Complete; sequential graph and hermetic fixtures, no quality claim |
-| M8 | Bounded parallel fan-out/fan-in for independent work | Planned |
+| M8 | Bounded parallel fan-out/fan-in for independent work | Complete. Three concurrent filing searches with opt-in adapters. See [M8 results](PARALLEL_RESEARCH.md) |
 | M9 | SEC XBRL concepts, periods, units, accessions, amendments, and restatements | Planned |
 | M10 | pypdf vs Docling and structure-aware document experiment | Planned |
 | M11 | Atomic claim graph, semantic support checks, contradictions, bounded correction | Planned |

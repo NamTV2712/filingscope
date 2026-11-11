@@ -258,7 +258,8 @@ metric, leakage, and reproduction details.
 | M5 | Finite complexity router and bounded FAST/RESEARCH/UNSUPPORTED routes | Complete; deterministic behavior fixture and unlabeled FinanceBench route distribution |
 | M6 | Shared Evidence Ledger | Complete; in-memory typed records and deterministic merge |
 | M7 | Bounded specialist research graph | Complete; sequential fixture path, no quality benchmark |
-| M8–M14 | Parallel research, advanced financial facts, verification, and retrieval research | Planned; see research agenda |
+| M8 | Bounded parallel filing research | Complete. Simulated search p50 fell from 251 ms to 87 ms |
+| M9–M14 | Advanced financial facts, verification, and retrieval research | Planned |
 | M15 | Local evidence-first research UX | Planned; no deployment |
 
 No answer quality or end-to-end agent performance claims are made by the

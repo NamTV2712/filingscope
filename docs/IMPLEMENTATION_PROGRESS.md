@@ -1,6 +1,6 @@
 # Implementation progress
 
-Updated: 2026-11-11<br>
+Updated: 2026-11-12<br>
 Branch: `main`<br>
 Remote: `origin` (`https://github.com/NamTV2712/filingscope.git`)<br>
 Deployment: none; explicitly out of scope
@@ -17,25 +17,30 @@ Deployment: none; explicitly out of scope
   suite 263 passed, 3 skipped; `compileall` and `git diff --check` passed.
   No live SEC or model-provider calls. Ruff was unavailable in the project
   environment (`uv run ruff` could not find the executable).
+- M8 adds bounded parallel filing research. Source
+  `2131e3cda186874b5bd1dc17a516454256437b99`. The full suite passed with
+  269 tests and 3 skips. Simulated search p50 fell from 250.85 ms to 87.44 ms
+  with six calls in each mode. [M8 validation](PARALLEL_RESEARCH.md)
 
 ## Current milestone
 
-M7 source and documentation are pushed and verified on `origin/main` at
-`81fe0e013a9270b18829d06a62a4952a0ff9b0d0`. Start M8 next.
+M8 is validated. M9 structured financial intelligence is next.
 
 ## Exact next steps
 
-1. Read M8 and sections P/R/V/W/AA in the pasted specification. Implement
-   bounded fan-out/fan-in only for independent company/period/source tasks;
-   preserve deterministic evidence-ledger merges and isolate worker failures.
-2. Add concurrency, budget, duplicate-work, merge-order, and failure-isolation
-   tests. Run focused and full regressions, record limits and results, commit
-   source and docs, push to `origin/main`, and verify the remote SHA.
-3. Continue with M9 only after M8 is validated and pushed.
+1. Read section L and M9 in the specification. Compare the existing
+   Company Facts reader with the official SEC documentation and EdgarTools.
+2. Replace permissive row selection with explicit company, taxonomy,
+   concept, fiscal period, duration, unit and revision handling.
+3. Exercise realistic Company Facts fixtures with comparative rows,
+   year-to-date data, amendments, competing units and restatements. Verify
+   the structured worker's ledger provenance and unknown states.
+4. Run the focused and full suites, document the findings, commit to
+   `main`, push and verify the remote before starting M10.
 
 ## Remaining milestones
 
-M8 parallel research; M9 structured financial intelligence; M10 document
+M9 structured financial intelligence; M10 document
 intelligence experiment; M11 advanced verification; M12 hard-negative
 financial retrieval benchmark; M13 multi-agent ablation; M14 advanced
 retrieval experiments; M15 local research UX. Do not deploy.

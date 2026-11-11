@@ -360,6 +360,21 @@ The log separates software-contract checks from answer-quality evidence.
   [`SPECIALIST_RESEARCH_GRAPH.md`](SPECIALIST_RESEARCH_GRAPH.md). Source
   commit: `eb3654113823240d93d043e714647f4b69f22910`.
 
+## M8 — Parallel Research
+
+- **Hypothesis** Independent blocking filing searches complete faster with
+  bounded parallel execution.
+- **Experiment** Six scoped queries, 40 ms simulated I/O per call and 20
+  measured runs per concurrency setting after warmup. The settings varied
+  only the concurrency cap.
+- **Result** Peak concurrency rose from one to three. p50 fell from 250.85 ms
+  to 87.44 ms and p95 fell from 251.65 ms to 87.89 ms. Both settings made
+  six retrieval calls and zero model calls per request.
+- **Decision** Adopt fan-out for adapters that support simultaneous retrieval.
+  The fixture measures scheduling under simulated I/O. M13 will measure
+  quality and end-to-end efficiency across research configurations.
+  [Reproduction and limitations](PARALLEL_RESEARCH.md)
+
 ## Planned experiments
 
 Each planned experiment must add its exact hypothesis, baseline, changed

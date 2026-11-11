@@ -5,9 +5,9 @@
 M7 adds a finite sequential specialist graph over the M5 router, M4 plan,
 existing retriever, M6 request-scoped ledger, P2 evidence sufficiency, and P4
 claim verifier. FAST uses four graph nodes, RESEARCH uses eight, and
-UNSUPPORTED uses one terminal node. M7 does not add parallel fan-out; that is
-M8. The graph is separate from the offline P5 evaluation path, and M3's
-candidate policy is not connected to it.
+UNSUPPORTED uses one terminal node. M8 adds parallel filing tasks to the
+RESEARCH stage for adapters that support concurrent calls. The graph remains
+separate from the offline P5 evaluation path. See [parallel research](PARALLEL_RESEARCH.md).
 
 ## Current M5 route graph
 
