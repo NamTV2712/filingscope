@@ -29,13 +29,14 @@ The next work follows the research milestones in
 LangGraph router with FAST, RESEARCH, and UNSUPPORTED paths and explicit route
 budgets. Its hand-authored 56-case behavior fixture passes, while the unlabeled
 150-question FinanceBench pass shows 104 requests remain unsupported under the
-current metric/period vocabulary. The router does not execute retrieval,
-generation, or agents, so answer quality is unmeasured. M6 adds the shared
-Evidence Ledger as a request-scoped in-memory blackboard with deterministic
-IDs and merges; it is not persistent or connected to P5. The target design
-separates a Research Plane from an Evidence Control Plane that decides evidence
-acceptance, sufficiency, verification, and answer release. A local
-evidence-first interface is a later milestone.
+current metric/period vocabulary. M7 adds a bounded specialist graph over the
+existing retriever, a narrow official SEC Company Facts client, P2 sufficiency,
+Decimal calculations, the M6 ledger, and P4 claim verification. Its hermetic
+fixtures validate flow and budget contracts, not real-world answer accuracy;
+it is not connected to P5. The target design separates a Research Plane from
+an Evidence Control Plane that decides evidence acceptance, sufficiency,
+verification, and answer release. A local evidence-first interface is a later
+milestone. See [`docs/SPECIALIST_RESEARCH_GRAPH.md`](docs/SPECIALIST_RESEARCH_GRAPH.md).
 **No cloud deployment is planned.**
 
 ## P0 retrieval baseline
@@ -256,7 +257,8 @@ metric, leakage, and reproduction details.
 | M4 | Runtime Corpus Map and corpus-aware planner | Complete; standalone evaluation component |
 | M5 | Finite complexity router and bounded FAST/RESEARCH/UNSUPPORTED routes | Complete; deterministic behavior fixture and unlabeled FinanceBench route distribution |
 | M6 | Shared Evidence Ledger | Complete; in-memory typed records and deterministic merge |
-| M7–M14 | Specialists, structured facts, verification, and further retrieval research | Planned; see research agenda |
+| M7 | Bounded specialist research graph | Complete; sequential fixture path, no quality benchmark |
+| M8–M14 | Parallel research, advanced financial facts, verification, and retrieval research | Planned; see research agenda |
 | M15 | Local evidence-first research UX | Planned; no deployment |
 
 No answer quality or end-to-end agent performance claims are made by the

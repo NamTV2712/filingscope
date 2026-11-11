@@ -2,14 +2,12 @@
 
 ## Status
 
-No multi-agent graph is implemented. The current adaptive controller is a
-bounded single retrieval controller. M1/P5 is an offline end-to-end evaluation
-path, not a supervisor/worker system. M2 diagnostics and M3 policy contracts
-are complete. M4 adds a standalone corpus-aware planner and typed task
-contract. M5 adds a finite LangGraph classifier with FAST, RESEARCH, and
-UNSUPPORTED branches, but it does not call workers or connect to P5. M6 adds
-the request-scoped in-memory Evidence Ledger and deterministic merge contract;
-specialist graph work is next in M7.
+M7 adds a finite sequential specialist graph over the M5 router, M4 plan,
+existing retriever, M6 request-scoped ledger, P2 evidence sufficiency, and P4
+claim verifier. FAST uses four graph nodes, RESEARCH uses eight, and
+UNSUPPORTED uses one terminal node. M7 does not add parallel fan-out; that is
+M8. The graph is separate from the offline P5 evaluation path, and M3's
+candidate policy is not connected to it.
 
 ## Current M5 route graph
 
@@ -17,8 +15,8 @@ specialist graph work is next in M7.
 START → classify_request → FAST | RESEARCH | UNSUPPORTED → END
 ```
 
-The route is deterministic, has no loops or checkpoint store, and only prepares
-a bounded M4 plan. It invokes no retriever, provider, LLM, or agent. The
+The route graph is deterministic, has no loops or checkpoint store, and only
+prepares a bounded M4 plan. It invokes no retriever, provider, LLM, or agent. The
 56-case authored fixture has 100% behavior agreement but is not independent
 quality evidence. On 150 unlabeled FinanceBench questions, the Corpus Map
 selected 36 FAST, 10 RESEARCH, and 104 UNSUPPORTED routes. Details and the
@@ -32,8 +30,32 @@ claims, and P4 verification results. Evidence and calculation IDs are stable;
 duplicate discovery merges provenance observations, while malformed or
 cross-request references fail before snapshots are committed. A `DERIVED_FACT`
 must carry its calculation ID and all ordered input evidence IDs. The ledger
-is in-memory and is not yet used by the router, P5, or a specialist worker.
-See [`EVIDENCE_LEDGER.md`](EVIDENCE_LEDGER.md).
+is in-memory and is not used by P5. M7 specialist workers add evidence and
+derived facts through this API. See [`EVIDENCE_LEDGER.md`](EVIDENCE_LEDGER.md).
+
+## M7 execution graph
+
+```text
+FAST:        filing → evidence analyst → report writer → verifier
+RESEARCH:    supervisor → filing → SEC facts → table → analyst → reasoner → writer → verifier
+UNSUPPORTED: terminal
+```
+
+This graph is acyclic. Each run owns its `SpecialistRuntime`, which keeps raw
+chunk text out of graph state and carries budget counters, P2 coverage, and
+ledger IDs. Workers return typed status, requirement/task/evidence IDs,
+structured observations, and measured calls, candidates, and elapsed time. The
+table worker spends only remaining route retrieval budget. The structured
+worker uses the official SEC Company Facts endpoint through
+`SECEdgarClient` when a client and company-to-ticker mapping are supplied. A
+deterministic writer formats supported lookups and calculations; the verifier
+controls the final status.
+
+The M7 Company Facts adapter is a narrow starter path. It does not guarantee
+concept equivalence, duration/instant matching, latest-as-reported selection,
+amendment handling, or restatement reconciliation. The SEC fixture checks
+provenance links and Decimal arithmetic, not real-world accuracy. See
+[`SPECIALIST_RESEARCH_GRAPH.md`](SPECIALIST_RESEARCH_GRAPH.md).
 
 ## Target planes
 
@@ -71,7 +93,7 @@ receive task IDs, allowed tools, required evidence, and explicit budgets, and
 return evidence IDs, structured observations, missing requirements, status,
 and measured usage. Do not copy raw filing context into a supervisor prompt.
 
-## Guardrails required before M7/M8
+## M8 parallelism guardrails
 
 - finite node graph, explicit terminal states, and a configured recursion cap;
 - route profiles with max steps, tool/retrieval/LLM calls, candidates, tokens,

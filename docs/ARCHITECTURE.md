@@ -1,6 +1,6 @@
 # FilingScope Architecture
 
-## Current implementation (P0–P5)
+## Current implementation (P0–P5 and M1–M7)
 
 ### Offline document and evaluation paths
 
@@ -162,6 +162,28 @@ all ordered input evidence IDs. The ledger is in memory only; it does not
 replace or connect the P2, M3, or P4 decision authority, and P5 does not yet
 use it. See [`EVIDENCE_LEDGER.md`](EVIDENCE_LEDGER.md).
 
+## M7 specialist research graph
+
+`src/agent/specialist_graph.py` compiles the M5 route into a bounded execution
+path. FAST runs filing retrieval, evidence analysis, report writing, and claim
+verification in four graph nodes. RESEARCH runs the supervisor, filing worker,
+official SEC Company Facts worker, table worker, evidence analyst, financial
+reasoner, report writer, and claim verifier in eight nodes. UNSUPPORTED ends
+in one node with no downstream calls. The workers pass evidence IDs through a
+request-scoped M6 ledger; filing text stays in invocation-local runtime
+context. Retrieval, tool, candidate, token, LLM, and graph-step use is counted
+against the selected route budget.
+
+The graph reuses P2 sufficiency and P4 verification. M3's candidate policy is
+not integrated. M7's XBRL support is deliberately narrow: standard concept
+aliases, a resolved ticker, and a requested period from official Company Facts
+fixtures or an explicitly supplied client. It does not resolve tag drift,
+amendment precedence, duration/instant equivalence, or restatements; M9 owns
+those cases. The graphs are tested with fake retrieval and SEC clients. No
+live SEC request, provider call, P5 integration, answer-quality benchmark,
+parallel fan-out, persistence, or deployment is part of M7. Details and
+limitations are in [`SPECIALIST_RESEARCH_GRAPH.md`](SPECIALIST_RESEARCH_GRAPH.md).
+
 ## Target: separate logical planes
 
 ```text
@@ -181,13 +203,13 @@ provenance + entity/metric/period + source authority + numeric consistency
 
 This is still a target architecture. M3 adds `src/policy/` as an independent,
 typed candidate-decision component with a deterministic policy, but it is not
-yet connected to P5 retrieval or final answer release. M4 adds `src/research/`
+connected to the M7 execution graph or P5 answer path. M4 adds `src/research/`
 with a standalone runtime Corpus Map and corpus-aware task planner. M5 adds a
-standalone finite complexity router that prepares those plans but does not
-execute retrieval or generation. M6 adds a request-scoped in-memory Evidence
-Ledger. None of these components is wired into P5. The repository has no
-persistent ledger, XBRL fact path, specialist worker graph, or request-facing
-UI. `src/decision/`,
+finite complexity router; M7 executes its route through a finite sequential
+specialist graph and an in-memory M6 ledger. These components remain outside
+P5. The XBRL worker only supports a narrow standard-tag path; M9 owns advanced
+fact reconciliation. The repository has no persistent ledger, fan-out graph,
+or request-facing UI. `src/decision/`,
 `src/verification/`, and `src/agent/adaptive_retrieval.py` remain the starting
 points; extend them instead of replacing them with broad framework
 abstractions. See [`CURRENT_ARCHITECTURE_AUDIT.md`](CURRENT_ARCHITECTURE_AUDIT.md)
@@ -206,7 +228,8 @@ retrieval baseline, and P5 integration is deferred pending downstream
 evaluation. M5's deterministic router and route-budget contract are complete
 but are not connected to retrieval, generation, or P5. M6's in-memory shared
 ledger and deterministic merge contract are complete, but snapshots do not
-persist. Specialist work, parallel research, SEC XBRL, parser comparisons,
-advanced verification, hard negatives, and agent ablations follow in M7–M14.
+persist. M7 adds a bounded sequential specialist graph and a narrow SEC Company
+Facts path; M8 parallel research, M9 advanced XBRL reconciliation, parser
+comparisons, advanced verification, hard negatives, and agent ablations remain.
 M15 may add a local evidence-first interface. Cloud deployment is out of scope
 unless explicitly requested.

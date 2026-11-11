@@ -42,6 +42,13 @@ consistency, sufficiency, verification, abstention, and release.
   generated claims, and P4 verification. Stable evidence IDs and staged,
   deterministic merges are validated; snapshots are not persisted and M6 is
   not wired into P5. See [`EVIDENCE_LEDGER.md`](EVIDENCE_LEDGER.md).
+- M7 adds a finite sequential specialist graph that uses the existing
+  retriever, the M6 request ledger, P2 sufficiency, Decimal reasoning, and P4
+  claim verification. It has a narrow official SEC Company Facts path for
+  standard tags. Hermetic tests validate orchestration and budgets, not answer
+  quality; the graph is not wired into P5. M9 owns advanced tag, period,
+  accession, amendment, and restatement handling. See
+  [`SPECIALIST_RESEARCH_GRAPH.md`](SPECIALIST_RESEARCH_GRAPH.md).
 - Deployment is explicitly out of scope. M15 may deliver a local research UI.
 
 ## Milestones
@@ -54,7 +61,7 @@ consistency, sufficiency, verification, abstention, and release.
 | M4 | Runtime Corpus Map and corpus-aware task planner | Complete; measured, not integrated into P5 |
 | M5 | Finite complexity router with FAST/RESEARCH/UNSUPPORTED budgets | Complete; standalone route and plan only |
 | M6 | Deterministically merged shared Evidence Ledger | Complete; in-memory contract, no persistence |
-| M7 | Filing, XBRL, table, evidence, and financial reasoning capabilities | Planned |
+| M7 | Filing, narrow XBRL, table, evidence, and financial reasoning capabilities | Complete; sequential graph and hermetic fixtures, no quality claim |
 | M8 | Bounded parallel fan-out/fan-in for independent work | Planned |
 | M9 | SEC XBRL concepts, periods, units, accessions, amendments, and restatements | Planned |
 | M10 | pypdf vs Docling and structure-aware document experiment | Planned |

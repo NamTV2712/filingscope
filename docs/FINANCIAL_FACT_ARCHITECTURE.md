@@ -2,9 +2,11 @@
 
 ## Status
 
-The repository has financial table extraction and deterministic arithmetic,
-but no SEC XBRL fact client, resolver, or shared financial fact model. Missing
-facts must remain `UNKNOWN`; absence from an API response is not a false value.
+The repository has financial table extraction and deterministic arithmetic.
+M7 adds a request-scoped `FinancialFact` ledger model and a narrow client path
+for standard SEC Company Facts tags. It does not yet provide robust concept
+resolution or reconciliation. Missing facts must remain `UNKNOWN`; absence
+from an API response is not a false value.
 
 ## Candidate fact record
 
@@ -32,10 +34,18 @@ taxonomy context unavailable. Any client must identify itself and observe SEC
 access guidance. Tests should use saved, license-compatible fixtures; live
 requests are opt-in.
 
-## M7/M9 acceptance
+## M7 scope and M9 acceptance
 
-Test company/CIK resolution, standard and custom tags, tag drift, taxonomy,
-instant vs duration, fiscal calendar, unit/currency conversion, accession
-selection, amendments, missing facts, and restatement conflicts. Report fact
-coverage and wrong-period/wrong-entity false acceptance separately from answer
-accuracy. Use `Decimal` for financial operations.
+M7 supports only a small standard-tag allowlist for revenue, net income,
+assets, liabilities, operating income, gross profit, and cash. It preserves
+the SEC concept namespace/tag, raw and Decimal values, unit, period label,
+form, filing date, accession, URL, CIK, ticker, and evidence ID. Alias tags
+are not treated as proven equivalent, and selected rows are not resolved
+against amended filings or later restatements. The M7 hermetic fixture tests
+the client contract and ledger lineage, not real-company fact accuracy.
+
+M9 acceptance must test company/CIK resolution, standard and custom tags, tag
+drift, taxonomy, instant vs duration, fiscal calendar, unit/currency
+conversion, accession selection, amendments, missing facts, and restatement
+conflicts. Report fact coverage and wrong-period/wrong-entity false acceptance
+separately from answer accuracy. Use `Decimal` for financial operations.

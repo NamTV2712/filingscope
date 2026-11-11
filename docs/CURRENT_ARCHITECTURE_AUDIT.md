@@ -3,14 +3,14 @@
 Audit refreshed: 2026-11-11<br>
 Branch: `main`<br>
 Audited repository: `D:\Project\filingscope`<br>
-Audited source commit: `706af9a86e8090dd7dca86400f007ce395185a55`<br>
+Audited source commit: `eb3654113823240d93d043e714647f4b69f22910`<br>
 Initial audit baseline: `956cef412d765395b5a7f0b773f821a58686a35a`
 
-This refresh reflects the committed P0–P5 repository, M1 runtime compatibility
-check, M2 retrieval diagnostics, M3 candidate policy, M4 corpus-aware
-planning, M5 finite complexity routing, and M6's in-memory Evidence Ledger.
-P0–P4 behavior and
-the completed P5 provider benchmark remain preserved. Source benchmark data,
+This refresh reflects P0–P5, M1 runtime compatibility, M2 retrieval
+diagnostics, M3 candidate policy, M4 corpus-aware planning, M5 finite
+complexity routing, M6's in-memory Evidence Ledger, and M7's sequential
+specialist graph with a narrow Company Facts path. P0–P4 behavior and the
+completed P5 provider benchmark remain preserved. Source benchmark data,
 model caches, and generated run artifacts remain local and git-ignored.
 
 ## Existing capabilities
@@ -47,8 +47,14 @@ model caches, and generated run artifacts remain local and git-ignored.
   yet wired into the P5 answer path.
 - Complexity routing: `src/agent/complexity_router.py` compiles a deterministic
   LangGraph with FAST, RESEARCH, and zero-budget UNSUPPORTED branches. It
-  prepares bounded research plans but invokes no retrieval, model, provider,
-  or agent and remains outside the P5 path.
+  prepares bounded research plans. `src/agent/specialist_graph.py` executes
+  those routes through finite FAST/RESEARCH/UNSUPPORTED paths, using typed
+  specialist results and invocation-local runtime context. It remains outside
+  the P5 path.
+- Specialist execution: `src/agent/specialists.py` implements bounded filing,
+  table, Company Facts, sufficiency, and Decimal reasoning workers. The graph
+  registers evidence and claims in the M6 ledger and calls the P4 verifier.
+  XBRL concept/period reconciliation is intentionally incomplete until M9.
 - Generation and evaluation: `src/generation/` contains a provider-agnostic
   answer interface plus a Groq adapter; `src/evaluation/` includes P1
   retrieval metrics and the P5 A0–A5 pipeline, lexical/numeric answer metrics,
@@ -66,8 +72,9 @@ model caches, and generated run artifacts remain local and git-ignored.
 | Decision | `EvidenceDecisionLayer.assess/decide(question, chunks, budget)` | Deterministic slot coverage, not calibrated probability or general semantic support. |
 | Candidate policy | `DeterministicDecisionBackend.decide(features)` | Typed observations and hard rules; synthetic cases only; not integrated into P5. |
 | Research planning | `QuestionOnlyPlanner.plan(question)` / `CorpusAwarePlanner.plan(question)` | Standalone M4 component; map is metadata-only and planner is not yet connected to a retriever or answer flow. |
-| Complexity routing | `ComplexityRouter.route(question)` | Standalone M5 graph; deterministic rules, no retrieval/generation execution, and not integrated into P5. |
-| Evidence ledger | `EvidenceLedger` registration/add/merge/snapshot API | Request-scoped and in-memory; not yet consumed by P5, the router, or specialist workers. |
+| Complexity routing | `ComplexityRouter.route(question)` → `SpecialistResearchGraph.run(question)` | Deterministic M5 routing plus M7 finite execution; not integrated into P5. |
+| Specialist graph | `SpecialistResearchGraph.run(question, request_id, route, ledger)` | Sequential only; requires injected retriever/client for those paths; no parallel fan-out or answer-quality benchmark. |
+| Evidence ledger | `EvidenceLedger` registration/add/merge/snapshot API | Request-scoped and in-memory; consumed by M7 workers, not persisted or consumed by P5. |
 | Adaptive retrieval | `AdaptiveRetrievalController.run(question, initial_chunks, budget)` | One bounded flow over the existing retriever; no planner/corpus map. |
 | Generation | `AnswerGenerator.generate(question, evidence_chunks)` | Provider call is not itself the evidence authority. |
 | Verification | `ClaimLevelVerifier.verify(question, answer, evidence_chunks)` | Lexical topical anchors and deterministic number parsing can miss paraphrases or valid facts. |
@@ -106,6 +113,13 @@ model caches, and generated run artifacts remain local and git-ignored.
   input links, claim verification, and atomic conflict handling. This validates
   the data contract, not financial accuracy; see
   [`EVIDENCE_LEDGER.md`](EVIDENCE_LEDGER.md).
+- M7's 20 focused tests cover SEC Company Facts request formatting, FAST and
+  RESEARCH traces, zero-call UNSUPPORTED behavior, route budget accounting,
+  table retrieval within remaining budget, evidence lineage, deterministic
+  Decimal growth, and P4 verification. The SEC facts are authored fixtures;
+  this is orchestration and contract coverage, not a quality or fact-accuracy
+  benchmark. No live SEC or model call was made; see
+  [`SPECIALIST_RESEARCH_GRAPH.md`](SPECIALIST_RESEARCH_GRAPH.md).
 - The provider-backed P5 run had interrupted attempts before the completed
   run. Completed case outputs and reported usage are preserved; prior-run token
   usage was unavailable and is represented by a conservative upper bound.
@@ -121,9 +135,11 @@ model caches, and generated run artifacts remain local and git-ignored.
    there is no real-candidate feature observer or runtime adapter. P2
    sufficiency, candidate acceptance, and P4 claim verification remain separate
    decisions rather than one evidence-control flow.
-3. **Financial facts.** Table extraction exists; SEC XBRL facts do not. There
-   is no tag drift, duration/instant, unit, accession, amendment, or
-   restatement-aware fact model.
+3. **Financial facts.** M7 adds a narrow standard-tag SEC Company Facts path
+   that preserves concept, period label, unit, accession, source URL, and
+   source IDs. It does not resolve tag drift, duration/instant equivalence,
+   fiscal-calendar differences, amendment precedence, or restatement conflicts;
+   custom taxonomy and broader unit normalization are still missing.
 4. **Planning and routing.** M4 adds rule-based corpus-conditioned planning
    and M5 adds a deterministic FAST/RESEARCH/UNSUPPORTED router. Both are
    standalone; neither is integrated in P5. The route taxonomy still depends
@@ -160,11 +176,12 @@ model caches, and generated run artifacts remain local and git-ignored.
 - Evidence Policy Engine integration with a real-candidate observer and the
   end-to-end evaluation path;
 - corpus-aware planner integration into the answer and retrieval path;
-- execute the FAST/RESEARCH route within its declared budgets and evaluate
-  request-level outcomes;
-- persistence and P5/router integration for the Evidence Ledger, plus
-  specialist task/result contracts;
-- SEC company-facts/submissions path with provenance and fiscal normalization;
+- evaluate FAST/RESEARCH answer quality and validate budget accounting against
+  production adapters;
+- persistence and P5 integration for the Evidence Ledger; connect the M3
+  candidate policy into the runtime evidence path;
+- broaden SEC company-facts/submissions support with concept, fiscal-period,
+  unit, amendment, and restatement resolution;
 - deterministic calculation objects consumed by the report writer;
 - document parser comparison (Docling vs current pypdf) on known failures;
 - multi-agent and route ablations; local evidence-first research UI.
@@ -283,8 +300,9 @@ or financial-calculation accuracy benchmark was run.
 
 ## Next milestone recommendation
 
-M1–M6 are validated. Continue with M7: define bounded filing, table, evidence,
-and financial-reasoning specialist interfaces over the existing ledger.
-Preserve the dense retrieval baseline; keep the router and ledger outside P5
-until downstream quality and budget effects are measured. The sequence is in
-[`RESEARCH_AGENDA.md`](RESEARCH_AGENDA.md).
+M1–M7 are validated. M7 source commit: `eb3654113823240d93d043e714647f4b69f22910`.
+Continue with M8: add safe fan-out/fan-in only for
+independent tasks, with deterministic ledger merging, bounded concurrency,
+failure isolation, and duplicate-work tests. Preserve dense retrieval and do
+not connect the graph to P5 until downstream quality and budget effects are
+measured. The sequence is in [`RESEARCH_AGENDA.md`](RESEARCH_AGENDA.md).

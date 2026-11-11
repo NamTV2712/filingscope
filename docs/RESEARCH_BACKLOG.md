@@ -11,7 +11,7 @@ tested work only; design notes are not completion evidence.
 | M4 | Runtime Corpus Map and corpus-aware planning | Complete; standalone research component, not wired into P5 | [150-case report](CORPUS_AWARE_PLANNING.md): BM25 Recall@10 +4.34 pp overall and +2.22 pp held-out; 10/10 absent-company calls avoided; p95 latency trade-off recorded |
 | M5 | Finite complexity/cost routing | Complete; standalone router, no workers invoked | [Routing report](COMPLEXITY_ROUTING.md): 56 authored fixtures, budget checks, and 150 unlabeled FinanceBench route distribution; downstream answer quality remains unmeasured |
 | M6 | Shared Evidence Ledger | Complete; request-scoped in-memory blackboard | [Ledger report](EVIDENCE_LEDGER.md): stable IDs, atomic/idempotent merge and dedup, provenance links, financial facts, derived-fact inputs, claims and verification relations |
-| M7 | Specialist capabilities | After ledger | Filing/table/evidence/reasoner interfaces; XBRL research can proceed in M9 |
+| M7 | Specialist research graph | Complete; sequential, bounded workflow | [Specialist graph report](SPECIALIST_RESEARCH_GRAPH.md): filing/table/XBRL/evidence/reasoner/writer/verifier contracts; 4-node FAST, 8-node RESEARCH, 1-node UNSUPPORTED paths; 20 focused tests, no answer-quality benchmark |
 | M8 | Bounded parallel independent tasks | After sequential graph works | Concurrency, budget, duplicate work and failure isolation tests |
 | M9 | SEC XBRL and fact normalization | Can be researched with M7 | Company/tag/period/unit/accession/amendment fixture coverage |
 | M10 | Docling and structure-aware parsing experiment | After failure subset selection | pypdf comparison with fidelity, retrieval, time, RAM, disk measurements |

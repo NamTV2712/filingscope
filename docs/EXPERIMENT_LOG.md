@@ -326,6 +326,40 @@ The log separates software-contract checks from answer-quality evidence.
   execution and privacy requirements are defined. See the M6 validation in
   `CURRENT_ARCHITECTURE_AUDIT.md` for its source revision.
 
+## M7 — Specialist Research Graph
+
+- **Hypothesis:** A finite specialist sequence can connect current routing,
+  retrieval, the request ledger, evidence sufficiency, supported arithmetic,
+  report writing, and claim verification while enforcing route budgets.
+- **Baseline / changed variable:** M5 only planned work and M6 only stored
+  records. M7 adds sequential execution, invocation-local text storage,
+  metadata-only ledger provenance, an optional official SEC Company Facts
+  client path, and typed specialist receipts. P5 and the retrieval baseline
+  are unchanged.
+- **Dataset/config:** Authored fake-retrieval and fake-SEC fixtures. Twenty
+  focused tests cover SEC request contracts, 4-node FAST, FAST growth,
+  zero-call UNSUPPORTED, 8-node two-company RESEARCH, table retrieval under
+  remaining route budget, evidence lineage, Decimal growth, and P4
+  verification. Full suite: 263 passed, 3 skipped.
+- **Result:** All focused and full-suite checks passed. The RESEARCH fixture
+  retrieves 2023/2024 Company Facts for two companies, produces supported
+  10% and 15% growth calculations, links each derived fact to its source
+  evidence, and verifies the generated claims. This is deterministic fixture
+  behavior, not real financial-answer accuracy.
+- **Latency/resources:** No separate latency, memory, or cost benchmark was
+  run. Runtime reports cooperative wall time and resource counters. Tests made
+  no live SEC requests and no provider/model calls.
+- **Interpretation:** M7 provides vertical orchestration and explicit
+  specialist contracts over existing P2/P4 behavior. XBRL tag aliases,
+  fiscal-period matching, and amendment selection remain narrow and must not
+  be treated as general fact normalization. The graph is not wired into P5,
+  M3 candidate policy is not applied, and there is no parallel execution.
+- **Decision:** **ADOPT** the sequential graph as the base for M8. Keep
+  unsupported requests at zero downstream budget. Continue to withhold any
+  answer-quality claim until a labeled, real-document evaluation exists. See
+  [`SPECIALIST_RESEARCH_GRAPH.md`](SPECIALIST_RESEARCH_GRAPH.md). Source
+  commit: `eb3654113823240d93d043e714647f4b69f22910`.
+
 ## Planned experiments
 
 Each planned experiment must add its exact hypothesis, baseline, changed
