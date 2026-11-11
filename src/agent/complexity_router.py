@@ -11,6 +11,7 @@ from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.decision.requirement_extractor import EvidenceRequirementExtractor
+from src.ingestion.company_facts import requested_revision_policies
 from src.research.corpus_map import CorpusMap
 from src.research.planner import (
     CorpusAwarePlanner,
@@ -18,7 +19,7 @@ from src.research.planner import (
     ResearchPlan,
 )
 
-ROUTER_VERSION = "1.0.0"
+ROUTER_VERSION = "1.1.0"
 
 _DEEP_RE = re.compile(
     r"\b(?:comprehensive|thorough|in[- ]depth|deep research|full financial profile|"
@@ -204,6 +205,7 @@ class ComplexityRouter:
             unsupported.intersection({"company_not_resolved", "metric_not_recognized"})
         )
         insufficient_scope = "insufficient_period_scope" in unsupported
+        revisions = requested_revision_policies(question)
         if predictive:
             complexity = ComplexityClass.UNSUPPORTED
             path = ExecutionPath.UNSUPPORTED
@@ -220,6 +222,14 @@ class ComplexityRouter:
             complexity = ComplexityClass.UNSUPPORTED
             path = ExecutionPath.UNSUPPORTED
             reason_codes.extend(sorted(unsupported or {"question_requirements_unsupported"}))
+        elif len(revisions) > 1:
+            complexity = ComplexityClass.UNSUPPORTED
+            path = ExecutionPath.UNSUPPORTED
+            reason_codes.append("mixed_filing_revision_request")
+        elif revisions:
+            complexity = ComplexityClass.MULTI_HOP
+            path = ExecutionPath.RESEARCH
+            reason_codes.append("explicit_filing_revision_requested")
         elif _DEEP_RE.search(question) or (metrics >= 3 and periods >= 3):
             complexity = ComplexityClass.DEEP_RESEARCH
             path = ExecutionPath.RESEARCH

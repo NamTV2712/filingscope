@@ -13,6 +13,7 @@ from src.decision.models import (
     OperationRequirement,
     QuestionRequirements,
 )
+from src.ingestion.company_facts import requested_currencies
 
 
 _METRIC_DEFINITIONS: tuple[MetricRequirement, ...] = (
@@ -210,6 +211,9 @@ class EvidenceRequirementExtractor:
             unsupported_reasons.append("metric_not_recognized")
         if relative_period:
             unsupported_reasons.append("relative_period_not_supported")
+        currencies = requested_currencies(question)
+        if len(currencies) > 1:
+            unsupported_reasons.append("multiple_requested_currencies")
         if any(operation in {"growth", "difference", "ratio", "average"} for operation in operations) and len(periods) == 1:
             unsupported_reasons.append("insufficient_period_scope")
 
@@ -261,6 +265,7 @@ class EvidenceRequirementExtractor:
             companies=tuple(entity.entity_id for entity in entities),
             metrics=metrics,
             periods=periods,
+            requested_currency=next(iter(currencies)) if len(currencies) == 1 else None,
             operations=operation_requirements,
             evidence=tuple(evidence),
             supported=not unsupported_reasons,

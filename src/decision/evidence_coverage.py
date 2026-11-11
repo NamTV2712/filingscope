@@ -241,12 +241,20 @@ def _facts_from_chunk(
     return tuple(facts)
 
 
+_SCALE_EXPONENTS = {"unit": 0, "thousand": 3, "million": 6, "billion": 9}
+
+
 def _value_signature(fact: EvidenceFact) -> tuple[str, str | None, str | None, str | None]:
+    scale = fact.scale
     try:
-        normalized = str(Decimal(str(fact.numeric_value or fact.value)).normalize())
+        value = Decimal(str(fact.numeric_value or fact.value))
+        if scale in _SCALE_EXPONENTS:
+            value = value.scaleb(_SCALE_EXPONENTS[scale])
+            scale = "unit"
+        normalized = str(value.normalize())
     except Exception:
         normalized = str(fact.value)
-    return normalized, fact.currency, fact.scale, fact.value_kind
+    return normalized, fact.currency, scale, fact.value_kind
 
 
 class EvidenceCoverageAnalyzer:
@@ -322,7 +330,11 @@ class EvidenceCoverageAnalyzer:
                     metric=metric,
                     entity_id=requirement.entity_id,
                 ):
-                    if period_matches(requirement.period, fact.period):
+                    if period_matches(requirement.period, fact.period) and (
+                        not requirement.quantitative
+                        or requirements.requested_currency is None
+                        or fact.currency == requirements.requested_currency
+                    ):
                         candidate_facts.append(fact)
 
             candidate_facts = list({
@@ -436,7 +448,7 @@ class EvidenceCoverageAnalyzer:
                 gaps.append(f"{operation.operation}:insufficient_operands")
                 continue
             if operation.requires_unit_compatibility:
-                units = {(fact.currency, fact.scale, fact.value_kind) for fact in facts}
+                units = {_value_signature(fact)[1:] for fact in facts}
                 if len(units) > 1:
                     gaps.append(f"{operation.operation}:unit_mismatch")
                     continue

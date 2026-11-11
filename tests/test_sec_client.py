@@ -98,7 +98,7 @@ def test_get_company_facts_uses_official_api_and_zero_pads_cik(monkeypatch) -> N
 def test_company_facts_cik_must_be_numeric() -> None:
     client = SECEdgarClient(user_agent=USER_AGENT)
 
-    with pytest.raises(ValueError, match="cik"):
+    with pytest.raises(ValueError, match="CIK"):
         client.get_company_facts("AAPL")
 
 
@@ -109,6 +109,18 @@ def test_company_facts_request_estimate_accounts_for_ticker_map_cache() -> None:
 
     client._ticker_to_cik = {"AAPL": 320193}
     assert client.estimated_company_facts_requests("AAPL") == 1
+
+
+def test_company_report_dates_are_bound_to_the_submissions_cik(monkeypatch) -> None:
+    payload = {"cik": "0000320193", "filings": {"recent": {
+        "accessionNumber": ["0000320193-24-000123", "0000320193-24-000124"],
+        "reportDate": ["2024-09-28", ""],
+    }}}
+    client, get_mock = _client_spying_on_get(_fake_response(payload), monkeypatch)
+    assert client.get_company_report_dates(320193) == {"0000320193-24-000123": "2024-09-28"}
+    get_mock.assert_called_once_with("https://data.sec.gov/submissions/CIK0000320193.json", timeout=15)
+    with pytest.raises(ValueError, match="Submissions CIK mismatch"):
+        client.get_company_report_dates(789019)
 
 
 def test_ticker_map_is_cached_after_first_download(monkeypatch) -> None:

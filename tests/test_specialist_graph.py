@@ -7,6 +7,7 @@ from typing import Any
 from src.agent.complexity_router import ComplexityRouter, ExecutionPath
 from src.agent.specialist_graph import SpecialistResearchGraph
 from src.agent.specialists import SpecialistStatus
+from src.ingestion.company_facts import RevisionKind
 from src.ledger.models import EvidenceSourceType
 from src.verification.models import ResponseDisposition
 
@@ -52,7 +53,7 @@ def _company_facts(name: str, cik: int, value_2023: str, value_2024: str) -> dic
                     "units": {
                         "USD": [
                             {
-                                "accn": f"{cik}-23-000001",
+                                "accn": f"{cik:010d}-23-000001",
                                 "fy": 2023,
                                 "fp": "FY",
                                 "form": "10-K",
@@ -62,7 +63,7 @@ def _company_facts(name: str, cik: int, value_2023: str, value_2024: str) -> dic
                                 "val": int(value_2023),
                             },
                             {
-                                "accn": f"{cik}-24-000001",
+                                "accn": f"{cik:010d}-24-000001",
                                 "fy": 2024,
                                 "fp": "FY",
                                 "form": "10-K",
@@ -385,3 +386,111 @@ def test_fan_in_refuses_conflicting_versions_of_the_same_chunk() -> None:
     failures = [item for item in result.specialist_results if item.error_code == "LedgerConflictError"]
     assert len(failures) == 2
     assert all(item.retrieval_calls == 1 and item.missing_requirement_ids for item in failures)
+
+
+def _apple_revenue_rows(sec: FakeSECCompanyFacts) -> list[dict[str, Any]]:
+    return sec.facts[320193]["facts"]["us-gaap"][
+        "RevenueFromContractWithCustomerExcludingAssessedTax"
+    ]["units"]["USD"]
+
+
+def test_explicit_revision_uses_revised_sec_fact_and_cites_its_accession() -> None:
+    sec = FakeSECCompanyFacts()
+    rows = _apple_revenue_rows(sec)
+    rows.append({
+        **rows[1], "accn": "0000320193-25-000009", "filed": "2025-03-15",
+        "form": "10-K/A", "val": 94_000_000_000,
+    })
+    result = SpecialistResearchGraph(retriever=FakeRetriever([_annual_chunk()]), sec_client=sec).run(
+        "What was Apple's restated revenue in FY2024?",
+    )
+    assert result.selected_path == ExecutionPath.RESEARCH
+    assert result.coverage is not None and result.coverage.sufficient
+    assert "94,000,000,000" in result.answer and "amended filing" in result.answer
+    assert result.status == "VERIFIED"
+    assert "110 billion" not in result.answer
+    fact = result.ledger_snapshot.financial_facts[0]
+    assert fact.xbrl_provenance is not None
+    assert fact.xbrl_provenance.revision_kind == RevisionKind.AMENDMENT
+    assert fact.xbrl_provenance.accession == "0000320193-25-000009"
+    record = next(item for item in result.ledger_snapshot.evidence_records if item.evidence_id in fact.evidence_ids)
+    assert "0000320193-25-000009-index.html" in (record.source_url or "")
+
+
+def test_missing_revision_does_not_use_an_unversioned_filing_excerpt() -> None:
+    chunk = _annual_chunk()
+    chunk["source_type"] = "XBRL_FACT"
+    result = SpecialistResearchGraph(
+        retriever=FakeRetriever([chunk]), sec_client=FakeSECCompanyFacts(),
+    ).run("What was Apple's restated revenue in FY2024?")
+    assert result.status == "ABSTAIN"
+    assert result.coverage is not None and not result.coverage.sufficient
+    assert not result.ledger_snapshot.financial_facts
+
+
+def test_disagreement_between_filing_and_sec_value_blocks_answer() -> None:
+    chunk = _annual_chunk()
+    chunk["text"] = "Revenue was $105 billion in FY2024."
+    result = SpecialistResearchGraph(
+        retriever=FakeRetriever([chunk]), sec_client=FakeSECCompanyFacts(),
+    ).run("Compare Apple and Microsoft revenue for FY2024.")
+    assert result.status == "ABSTAIN"
+    assert result.coverage is not None and result.coverage.conflicted_requirement_ids
+
+
+def test_agreement_across_scales_keeps_filing_and_structured_provenance() -> None:
+    result = SpecialistResearchGraph(
+        retriever=FakeRetriever([_annual_chunk()]), sec_client=FakeSECCompanyFacts(),
+    ).run("Compare Apple and Microsoft revenue for FY2024.")
+    assert result.coverage is not None and result.coverage.sufficient
+    assert len([fact for fact in result.ledger_snapshot.financial_facts if fact.ticker == "AAPL"]) == 2
+
+
+def test_calculation_cannot_silently_combine_different_tags() -> None:
+    sec = FakeSECCompanyFacts()
+    gaap = sec.facts[320193]["facts"]["us-gaap"]
+    rows = _apple_revenue_rows(sec)
+    gaap["SalesRevenueNet"] = {"units": {"USD": [rows.pop(0)]}}
+    result = SpecialistResearchGraph(sec_client=sec).run(
+        "Calculate Apple's revenue growth as reported from FY2023 to FY2024.",
+    )
+    assert result.coverage is not None and result.coverage.sufficient
+    assert result.status == "ABSTAIN" and not result.calculations
+    assert any(
+        item.key == "calculation_skipped" and "incompatible_fact_provenance" in item.value
+        for task in result.specialist_results for item in task.observations
+    )
+
+
+def test_currency_request_cannot_use_a_differently_denominated_filing_value() -> None:
+    result = SpecialistResearchGraph(retriever=FakeRetriever([_annual_chunk()])).run(
+        "What was Apple's revenue in CAD for FY2024?",
+    )
+    assert result.coverage is not None and not result.coverage.sufficient
+    assert result.status == "ABSTAIN"
+
+
+def test_optional_report_dates_preserve_the_company_facts_budget() -> None:
+    class SECWithReportDates(FakeSECCompanyFacts):
+        def get_company_report_dates(self, cik: int) -> dict[str, str]:
+            self.request_count += 1
+            return {}
+
+    sec = SECWithReportDates()
+    graph = SpecialistResearchGraph(sec_client=sec)
+    question = "Compare Apple and Microsoft revenue for FY2024."
+    route = graph.router.route(question)
+    route = route.model_copy(update={"budget": route.budget.model_copy(update={"max_tool_calls": 2})})
+    result = graph.run(question, route=route)
+    assert sec.request_count == result.usage.tool_calls == 2
+    assert result.coverage is not None and result.coverage.sufficient
+
+
+def test_mixed_revision_request_ends_without_sec_calls() -> None:
+    sec = FakeSECCompanyFacts()
+    result = SpecialistResearchGraph(sec_client=sec).run(
+        "Compare Apple's originally reported and restated revenue in FY2024.",
+    )
+    assert result.status == "UNSUPPORTED"
+    assert "mixed_filing_revision_request" in result.route.decision.reason_codes
+    assert sec.request_count == 0

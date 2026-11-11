@@ -29,6 +29,7 @@ from src.agent.specialists import (
     TableEvidenceWorker,
 )
 from src.decision.models import DecisionResult, EvidenceCoverage
+from src.decision.company_catalog import DEFAULT_COMPANY_ALIASES
 from src.generation.answer_generator import (
     AnswerGenerationResult,
     AnswerGenerator,
@@ -37,6 +38,7 @@ from src.generation.answer_generator import (
     is_fallback_answer,
 )
 from src.ingestion.sec_client import SECEdgarClient
+from src.ingestion.company_facts import RevisionKind, RevisionPolicy, requested_revision_policies
 from src.ledger.evidence_ledger import EvidenceLedger, LedgerConflictError, LedgerReferenceError
 from src.ledger.models import (
     DerivedCalculation,
@@ -194,6 +196,7 @@ class SpecialistResearchGraph:
                 raise ValueError("research plan exceeds the selected retrieval-call budget")
         if ledger is not None and ledger.request_id != request_id:
             raise ValueError("ledger request_id must match the specialist run")
+        revisions = requested_revision_policies(question)
         runtime = SpecialistRuntime(
             request_id=request_id,
             ledger=ledger or EvidenceLedger(request_id=request_id),
@@ -205,6 +208,8 @@ class SpecialistResearchGraph:
             ticker_by_company=self.ticker_by_company,
             generator=self.generator,
             verifier=self.verifier,
+            xbrl_revision_policy=next(iter(revisions), RevisionPolicy.AS_REPORTED),
+            require_structured_facts=bool(revisions),
         )
         concurrency = 1
         if route.selected_path == ExecutionPath.RESEARCH and self.retriever_concurrency_safe:
@@ -686,6 +691,20 @@ class SpecialistResearchGraph:
         if coverage is None or not coverage.sufficient:
             return _fallback_result()
         chunks = _ordered_report_chunks(runtime)
+        arithmetic = {
+            operation.operation for operation in runtime.requirements.operations
+            if operation.operation in {"growth", "difference", "ratio", "average"}
+        }
+        if arithmetic:
+            requested = {
+                (operation, entity.canonical_name, metric.metric_id)
+                for operation in arithmetic
+                for entity in runtime.requirements.entities
+                for metric in runtime.requirements.metrics if metric.quantitative
+            }
+            calculated = {(item.operation, item.company, item.metric_id) for item in runtime.calculations}
+            if not requested or not requested.issubset(calculated):
+                return _fallback_result()
         if runtime.calculations:
             answer = _render_calculations(runtime)
             if answer:
@@ -696,7 +715,7 @@ class SpecialistResearchGraph:
                     completion_tokens=0,
                     latency_ms=max(0.0, (time.perf_counter() - started) * 1000),
                 )
-        if runtime.generator is None:
+        if runtime.generator is None or runtime.require_structured_facts:
             answer = _render_lookup(runtime)
             if answer:
                 return AnswerGenerationResult(
@@ -748,15 +767,23 @@ class SpecialistResearchGraph:
 
 
 def _ticker_lookup(router: ComplexityRouter, explicit: dict[str, str]) -> dict[str, str]:
-    lookup = {" ".join(key.casefold().split()): value.upper() for key, value in explicit.items()}
+    lookup = {
+        alias.casefold(): ticker
+        for ticker, aliases in DEFAULT_COMPANY_ALIASES.items()
+        for alias in (ticker, *aliases)
+    }
     corpus_map = getattr(router, "corpus_map", None)
-    if corpus_map is None:
-        return lookup
-    for document in corpus_map.documents:
-        tickers = tuple(value.upper() for value in document.tickers)
-        for company in document.company_names:
-            if company and tickers:
-                lookup.setdefault(" ".join(company.casefold().split()), tickers[0])
+    if corpus_map is not None:
+        ticker_sets: dict[str, set[str]] = defaultdict(set)
+        for document in corpus_map.documents:
+            for company in document.company_names:
+                ticker_sets[" ".join(company.casefold().split())].update(document.tickers)
+        for company, tickers in ticker_sets.items():
+            if len(tickers) == 1:
+                lookup[company] = next(iter(tickers)).upper()
+            elif len(tickers) > 1:
+                lookup.pop(company, None)
+    lookup.update({" ".join(key.casefold().split()): value.upper() for key, value in explicit.items()})
     return lookup
 
 
@@ -874,7 +901,11 @@ def _build_filing_assignments(
 
 
 def _ordered_report_chunks(runtime: SpecialistRuntime) -> list[dict[str, Any]]:
-    return [runtime.source_chunks[key] for key in sorted(runtime.source_chunks)]
+    return [
+        runtime.source_chunks[key] for key in sorted(runtime.source_chunks)
+        if not runtime.require_structured_facts
+        or key in runtime.xbrl_chunk_ids
+    ]
 
 
 def _citation_number(runtime: SpecialistRuntime, chunk_id: str, order: dict[str, int]) -> int | None:
@@ -915,7 +946,17 @@ def _render_lookup(runtime: SpecialistRuntime) -> str:
             )
             period = f" for {fact.period}" if fact.period else ""
             markers = " ".join(f"[Source {number}]" for number in citations)
-            sentences.append(f"{entity} reported {metric} of {fact.value}{period}. {markers}")
+            evidence_id = runtime.preferred_evidence_by_chunk_id.get(fact.evidence_id)
+            provenance = runtime.ledger.evidence(evidence_id).xbrl_provenance if evidence_id else None
+            basis = ""
+            if provenance is not None and runtime.require_structured_facts:
+                basis = {
+                    RevisionKind.ORIGINAL: " in the original filing",
+                    RevisionKind.REFILED: " in a later filing with the same value",
+                    RevisionKind.AMENDMENT: " in the amended filing",
+                    RevisionKind.COMPARATIVE_REVISION: " as revised in a later comparative filing",
+                }[provenance.revision_kind]
+            sentences.append(f"{entity} reported {metric} of {fact.value}{period}{basis}. {markers}")
     return " ".join(sentences)
 
 
@@ -940,16 +981,23 @@ def _render_calculations(runtime: SpecialistRuntime) -> str:
             continue
         marker_text = " ".join(f"[Source {number}]" for number in citations)
         value = _decimal_text(calculation.result)
+        basis = ""
+        if runtime.require_structured_facts:
+            basis = (
+                " using the revised filing values"
+                if runtime.xbrl_revision_policy == RevisionPolicy.LATEST
+                else " using the original filing values"
+            )
         if calculation.operation == "growth":
             sentence = (
                 f"{calculation.company or 'The company'} {calculation.metric_id.replace('_', ' ')} "
-                f"growth was {value}% from {calculation.fiscal_period}. {marker_text}"
+                f"growth was {value}% from {calculation.fiscal_period}{basis}. {marker_text}"
             )
         else:
             unit = calculation.currency or calculation.unit or "units"
             sentence = (
                 f"The absolute {calculation.metric_id.replace('_', ' ')} difference was "
-                f"{unit} {value} across {calculation.fiscal_period}. {marker_text}"
+                f"{unit} {value} across {calculation.fiscal_period}{basis}. {marker_text}"
             )
         sentences.append(sentence)
     return " ".join(sentences)

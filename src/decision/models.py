@@ -66,6 +66,7 @@ class QuestionRequirements(BaseModel):
     companies: tuple[str, ...] = ()
     metrics: tuple[MetricRequirement, ...] = ()
     periods: tuple[str, ...] = ()
+    requested_currency: str | None = None
     operations: tuple[OperationRequirement, ...] = ()
     evidence: tuple[EvidenceRequirement, ...] = ()
     supported: bool = True

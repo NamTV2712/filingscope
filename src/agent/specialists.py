@@ -6,6 +6,7 @@ import re
 import threading
 import time
 from dataclasses import dataclass, field
+from datetime import date
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP, localcontext
 from enum import StrEnum
 from typing import Any, Protocol
@@ -25,6 +26,14 @@ from src.generation.answer_generator import (
     AnswerGenerator,
 )
 from src.ingestion.sec_client import SECEdgarClient
+from src.ingestion.company_facts import (
+    CompanyFactsResolver,
+    METRIC_CONCEPTS,
+    MONETARY_CURRENCIES,
+    ResolvedCompanyFact,
+    RevisionKind,
+    RevisionPolicy,
+)
 from src.ledger.evidence_ledger import EvidenceLedger
 from src.ledger.models import (
     CalculationValidationStatus,
@@ -167,7 +176,10 @@ class SpecialistRuntime:
     generator: AnswerGenerator | None = None
     decision_layer: EvidenceDecisionLayer = field(default_factory=EvidenceDecisionLayer)
     verifier: ClaimLevelVerifier = field(default_factory=ClaimLevelVerifier)
+    xbrl_revision_policy: RevisionPolicy = RevisionPolicy.AS_REPORTED
+    require_structured_facts: bool = False
     source_chunks: dict[str, dict[str, Any]] = field(default_factory=dict)
+    xbrl_chunk_ids: set[str] = field(default_factory=set)
     evidence_id_by_chunk_id: dict[str, str] = field(default_factory=dict)
     chunk_tasks: dict[str, set[str]] = field(default_factory=dict)
     preferred_evidence_by_chunk_id: dict[str, str] = field(default_factory=dict)
@@ -491,27 +503,9 @@ class TableEvidenceWorker:
 
 
 class StructuredFinancialDataWorker:
-    """Read a narrow set of standard XBRL concepts from SEC Company Facts.
-
-    Tag drift, amended filing precedence, duration/instant normalization, and
-    restatement reconciliation are deliberately deferred to M9.
-    """
+    """Resolve and register scoped, provenance-linked SEC Company Facts."""
 
     worker_id = "structured_financial_data_worker"
-
-    METRIC_TAGS: dict[str, tuple[str, ...]] = {
-        "revenue": (
-            "RevenueFromContractWithCustomerExcludingAssessedTax",
-            "Revenues",
-            "SalesRevenueNet",
-        ),
-        "net_income": ("NetIncomeLoss", "ProfitLoss"),
-        "total_assets": ("Assets",),
-        "total_liabilities": ("Liabilities",),
-        "operating_income": ("OperatingIncomeLoss",),
-        "gross_profit": ("GrossProfit",),
-        "cash_and_equivalents": ("CashAndCashEquivalentsAtCarryingValue",),
-    }
 
     def __init__(self, sec_client: SECEdgarClient | None = None):
         self.sec_client = sec_client
@@ -538,7 +532,7 @@ class StructuredFinancialDataWorker:
 
         grouped: dict[str, list[ResearchTask]] = {}
         for task in tasks:
-            if task.metric_id not in self.METRIC_TAGS:
+            if task.metric_id not in METRIC_CONCEPTS:
                 missing.update(task.requirement_ids)
                 continue
             ticker = _resolve_ticker(task.company_name, runtime.ticker_by_company)
@@ -551,7 +545,9 @@ class StructuredFinancialDataWorker:
                 continue
             grouped.setdefault(ticker, []).append(task)
 
-        for ticker, ticker_tasks in grouped.items():
+        currency = runtime.requirements.requested_currency
+        ticker_groups = list(grouped.items())
+        for index, (ticker, ticker_tasks) in enumerate(ticker_groups):
             estimate = _estimated_sec_requests(self.sec_client, ticker)
             # Leave one finite tool call for the report writer when configured.
             reserve_for_writer = int(runtime.generator is not None and runtime.budget.max_llm_calls > 0)
@@ -565,6 +561,7 @@ class StructuredFinancialDataWorker:
             try:
                 cik = self.sec_client.get_cik(ticker)
                 company_facts = self.sec_client.get_company_facts(cik)
+                resolver = CompanyFactsResolver(company_facts, expected_cik=cik)
             except Exception as error:
                 observations.append(SpecialistObservation(
                     key="xbrl_error",
@@ -572,26 +569,56 @@ class StructuredFinancialDataWorker:
                 ))
                 missing.update(req for task in ticker_tasks for req in task.requirement_ids)
                 continue
-            after = getattr(self.sec_client, "request_count", None)
-            if before is not None and isinstance(after, int):
-                actual = max(0, after - before)
-                runtime.budget_tracker.tool_calls -= max(0, estimate - actual)
+            finally:
+                after = getattr(self.sec_client, "request_count", None)
+                if before is not None and isinstance(after, int):
+                    runtime.budget_tracker.tool_calls += max(0, after - before) - estimate
 
-            company_name = str(company_facts.get("entityName") or ticker)
+            report_dates = getattr(self.sec_client, "get_company_report_dates", None)
+            future_requests = sum(
+                _estimated_sec_requests(self.sec_client, future_ticker)
+                for future_ticker, _ in ticker_groups[index + 1:]
+            )
+            if callable(report_dates) and runtime.budget_tracker.can_start(
+                tools=1 + future_requests + reserve_for_writer,
+            ):
+                runtime.budget_tracker.charge()
+                try:
+                    resolver = CompanyFactsResolver(
+                        company_facts, expected_cik=cik, report_dates=report_dates(cik),
+                    )
+                except Exception as error:
+                    observations.append(SpecialistObservation(
+                        key="xbrl_report_dates_unavailable", value=type(error).__name__,
+                    ))
             for task in ticker_tasks:
-                found = self._records_for_task(
-                    task=task,
-                    ticker=ticker,
-                    cik=cik,
-                    company_name=company_name,
-                    company_facts=company_facts,
-                    runtime=runtime,
+                resolution = resolver.resolve(
+                    task.metric_id or "", task.period, currency=currency,
+                    revision=runtime.xbrl_revision_policy, form_types=task.form_types,
                 )
-                if found:
-                    evidence_ids.update(record.evidence_id for record in found)
+                if (
+                    runtime.require_structured_facts
+                    and runtime.xbrl_revision_policy == RevisionPolicy.LATEST
+                    and resolution.fact is not None
+                    and resolution.fact.provenance.revision_kind in {RevisionKind.ORIGINAL, RevisionKind.REFILED}
+                ):
+                    missing.update(task.requirement_ids)
+                    observations.append(SpecialistObservation(
+                        key="xbrl_unavailable", value=f"{task.task_id}:changed_revision_unavailable",
+                    ))
+                    continue
+                record = None if resolution.fact is None else self._record_fact(
+                    task, ticker, resolver, resolution.fact, runtime,
+                )
+                if record is not None:
+                    evidence_ids.add(record.evidence_id)
                     task_ids.add(task.task_id)
                 else:
                     missing.update(task.requirement_ids)
+                    reason = resolution.reason if resolution.fact is None else "candidate_budget_reached"
+                    observations.append(SpecialistObservation(
+                        key="xbrl_unavailable", value=f"{task.task_id}:{reason}",
+                    ))
             observations.append(SpecialistObservation(
                 key="company_fact_entities",
                 value=f"{ticker}:{len([item for item in ticker_tasks if item.task_id in task_ids])} task(s)",
@@ -618,123 +645,82 @@ class StructuredFinancialDataWorker:
         runtime.save_result(result)
         return result
 
-    def _records_for_task(
+    def _record_fact(
         self,
-        *,
         task: ResearchTask,
         ticker: str,
-        cik: int | str,
-        company_name: str,
-        company_facts: dict[str, Any],
+        resolver: CompanyFactsResolver,
+        fact: ResolvedCompanyFact,
         runtime: SpecialistRuntime,
-    ) -> tuple[EvidenceRecord, ...]:
-        facts_root = company_facts.get("facts", {})
-        candidates: list[tuple[int, dict[str, Any], str, str, str]] = []
-        concept_order = self.METRIC_TAGS.get(task.metric_id or "", ())
-        target_year, target_quarter = _period_parts(task.period)
-        for namespace, namespace_facts in sorted(facts_root.items()):
-            if not isinstance(namespace_facts, dict):
-                continue
-            for tag_rank, tag in enumerate(concept_order):
-                fact_payload = namespace_facts.get(tag)
-                if not isinstance(fact_payload, dict):
-                    continue
-                for unit, rows in sorted((fact_payload.get("units") or {}).items()):
-                    if not isinstance(rows, list):
-                        continue
-                    eligible = [row for row in rows if isinstance(row, dict) and _xbrl_period_matches(
-                        row, target_year=target_year, target_quarter=target_quarter
-                    )]
-                    if not eligible:
-                        continue
-                    eligible.sort(key=lambda row: (
-                        str(row.get("filed") or ""),
-                        str(row.get("accn") or ""),
-                        str(row.get("end") or ""),
-                    ), reverse=True)
-                    candidates.append((tag_rank, eligible[0], namespace, tag, unit))
-
-        # Keep the first tag in the narrow M7 alias list per namespace/unit.
-        # Other namespaces and units remain separate evidence to expose conflicts.
-        selected: dict[tuple[str, str], tuple[int, dict[str, Any], str, str, str]] = {}
-        for item in candidates:
-            key = (item[2], item[4])
-            if key not in selected or item[0] < selected[key][0]:
-                selected[key] = item
-
-        records: list[EvidenceRecord] = []
-        for _, row, namespace, tag, unit in sorted(
-            selected.values(),
-            key=lambda item: (item[2], item[3], item[4], str(item[1].get("accn") or "")),
-        ):
-            value = row.get("val")
-            try:
-                normalized = Decimal(str(value))
-            except (InvalidOperation, TypeError):
-                continue
-            if not normalized.is_finite():
-                continue
-            accn = str(row.get("accn") or "unknown-accession")
-            filed = str(row.get("filed") or "") or None
-            period = _format_xbrl_period(row, task.period)
-            source_url = f"https://data.sec.gov/api/xbrl/companyfacts/CIK{str(cik).zfill(10)}.json"
-            metric = _metric_label(runtime.requirements, task.metric_id or "")
-            chunk_id = f"xbrl-{str(cik).zfill(10)}-{accn}-{namespace}-{tag}-{period or 'period-unknown'}-{unit}"
-            record = EvidenceRecord.from_source(
-                request_id=runtime.request_id,
-                document_id=f"CIK{str(cik).zfill(10)}:{accn}",
-                chunk_id=chunk_id,
-                company=company_name,
-                ticker=ticker,
-                cik=str(cik).zfill(10),
-                form_type=str(row.get("form") or "") or None,
-                filing_date=filed,
-                fiscal_period=period,
-                section="xbrl_company_facts",
-                metric=metric,
-                metric_id=task.metric_id,
-                financial_concept=f"{namespace}:{tag}",
-                raw_value=str(value),
-                normalized_value=format(normalized, "f"),
-                unit=unit,
-                currency=unit if unit in {"USD", "EUR", "GBP"} else None,
-                source_type=EvidenceSourceType.XBRL_FACT,
-                source_url=source_url,
-                discovered_by=(self.worker_id,),
-                source_revision=f"{accn}|{filed or ''}|{namespace}:{tag}|{row.get('start') or 'instant'}:{row.get('end') or ''}|{unit}",
-                task_id=task.task_id,
-                requirement_ids=task.requirement_ids,
-            )
-            is_new_candidate = record.chunk_id not in runtime.source_chunks
-            if is_new_candidate and not runtime.budget_tracker.remaining_candidates():
-                continue
-            record = runtime.ledger.add_evidence(record)
-            records.append(record)
-            if is_new_candidate:
-                runtime.budget_tracker.candidate_chunks += 1
-            value_text = f"{format(normalized, ',f')} {unit}"
-            text = f"{company_name} {metric} for {period or 'the reported period'}: {value_text} ({namespace}:{tag})."
-            pseudo_chunk = {
-                "chunk_id": record.chunk_id,
-                "source_type": EvidenceSourceType.XBRL_FACT.value,
-                "document_id": record.document_id,
-                "doc_name": record.document_id,
-                "ticker": ticker,
-                "company": company_name,
-                "filing_date": filed or "",
-                "section": record.section,
-                "source_url": source_url,
-                "text": text,
-                "financial_concept": record.financial_concept,
-                "metric_id": task.metric_id,
-                "period": period,
-                "currency": record.currency,
-            }
-            runtime.source_chunks[str(record.chunk_id)] = pseudo_chunk
-            runtime.evidence_id_by_chunk_id[str(record.chunk_id)] = record.evidence_id
-            runtime.preferred_evidence_by_chunk_id[str(record.chunk_id)] = record.evidence_id
-            runtime.chunk_tasks.setdefault(str(record.chunk_id), set()).add(task.task_id)
-        return tuple(records)
+    ) -> EvidenceRecord | None:
+        provenance = fact.provenance
+        concept = f"{provenance.taxonomy}:{provenance.tag}"
+        interval = f"{provenance.period_start or 'instant'}:{provenance.period_end}"
+        revision = f"{provenance.accession}|{concept}|{interval}|{fact.currency}"
+        chunk_id = f"xbrl-{resolver.cik}-{revision}"
+        is_new_candidate = chunk_id not in runtime.source_chunks
+        if is_new_candidate and not runtime.budget_tracker.remaining_candidates():
+            return None
+        metric = _metric_label(runtime.requirements, task.metric_id or "")
+        record = runtime.ledger.add_evidence(EvidenceRecord.from_source(
+            request_id=runtime.request_id,
+            document_id=f"CIK{resolver.cik}:{provenance.accession}",
+            chunk_id=chunk_id,
+            company=resolver.company,
+            ticker=ticker,
+            cik=resolver.cik,
+            form_type=fact.form,
+            filing_date=fact.filing_date,
+            fiscal_period=fact.fiscal_period,
+            section="xbrl_company_facts",
+            metric=metric,
+            metric_id=task.metric_id,
+            financial_concept=concept,
+            raw_value=fact.raw_value,
+            normalized_value=format(fact.value, "f"),
+            unit=fact.currency,
+            currency=fact.currency,
+            source_type=EvidenceSourceType.XBRL_FACT,
+            source_url=fact.filing_url,
+            discovered_by=(self.worker_id,),
+            source_revision=revision,
+            xbrl_provenance=provenance,
+            task_id=task.task_id,
+            requirement_ids=task.requirement_ids,
+        ))
+        if is_new_candidate:
+            runtime.budget_tracker.candidate_chunks += 1
+        revision_text = {
+            RevisionKind.ORIGINAL: "original filing",
+            RevisionKind.REFILED: "unchanged comparative value",
+            RevisionKind.AMENDMENT: "amended filing value",
+            RevisionKind.COMPARATIVE_REVISION: "revised comparative value",
+        }[provenance.revision_kind]
+        value_text = f"{fact.currency} {format(fact.value, ',f')}"
+        runtime.source_chunks[chunk_id] = {
+            "chunk_id": chunk_id,
+            "source_type": EvidenceSourceType.XBRL_FACT.value,
+            "document_id": record.document_id,
+            "doc_name": record.document_id,
+            "ticker": ticker,
+            "company": resolver.company,
+            "filing_date": fact.filing_date,
+            "section": record.section,
+            "source_url": fact.filing_url,
+            "text": (
+                f"{resolver.company} {metric} for {fact.fiscal_period}: "
+                f"{value_text} ({revision_text}, {concept})."
+            ),
+            "financial_concept": concept,
+            "metric_id": task.metric_id,
+            "period": fact.fiscal_period,
+            "currency": fact.currency,
+        }
+        runtime.evidence_id_by_chunk_id[chunk_id] = record.evidence_id
+        runtime.preferred_evidence_by_chunk_id[chunk_id] = record.evidence_id
+        runtime.chunk_tasks.setdefault(chunk_id, set()).add(task.task_id)
+        runtime.xbrl_chunk_ids.add(chunk_id)
+        return record
 
 
 class EvidenceAnalyst:
@@ -745,28 +731,10 @@ class EvidenceAnalyst:
     def run(self, question: str, runtime: SpecialistRuntime) -> SpecialistTaskResult:
         started = time.perf_counter()
         runtime.register_plan()
-        all_chunks = _ordered_chunks(runtime)
-        filing_chunks = [
-            item for item in all_chunks
-            if item.get("source_type") != EvidenceSourceType.XBRL_FACT.value
+        chunks = [
+            runtime.source_chunks[chunk_id] for chunk_id in sorted(runtime.source_chunks)
+            if not runtime.require_structured_facts or chunk_id in runtime.xbrl_chunk_ids
         ]
-        filing_coverage = runtime.decision_layer.assess(question, filing_chunks)
-        uncovered = set(filing_coverage.missing_requirement_ids)
-        xbrl_chunks: list[dict[str, Any]] = []
-        for item in all_chunks:
-            if item.get("source_type") != EvidenceSourceType.XBRL_FACT.value:
-                continue
-            task_requirement_ids = {
-                requirement_id
-                for task_id in runtime.chunk_tasks.get(str(item.get("chunk_id")), ())
-                if (task := _task_by_id(runtime.plan, task_id)) is not None
-                for requirement_id in task.requirement_ids
-            }
-            if uncovered.intersection(task_requirement_ids):
-                xbrl_chunks.append(item)
-        # Keep already covered filing slots out of the M7 XBRL sufficiency pass.
-        # M9 adds unit/scale normalization before these sources are reconciled.
-        chunks = [*filing_chunks, *xbrl_chunks]
         runtime.coverage = runtime.decision_layer.assess(question, chunks)
         runtime.decision = runtime.decision_layer.decide(
             question,
@@ -879,8 +847,14 @@ class FinancialReasoner:
                     if len(periods) < 2:
                         continue
                     earlier, later = periods[0], periods[-1]
-                    earlier_value = _consensus_fact(by_period[earlier])
-                    later_value = _consensus_fact(by_period[later])
+                    compatible = _compatible_operands(by_period[earlier], by_period[later])
+                    if compatible is None:
+                        notes.append(SpecialistObservation(
+                            key="calculation_skipped",
+                            value=f"incompatible_fact_provenance:{entity.entity_id}:{metric_id}",
+                        ))
+                        continue
+                    earlier_value, later_value = map(_consensus_fact, compatible)
                     if earlier_value is None or later_value is None:
                         notes.append(SpecialistObservation(
                             key="calculation_skipped",
@@ -889,7 +863,7 @@ class FinancialReasoner:
                         continue
                     earlier_number, earlier_unit, earlier_currency, earlier_evidence_ids = earlier_value
                     later_number, later_unit, later_currency, later_evidence_ids = later_value
-                    if earlier_unit not in {"%", "USD", "EUR", "GBP"}:
+                    if earlier_unit not in MONETARY_CURRENCIES | {"%"}:
                         notes.append(SpecialistObservation(
                             key="calculation_skipped",
                             value=f"unit_unknown:{entity.entity_id}:{metric_id}",
@@ -1078,10 +1052,6 @@ def _rank_for_chunk(runtime: SpecialistRuntime, chunk_id: str) -> int:
     return runtime.ledger.evidence(evidence_id).retrieval_rank or 0
 
 
-def _ordered_chunks(runtime: SpecialistRuntime) -> list[dict[str, Any]]:
-    return [runtime.source_chunks[key] for key in sorted(runtime.source_chunks)]
-
-
 def _metric_label(requirements: QuestionRequirements, metric_id: str) -> str:
     return next((metric.display_name for metric in requirements.metrics if metric.metric_id == metric_id), metric_id.replace("_", " "))
 
@@ -1157,50 +1127,14 @@ def _period_parts(period: str | None) -> tuple[int | None, int | None]:
     )
 
 
-def _xbrl_period_matches(
-    row: dict[str, Any], *, target_year: int | None, target_quarter: int | None
-) -> bool:
-    if target_year is None:
-        return True
-    if row.get("fy") is not None:
-        try:
-            if int(row["fy"]) != target_year:
-                return False
-        except (TypeError, ValueError):
-            return False
-    else:
-        end_year, _ = _period_parts(str(row.get("end") or ""))
-        if end_year != target_year:
-            return False
-    if target_quarter is None:
-        return str(row.get("fp") or "").upper() in {"FY", "Q4", ""}
-    return str(row.get("fp") or "").upper() == f"Q{target_quarter}"
-
-
-def _format_xbrl_period(row: dict[str, Any], fallback: str | None) -> str | None:
-    fp = str(row.get("fp") or "").upper()
-    fy = row.get("fy")
-    if fy is None:
-        _, quarter = _period_parts(str(row.get("end") or ""))
-        year, _ = _period_parts(str(row.get("end") or ""))
-        if year is None:
-            return fallback
-        return f"Q{quarter} FY{year}" if quarter else f"FY{year}"
-    try:
-        year = int(fy)
-    except (TypeError, ValueError):
-        return fallback
-    return f"{fp} FY{year}" if fp.startswith("Q") else f"FY{year}"
-
-
 def _resolve_ticker(company: str | None, lookup: dict[str, str]) -> str | None:
     if not company:
         return None
     normalized = " ".join(company.casefold().split())
     if normalized in lookup:
         return lookup[normalized].upper()
-    if re.fullmatch(r"[A-Z][A-Z0-9.\-]{0,9}", company.upper()):
-        return company.upper()
+    if re.fullmatch(r"[A-Z][A-Z0-9.\-]{0,9}", company):
+        return company
     return None
 
 
@@ -1212,6 +1146,43 @@ def _estimated_sec_requests(client: Any, ticker: str) -> int:
         except Exception:
             return 2
     return 2 if hasattr(client, "get_cik") else 1
+
+
+def _compatible_operands(
+    earlier: list[FinancialFact], later: list[FinancialFact],
+) -> tuple[list[FinancialFact], list[FinancialFact]] | None:
+    earlier_xbrl = [fact for fact in earlier if fact.source_type == EvidenceSourceType.XBRL_FACT]
+    later_xbrl = [fact for fact in later if fact.source_type == EvidenceSourceType.XBRL_FACT]
+    if not (earlier_xbrl and later_xbrl):
+        left = [fact for fact in earlier if fact.source_type != EvidenceSourceType.XBRL_FACT]
+        right = [fact for fact in later if fact.source_type != EvidenceSourceType.XBRL_FACT]
+        return (left, right) if left and right else None
+
+    selected = [*earlier_xbrl, *later_xbrl]
+    if len({fact.financial_concept for fact in selected}) != 1:
+        return None
+    durations: set[int | None] = set()
+    bases: set[tuple[RevisionPolicy, bool]] = set()
+    for fact in selected:
+        provenance = fact.xbrl_provenance
+        if provenance is None:
+            return None
+        duration = None
+        if provenance.period_start is not None:
+            duration = (
+                date.fromisoformat(provenance.period_end) - date.fromisoformat(provenance.period_start)
+            ).days
+        durations.add(duration)
+        bases.add((
+            provenance.revision_policy,
+            provenance.revision_kind in {RevisionKind.AMENDMENT, RevisionKind.COMPARATIVE_REVISION},
+        ))
+    if len(bases) != 1 or (None in durations and len(durations) != 1):
+        return None
+    duration_values = [duration for duration in durations if duration is not None]
+    if duration_values and max(duration_values) - min(duration_values) > 14:
+        return None
+    return earlier_xbrl, later_xbrl
 
 
 def _consensus_fact(

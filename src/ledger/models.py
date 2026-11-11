@@ -12,6 +12,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from src.decision.models import EvidenceRequirement, QuestionRequirements
+from src.ingestion.company_facts import XbrlProvenance
 from src.research.planner import ResearchPlan, ResearchTask
 from src.verification.models import ClaimStatus, VerificationResult
 
@@ -147,6 +148,7 @@ class EvidenceRecord(BaseModel):
     retrieval_observations: tuple[RetrievalObservation, ...] = ()
     discovered_by: tuple[str, ...] = Field(default=("unknown",), min_length=1)
     source_revision: str | None = None
+    xbrl_provenance: XbrlProvenance | None = None
     evidence_status: EvidenceStatus = EvidenceStatus.UNKNOWN
     task_id: str | None = None
     task_ids: tuple[str, ...] = ()
@@ -232,16 +234,29 @@ class EvidenceRecord(BaseModel):
         elif self.source_type == EvidenceSourceType.XBRL_FACT:
             if not self.financial_concept or not (self.document_id or self.source_url):
                 raise ValueError("XBRL facts require a concept and accession/document or source URL")
+        if self.xbrl_provenance is not None:
+            provenance = self.xbrl_provenance
+            if (
+                self.source_type != EvidenceSourceType.XBRL_FACT
+                or self.financial_concept != f"{provenance.taxonomy}:{provenance.tag}"
+            ):
+                raise ValueError("XBRL provenance must describe the record's source concept")
         return self
 
 
 def _evidence_identity(record: EvidenceRecord | Mapping[str, Any]) -> dict[str, Any]:
     if isinstance(record, EvidenceRecord):
-        return {field: getattr(record, field) for field in _EVIDENCE_ID_FIELDS}
-    return {
-        field: record.get(field, () if field == "derived_from_evidence_ids" else None)
-        for field in _EVIDENCE_ID_FIELDS
-    }
+        identity = {field: getattr(record, field) for field in _EVIDENCE_ID_FIELDS}
+        provenance = record.xbrl_provenance
+    else:
+        identity = {
+            field: record.get(field, () if field == "derived_from_evidence_ids" else None)
+            for field in _EVIDENCE_ID_FIELDS
+        }
+        provenance = record.get("xbrl_provenance")
+    if provenance is not None:
+        identity["xbrl_provenance"] = provenance
+    return identity
 
 
 _FACT_ID_FIELDS = (
@@ -284,6 +299,7 @@ class FinancialFact(BaseModel):
     currency: str | None = None
     source_type: EvidenceSourceType
     source_revision: str | None = None
+    xbrl_provenance: XbrlProvenance | None = None
 
     @classmethod
     def from_evidence(
@@ -312,6 +328,7 @@ class FinancialFact(BaseModel):
             "currency": record.currency,
             "source_type": record.source_type,
             "source_revision": record.source_revision,
+            "xbrl_provenance": record.xbrl_provenance,
         }
         return cls(fact_id=_stable_id("fact", _fact_identity(values)), **values)
 
@@ -328,8 +345,14 @@ class FinancialFact(BaseModel):
 
 def _fact_identity(fact: FinancialFact | Mapping[str, Any]) -> dict[str, Any]:
     if isinstance(fact, FinancialFact):
-        return {field: getattr(fact, field) for field in _FACT_ID_FIELDS}
-    return {field: fact.get(field) for field in _FACT_ID_FIELDS}
+        identity = {field: getattr(fact, field) for field in _FACT_ID_FIELDS}
+        provenance = fact.xbrl_provenance
+    else:
+        identity = {field: fact.get(field) for field in _FACT_ID_FIELDS}
+        provenance = fact.get("xbrl_provenance")
+    if provenance is not None:
+        identity["xbrl_provenance"] = provenance
+    return identity
 
 
 _CALCULATION_ID_FIELDS = (

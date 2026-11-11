@@ -12,10 +12,12 @@ not modify it scattered across every notebook/script that calls it.
 import logging
 import time
 from dataclasses import dataclass
+from decimal import Decimal
 from pathlib import Path
 from typing import Optional
 import requests
 
+from src.ingestion.company_facts import normalize_cik
 logger = logging.getLogger(__name__)
 
 
@@ -185,11 +187,24 @@ class SECEdgarClient:
 
     def get_company_facts(self, cik: int | str) -> dict:
         """Fetch the official SEC Company Facts JSON for one filer."""
-        cik_digits = str(cik).strip()
-        if not cik_digits.isdigit():
-            raise ValueError("cik must contain only digits")
-        url = self.COMPANY_FACTS_URL_TEMPLATE.format(cik=cik_digits.zfill(10))
-        return self._throttled_get(url).json()
+        url = self.COMPANY_FACTS_URL_TEMPLATE.format(cik=normalize_cik(cik))
+        return self._throttled_get(url).json(parse_float=Decimal)
+
+    def get_company_report_dates(self, cik: int | str) -> dict[str, str]:
+        """Read accession-to-report-date hints from recent SEC submissions."""
+        normalized = normalize_cik(cik)
+        url = self.SUBMISSIONS_URL_TEMPLATE.format(cik=normalized)
+        payload = self._throttled_get(url).json()
+        if normalize_cik(payload.get("cik")) != normalized:
+            raise ValueError("SEC Submissions CIK mismatch")
+        recent = payload["filings"]["recent"]
+        return {
+            accession: report_date
+            for accession, report_date in zip(
+                recent["accessionNumber"], recent["reportDate"], strict=True,
+            )
+            if isinstance(accession, str) and isinstance(report_date, str) and report_date
+        }
 
     def download_filing(self, filing: FilingMetadata, save_path: Path) -> Path:
         response = self._throttled_get(filing.filing_url)

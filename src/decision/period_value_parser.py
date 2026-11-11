@@ -13,18 +13,21 @@ import re
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 
+from src.ingestion.company_facts import MONETARY_CURRENCIES
+
 
 _YEAR_RE = re.compile(r"(?<!\d)(?:19|20)\d{2}(?!\d)")
 _QUARTER_RE = re.compile(r"\bQ([1-4])\s*(?:FY\s*)?((?<!\d)(?:19|20)\d{2})(?!\d)", re.I)
+_CURRENCY_TOKEN = "|".join((*sorted(MONETARY_CURRENCIES), r"\$", "€", "£"))
 _VALUE_RE = re.compile(
-    r"(?<![\w.])(?P<currency>USD|EUR|GBP|\$|€|£)?\s*"
+    rf"(?<![\w.])(?P<currency>{_CURRENCY_TOKEN})?\s*"
     r"(?P<number>\(?-?\d{1,3}(?:,\d{3})*(?:\.\d+)?\)?|\(?-?\d+(?:\.\d+)?\)?)"
     r"\s*(?P<percent>%|percent\b)?\s*"
     r"(?P<scale>\b(?:billion|million|thousand|bn|mm|m)\b)?",
     re.I,
 )
 _STRICT_NUMBER_RE = re.compile(
-    r"^(?P<currency>USD|EUR|GBP|\$|€|£)?\s*"
+    rf"^(?P<currency>{_CURRENCY_TOKEN})?\s*"
     r"(?P<number>\(?-?\d{1,3}(?:,\d{3})*(?:\.\d+)?\)?|\(?-?\d+(?:\.\d+)?\)?)"
     r"\s*(?P<percent>%|percent)?\s*"
     r"(?P<scale>billion|million|thousand|bn|mm|m)?$",
