@@ -117,6 +117,19 @@ abstain on too many cases. These are failure findings, not a demonstrated
 end-user quality gain. See [`BENCHMARK_RESULTS.md`](BENCHMARK_RESULTS.md) and
 [`FAILURE_ANALYSIS.md`](FAILURE_ANALYSIS.md).
 
+## M4 corpus-aware planning
+
+`src/research/corpus_map.py` aggregates a versioned metadata-only inventory of
+the indexed corpus. `src/research/planner.py` exposes question-only and
+Corpus-Map-conditioned planning modes, with explicit `AVAILABLE`, `MISSING`,
+and `UNKNOWN` states and document IDs sourced only from the map. A fixed
+150-case comparison showed a BM25 Recall@10 increase from 0.1133 to 0.1567
+overall and from 0.0889 to 0.1111 on held-out cases. The experiment also
+recorded the latency increase and missing metadata limits; it did not measure
+answer generation. The planner remains standalone and does not alter the P5
+path or dense retrieval default. See
+[`CORPUS_AWARE_PLANNING.md`](CORPUS_AWARE_PLANNING.md).
+
 ## Target: separate logical planes
 
 ```text
@@ -136,9 +149,11 @@ provenance + entity/metric/period + source authority + numeric consistency
 
 This is still a target architecture. M3 adds `src/policy/` as an independent,
 typed candidate-decision component with a deterministic policy, but it is not
-yet connected to P5 retrieval or final answer release. The repository has no
-persistent Evidence Ledger, runtime Corpus Map, XBRL fact path, complexity
-router, specialist graph, or request-facing UI. `src/decision/`,
+yet connected to P5 retrieval or final answer release. M4 adds `src/research/`
+with a standalone runtime Corpus Map and corpus-aware task planner, but it is
+not wired into the P5 answer path. The repository has no persistent Evidence
+Ledger, XBRL fact path, complexity router, specialist graph, or request-facing
+UI. `src/decision/`,
 `src/verification/`, and `src/agent/adaptive_retrieval.py` remain the starting
 points; extend them instead of replacing them with broad framework
 abstractions. See [`CURRENT_ARCHITECTURE_AUDIT.md`](CURRENT_ARCHITECTURE_AUDIT.md)
@@ -151,9 +166,11 @@ diagnostics are complete; dense remains the permanent baseline because no
 fusion or reranking variant beat it on the held-out cohort. M3's deterministic
 candidate policy and separate 60-case synthetic benchmark are complete, with
 the limitation that the policy is not yet part of the P5 answer path and its
-fixtures do not measure financial-document accuracy. M4 is next: runtime
-Corpus Map and corpus-aware planning. Bounded routing, a shared ledger,
-specialist work, parallel research, SEC XBRL, document parser comparisons,
-advanced verification, hard negatives, and agent ablations follow in M5–M14.
+fixtures do not measure financial-document accuracy. M4's standalone
+Corpus-Map-conditioned planner is complete and measured; dense remains the
+retrieval baseline, and P5 integration is deferred pending downstream
+evaluation. Bounded routing, a shared ledger, specialist work, parallel
+research, SEC XBRL, document parser comparisons, advanced verification, hard
+negatives, and agent ablations follow in M5–M14.
 M15 may add a local evidence-first interface. Cloud deployment is out of scope
 unless explicitly requested.

@@ -77,4 +77,4 @@ The policy is not yet connected to P5's A0–A5 evaluation pipeline.
 **EXPERIMENT** on independently annotated real candidate evidence, add
 probability-producing backends only when needed, and measure false accepts
 before runtime promotion. Jev remains optional; FilingScope has no Jev
-dependency. M4 is next.
+dependency. M4 has since been completed; M5 finite routing is next.

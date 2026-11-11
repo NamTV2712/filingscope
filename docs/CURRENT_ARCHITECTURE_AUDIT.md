@@ -1,13 +1,14 @@
 # Current architecture audit
 
-Audit refreshed: 2026-11-08<br>
+Audit refreshed: 2026-11-11<br>
 Branch: `main`<br>
 Audited repository: `D:\Project\filingscope`<br>
-Audited commit: `3ac21fed877627bbe93a61a0978b3b12d1a0856b`<br>
+Audited commit: `0be938d31cf3a76b5b0baa31023bd4354ce571a3`<br>
 Initial audit baseline: `956cef412d765395b5a7f0b773f821a58686a35a`
 
 This refresh reflects the committed P0–P5 repository, M1 runtime compatibility
-check, M2 retrieval diagnostics, and M3 candidate policy. P0–P4 behavior and
+check, M2 retrieval diagnostics, M3 candidate policy, and M4 corpus-aware
+planning. P0–P4 behavior and
 the completed P5 provider benchmark remain preserved. Source benchmark data,
 model caches, and generated run artifacts remain local and git-ignored.
 
@@ -35,6 +36,10 @@ model caches, and generated run artifacts remain local and git-ignored.
   deterministic `ACCEPT`/`WEAK`/`REJECT` rules, stable reason codes, backend
   protocols, and a separate synthetic benchmark. It is not yet called by the
   P5 A0–A5 evaluation pipeline.
+- Corpus-aware planning: `src/research/` builds a metadata-only runtime Corpus
+  Map and emits bounded, typed research tasks from question requirements.
+  Missing versus unknown source states are kept explicit. The planner is not
+  yet wired into the P5 answer path.
 - Generation and evaluation: `src/generation/` contains a provider-agnostic
   answer interface plus a Groq adapter; `src/evaluation/` includes P1
   retrieval metrics and the P5 A0–A5 pipeline, lexical/numeric answer metrics,
@@ -51,6 +56,7 @@ model caches, and generated run artifacts remain local and git-ignored.
 | Retrieval inspection | `HybridRetriever.inspect(...)` | Diagnostic only; not an answer-quality result. |
 | Decision | `EvidenceDecisionLayer.assess/decide(question, chunks, budget)` | Deterministic slot coverage, not calibrated probability or general semantic support. |
 | Candidate policy | `DeterministicDecisionBackend.decide(features)` | Typed observations and hard rules; synthetic cases only; not integrated into P5. |
+| Research planning | `QuestionOnlyPlanner.plan(question)` / `CorpusAwarePlanner.plan(question)` | Standalone M4 component; map is metadata-only and planner is not yet connected to a retriever or answer flow. |
 | Adaptive retrieval | `AdaptiveRetrievalController.run(question, initial_chunks, budget)` | One bounded flow over the existing retriever; no planner/corpus map. |
 | Generation | `AnswerGenerator.generate(question, evidence_chunks)` | Provider call is not itself the evidence authority. |
 | Verification | `ClaimLevelVerifier.verify(question, answer, evidence_chunks)` | Lexical topical anchors and deterministic number parsing can miss paraphrases or valid facts. |
@@ -75,6 +81,10 @@ model caches, and generated run artifacts remain local and git-ignored.
 - P2/P3/P4 and M3 decision/verification accuracy is measured with small fixed
   synthetic scenario sets; those results are software behavior checks, not
   calibration or real-world decision accuracy.
+- M4's 150-case BM25 planning comparison improved Recall@10 from 0.1133 to
+  0.1567 overall and from 0.0889 to 0.1111 held-out. It remains below dense
+  P1 Recall@10 of 0.4167; corpus-aware p95 BM25 latency was 1,051 ms. No answer
+  generation was evaluated.
 - The provider-backed P5 run had interrupted attempts before the completed
   run. Completed case outputs and reported usage are preserved; prior-run token
   usage was unavailable and is represented by a conservative upper bound.
@@ -92,9 +102,10 @@ model caches, and generated run artifacts remain local and git-ignored.
 3. **Financial facts.** Table extraction exists; SEC XBRL facts do not. There
    is no tag drift, duration/instant, unit, accession, amendment, or
    restatement-aware fact model.
-4. **Planning and routing.** Requirements are recognized by rule-based aliases
-   and period parsing. There is no corpus map, complexity/cost router,
-   corpus-conditioned decomposition, or specialist task interface.
+4. **Planning and routing.** M4 adds rule-based corpus-conditioned planning
+   and a compact metadata map, but it is standalone and supports only the
+   current alias/period rules. There is no complexity/cost router, planner
+   integration in P5, or specialist task interface.
 5. **Generation/verification.** The verifier splits answer text into clauses
    and creates local claim IDs, but no durable claim graph joins claims,
    calculation objects, and evidence IDs. Atomic semantic verification and a
@@ -123,7 +134,7 @@ model caches, and generated run artifacts remain local and git-ignored.
 
 - Evidence Policy Engine integration with a real-candidate observer and the
   end-to-end evaluation path;
-- runtime Corpus Map and corpus-aware planner;
+- corpus-aware planner integration into the answer and retrieval path;
 - explicit FAST/STANDARD/DEEP complexity routing and budget profiles;
 - shared Evidence Ledger and specialist task/result contracts;
 - SEC company-facts/submissions path with provenance and fiscal normalization;
@@ -187,11 +198,28 @@ See [`EVIDENCE_POLICY_EVALUATION.md`](EVIDENCE_POLICY_EVALUATION.md).
 The full regression suite after M3 implementation passed with 227 passed and
 3 skipped tests.
 
+## M4 validation update
+
+The standalone Corpus Map records 84 documents, 28,849 chunks, and 32 company
+entities from the pinned P1 index. Company, filing-form, period, and section
+metadata are complete. Ticker and CIK metadata are not indexed; table IDs are
+not indexed and structured-table evidence is marked missing for this index;
+XBRL coverage remains unknown. The planner receives questions and this map,
+never benchmark labels. On 150 FinanceBench questions, corpus-aware planning
+improved BM25 Recall@10 by 4.34 percentage points overall and 2.22 points
+held-out. It marked all 10 synthetic absent-company probes missing and avoided
+10 retrieval calls. Query count and p95 BM25 latency increased, so dense stays
+the retrieval baseline and P5 integration is deferred. Peak incremental Python
+allocation was 473,289,904 bytes; process RSS was not measured. See
+[`CORPUS_AWARE_PLANNING.md`](CORPUS_AWARE_PLANNING.md).
+
+The full regression suite after M4 implementation passed with 242 passed and
+3 skipped tests.
+
 ## Next milestone recommendation
 
-M1–M3 are validated. Continue with M4: construct a runtime Corpus Map from
-available corpus metadata and measure corpus-conditioned planning against
-question-only planning. Preserve the dense retrieval baseline; keep
-query-derived company/period filtering diagnostic-only until paired latency
-and false-filter analysis is complete. The sequence is in
+M1–M4 are validated. Continue with M5: finite complexity and cost routing over
+the research task contract. Preserve the dense retrieval baseline; keep M4
+planning standalone until downstream quality and budget effects are measured.
+The sequence is in
 [`RESEARCH_AGENDA.md`](RESEARCH_AGENDA.md).

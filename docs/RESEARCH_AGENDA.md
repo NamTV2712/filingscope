@@ -23,7 +23,13 @@ consistency, sufficiency, verification, abstention, and release.
 - M3 candidate Evidence Policy Engine and its separate 60-case synthetic
   decision benchmark are complete. Policy v1.0.0 is a typed, deterministic
   contract; its perfect fixture agreement is not real-corpus accuracy or
-  calibration. It is not yet connected to the P5 answer path. M4 is next.
+  calibration. It is not yet connected to the P5 answer path.
+- M4 runtime Corpus Map and corpus-aware planning are complete as a standalone
+  component and 150-case BM25 comparison. Corpus-aware planning improved
+  Recall@10 by 4.34 points overall and 2.22 points held-out, but p95 BM25
+  latency rose to 1,051 ms and the absolute BM25 result remains below dense.
+  Keep dense as the baseline; M5 finite complexity routing is next. See
+  [`CORPUS_AWARE_PLANNING.md`](CORPUS_AWARE_PLANNING.md).
 - Deployment is explicitly out of scope. M15 may deliver a local research UI.
 
 ## Milestones
@@ -33,7 +39,7 @@ consistency, sufficiency, verification, abstention, and release.
 | M1 | Connected, reproducible retrieval → decision → adaptive retrieval → generation → verification baseline | Complete as offline P5 evaluation |
 | M2 | Candidate recall, fusion, pool-size, metadata, and reranker diagnostics | Complete; dense baseline retained |
 | M3 | Versioned Evidence Policy Engine and separate decision benchmark | Complete; synthetic contract only |
-| M4 | Runtime Corpus Map and corpus-aware task planner | Next |
+| M4 | Runtime Corpus Map and corpus-aware task planner | Complete; measured, not integrated into P5 |
 | M5 | Finite complexity router with FAST/STANDARD/DEEP budgets | Planned |
 | M6 | Deterministically merged shared Evidence Ledger | Planned |
 | M7 | Filing, XBRL, table, evidence, and financial reasoning capabilities | Planned |

@@ -17,9 +17,16 @@ behavior only; they are not financial-document accuracy or calibration
 results. See
 [`docs/EVIDENCE_POLICY_EVALUATION.md`](docs/EVIDENCE_POLICY_EVALUATION.md).
 
+M4 adds a metadata-only runtime Corpus Map and a bounded corpus-aware query
+planner. On the fixed 150-case BM25 comparison it improved Recall@10 by 4.34
+points overall and 2.22 points held-out, while increasing retrieval p95 to
+1,051 ms. This remains a standalone research component: dense retrieval is
+still the baseline, and no answer-quality gain was measured. See
+[`docs/CORPUS_AWARE_PLANNING.md`](docs/CORPUS_AWARE_PLANNING.md).
+
 The next work follows the research milestones in
-[`docs/RESEARCH_AGENDA.md`](docs/RESEARCH_AGENDA.md), beginning with a runtime
-Corpus Map and corpus-aware planning. The target design separates a Research
+[`docs/RESEARCH_AGENDA.md`](docs/RESEARCH_AGENDA.md), beginning with finite
+complexity and cost routing in M5. The target design separates a Research
 Plane, which finds and prepares information, from an Evidence Control Plane,
 which makes the deterministic acceptance, sufficiency, verification, and
 answer-release decisions. A local evidence-first interface is a later
@@ -240,7 +247,7 @@ metric, leakage, and reproduction details.
 | M1 | End-to-end retrieval, decision, adaptive retrieval, generation, and verification baseline | Complete as an offline evaluation path |
 | M2 | Retrieval stage diagnostics | Complete; dense baseline retained |
 | M3 | Candidate Evidence Policy Engine and independent decision benchmark | Complete; synthetic behavior benchmark only |
-| M4 | Runtime Corpus Map and corpus-aware planner | Next |
+| M4 | Runtime Corpus Map and corpus-aware planner | Complete; standalone evaluation component |
 | M5–M14 | Routing, ledger, specialists, structured facts, verification, and further retrieval research | Planned; see research agenda |
 | M15 | Local evidence-first research UX | Planned; no deployment |
 
@@ -261,8 +268,9 @@ retrieval-only FinanceBench benchmark.
 - P3's synthetic retrieval evaluation does not estimate FinanceBench multi-hop
   performance. Its elapsed-time budget is cooperative around synchronous
   retrieval calls.
-- A persistent evidence ledger, SEC XBRL path, research planner/router,
-  production request API, and local research UI are not implemented yet.
+- A persistent evidence ledger, SEC XBRL path, complexity router, planner
+  integration into the answer path, production request API, and local research
+  UI are not implemented yet.
 - The current A0–A5 path is an offline evaluation pipeline, not a deployed
   application. Its strict evidence checks expose useful failure modes but do
   not yet produce useful coverage on much of the held-out sample.

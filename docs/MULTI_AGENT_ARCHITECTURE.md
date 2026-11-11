@@ -5,8 +5,9 @@
 No multi-agent graph is implemented. The current adaptive controller is a
 bounded single retrieval controller. M1/P5 is an offline end-to-end evaluation
 path, not a supervisor/worker system. M2 diagnostics and M3 policy contracts
-are complete; M4 corpus-aware planning and M5 finite routing come before
-specialist graph work.
+are complete. M4 adds a standalone corpus-aware planner and typed task
+contract, but does not connect it to P5 or a supervisor/worker graph. M5 finite
+routing comes next, before specialist graph work.
 
 ## Target planes
 

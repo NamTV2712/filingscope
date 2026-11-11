@@ -161,7 +161,8 @@ The log separates software-contract checks from answer-quality evidence.
 - **Decision:** **KEEP** dense as the permanent baseline; **ADAPT** the
   query-derived company/period filters as dense-only opt-in diagnostics;
   **DEFER** production filter promotion until paired latency and false-filter
-  analysis. No fusion or reranker default changes. M4 is next.
+  analysis. No fusion or reranker default changes. M4 was the next planned
+  milestone and is now complete; see the M4 experiment below.
 
 ## M3 — Candidate Evidence Policy Engine
 
@@ -196,6 +197,49 @@ The log separates software-contract checks from answer-quality evidence.
   financial evidence before wiring into the P5 answer path. No Jev or other
   probabilistic backend is adopted. Code commit:
   `3ac21fed877627bbe93a61a0978b3b12d1a0856b`.
+
+## M4 — Runtime Corpus Map and corpus-aware planning
+
+- **Hypothesis:** A compact map of indexed companies, forms, periods, sections,
+  and source coverage can improve query targeting and prevent searches for
+  sources known to be absent, without passing evaluation labels to the planner.
+- **Baseline / changed variable:** Deterministic question-only requirement
+  extraction and query planning versus the same bounded planner conditioned
+  on a frozen runtime Corpus Map. Both used the same BM25 scorer, corpus,
+  top-50-per-task candidate rule, and top-10 final output.
+- **Dataset/config:** 150 public FinanceBench questions with development,
+  validation, and held-out splits of 60/45/45; frozen P1 generation
+  `3ea92c895826e46ccf03ee52248771cc83e779e90b1660c390d29f2c4abfd18f`; 84
+  documents and 28,849 chunks; `rank-bm25==0.2.2`. Only question strings reach
+  either planner; gold document/page labels are read by the separate scorer.
+  The evaluator uses the union of each task query's top-50 pages, so the
+  candidate measure is not a single global 50-item cap. Full protocol and
+  reproduction command are in `CORPUS_AWARE_PLANNING.md`.
+- **Result:** Corpus-aware planning improved Recall@10 from 0.1133 to 0.1567
+  overall and 0.0889 to 0.1111 on held-out cases. Candidate page recall over
+  task top-50 unions increased from 0.1800 to 0.2389; full candidate evidence
+  coverage increased from 0.1733 to 0.2267. For 128 cases with known source
+  states, gold source-document target alignment was 128/128. Ten synthetic
+  absent-company probes were marked missing, avoiding 10/10 baseline retrieval
+  calls.
+- **Latency/resources:** Planner p50/p95 was 1.047/1.422 ms for question-only
+  and 1.939/2.669 ms for Corpus Map planning. BM25 p50/p95 was 223/490 ms and
+  225/1,051 ms, respectively. Corpus Map load/build took 629 ms; evaluation
+  took 95.0 seconds. Tracemalloc measured 473,284,499 bytes of peak incremental
+  Python allocations; process RSS was not measured. Map serialized size was
+  28,421 bytes. Zero provider calls, tokens, or estimated cost.
+- **Interpretation:** Corpus conditioning improved this isolated BM25 planning
+  comparison but increased mean retrieval calls from 1.01 to 1.21 and roughly
+  doubled p95 BM25 latency. Its absolute Recall@10 of 0.1567 remains below
+  dense P1 at 0.4167. No answer-generation quality was measured. Missing
+  CIK/ticker and structured-table metadata remain explicit coverage gaps; XBRL
+  remains unknown.
+- **Decision:** **ADAPT** the Corpus Map and finite task contract as a standalone
+  research component; **KEEP** dense retrieval as the baseline. Do not route
+  P5 or claim an end-to-end quality gain yet. M5 should measure quality and
+  budgets using this interface before integration. Source commit:
+  `0be938d31cf3a76b5b0baa31023bd4354ce571a3`. Evaluation case-set SHA-256:
+  `e73869cb631d51670f23afa38bfb2a47bd955b7c6e3e727663bea1fd856fc6cd`.
 
 ## Planned experiments
 

@@ -70,4 +70,5 @@ or Jev/TypeSafe integration is included. M3 does not replace P2 sufficiency,
 claim verification, or final response release policy. Evaluate the typed
 contract against externally annotated financial evidence and connect it to a
 request path only after false-accept behavior is measured on real candidates.
-M4 is the runtime Corpus Map and corpus-aware planner.
+M4 subsequently added a standalone runtime Corpus Map and corpus-aware
+planner; M5 finite complexity routing is next.
