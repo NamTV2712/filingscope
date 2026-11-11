@@ -1,18 +1,21 @@
-"""Finite M7 specialist graph over the existing router, ledger, and P2/P4 APIs."""
+"""Bounded specialist graph over the existing router, ledger, and P2/P4 APIs."""
 
 from __future__ import annotations
 
+import hashlib
 import re
 import time
 import uuid
+from collections import defaultdict
 from decimal import Decimal
-from typing import Any, Literal, TypedDict
+from typing import Annotated, Any, Literal, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
+from langgraph.types import Send
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.agent.complexity_router import ComplexityRouter, ExecutionPath, RouterExecution
+from src.agent.complexity_router import ComplexityRouter, ExecutionPath, RouteBudget, RouterExecution
 from src.agent.specialists import (
     EvidenceAnalyst,
     FilingResearchWorker,
@@ -20,6 +23,7 @@ from src.agent.specialists import (
     SpecialistObservation,
     SpecialistRuntime,
     SpecialistStatus,
+    SpecialistTaskAssignment,
     SpecialistTaskResult,
     StructuredFinancialDataWorker,
     TableEvidenceWorker,
@@ -33,13 +37,13 @@ from src.generation.answer_generator import (
     is_fallback_answer,
 )
 from src.ingestion.sec_client import SECEdgarClient
-from src.ledger.evidence_ledger import EvidenceLedger
+from src.ledger.evidence_ledger import EvidenceLedger, LedgerConflictError, LedgerReferenceError
 from src.ledger.models import (
     DerivedCalculation,
     GeneratedClaim,
     LedgerSnapshot,
 )
-from src.research.planner import ResearchPlan
+from src.research.planner import ResearchPlan, ResearchTask
 from src.verification.claim_verifier import ClaimLevelVerifier
 from src.verification.models import ClaimAssessment, ResponseDisposition, VerificationResult
 
@@ -57,6 +61,11 @@ class SpecialistUsage(BaseModel):
     retrieval_calls: int = Field(ge=0)
     llm_calls: int = Field(ge=0)
     candidate_chunks: int = Field(ge=0)
+    parallel_task_count: int = Field(default=0, ge=0)
+    max_concurrency: int = Field(default=0, ge=0)
+    peak_parallel_tasks: int = Field(default=0, ge=0)
+    deduplicated_query_tasks: int = Field(default=0, ge=0)
+    duplicate_candidate_chunks: int = Field(default=0, ge=0)
     context_tokens: int = Field(ge=0)
     wall_time_ms: float = Field(ge=0, allow_inf_nan=False)
 
@@ -84,6 +93,30 @@ class SpecialistExecution(BaseModel):
     ledger_snapshot: LedgerSnapshot
 
 
+class ParallelFilingReceipt(BaseModel):
+    """Metadata-only result from one isolated retrieval worker."""
+
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    assignment_id: str = Field(min_length=1)
+    task_result: SpecialistTaskResult
+    ledger_snapshot: LedgerSnapshot
+
+
+def _merge_filing_receipts(
+    current: dict[str, ParallelFilingReceipt],
+    incoming: dict[str, ParallelFilingReceipt],
+) -> dict[str, ParallelFilingReceipt]:
+    """Associative, commutative reducer for disjoint or identical task writes."""
+    merged = dict(current)
+    for assignment_id, receipt in incoming.items():
+        existing = merged.get(assignment_id)
+        if existing is not None and existing != receipt:
+            raise ValueError(f"conflicting parallel filing receipt: {assignment_id}")
+        merged[assignment_id] = receipt
+    return {key: merged[key] for key in sorted(merged)}
+
+
 class _SpecialistGraphState(TypedDict, total=False):
     request_id: str
     question: str
@@ -96,14 +129,18 @@ class _SpecialistGraphState(TypedDict, total=False):
     generation: AnswerGenerationResult | None
     verification: VerificationResult | None
     status: str
+    filing_assignments: list[SpecialistTaskAssignment]
+    filing_pre_results: list[SpecialistTaskResult]
+    filing_assignment: SpecialistTaskAssignment
+    filing_receipts: Annotated[dict[str, ParallelFilingReceipt], _merge_filing_receipts]
 
 
 class SpecialistResearchGraph:
     """Execute a fixed FAST or RESEARCH sequence with route-specific ceilings.
 
-    The graph runs no worker fan-out, checkpointing, or autonomous loops. FAST
-    has four execution nodes; RESEARCH has eight. UNSUPPORTED has one terminal
-    node and performs no downstream retrieval, SEC, or model call.
+    FAST has four execution stages and RESEARCH has eight. Concurrent-safe
+    retrievers can fan out the RESEARCH filing stage. UNSUPPORTED terminates
+    without downstream calls.
     """
 
     def __init__(
@@ -115,6 +152,7 @@ class SpecialistResearchGraph:
         generator: AnswerGenerator | None = None,
         verifier: ClaimLevelVerifier | None = None,
         ticker_by_company: dict[str, str] | None = None,
+        retriever_concurrency_safe: bool | None = None,
     ):
         self.router = router or ComplexityRouter()
         self.retriever = retriever
@@ -122,6 +160,14 @@ class SpecialistResearchGraph:
         self.generator = generator
         self.verifier = verifier or ClaimLevelVerifier()
         self.ticker_by_company = _ticker_lookup(self.router, ticker_by_company or {})
+        self.retriever_concurrency_safe = (
+            retriever is not None
+            and (
+                getattr(retriever, "supports_concurrent_retrieval", False) is True
+                if retriever_concurrency_safe is None
+                else retriever_concurrency_safe
+            )
+        )
         self.graph = self._build_graph()
 
     def run(
@@ -160,6 +206,9 @@ class SpecialistResearchGraph:
             generator=self.generator,
             verifier=self.verifier,
         )
+        concurrency = 1
+        if route.selected_path == ExecutionPath.RESEARCH and self.retriever_concurrency_safe:
+            concurrency = max(1, route.budget.max_concurrency)
         initial: _SpecialistGraphState = {
             "request_id": request_id,
             "question": question,
@@ -172,11 +221,17 @@ class SpecialistResearchGraph:
             "generation": None,
             "verification": None,
             "status": "ABSTAIN",
+            "filing_assignments": [],
+            "filing_pre_results": [],
+            "filing_receipts": {},
         }
         state = self.graph.invoke(
             initial,
             context=runtime,
-            config={"recursion_limit": max(2, allowed_steps + 3)},
+            config={
+                "recursion_limit": max(2, allowed_steps + 3),
+                "max_concurrency": concurrency,
+            },
         )
         steps = len(state.get("trace", ()))
         if steps > allowed_steps:
@@ -188,6 +243,11 @@ class SpecialistResearchGraph:
             retrieval_calls=runtime.budget_tracker.retrieval_calls,
             llm_calls=runtime.budget_tracker.llm_calls,
             candidate_chunks=runtime.budget_tracker.candidate_chunks,
+            parallel_task_count=runtime.parallel_task_count,
+            max_concurrency=runtime.effective_max_concurrency,
+            peak_parallel_tasks=runtime.parallel_task_tracker.peak,
+            deduplicated_query_tasks=runtime.deduplicated_query_count,
+            duplicate_candidate_chunks=runtime.duplicate_candidate_chunks,
             context_tokens=runtime.budget_tracker.context_tokens,
             wall_time_ms=max(0.0, (time.perf_counter() - runtime.budget_tracker.started) * 1000),
         )
@@ -217,6 +277,7 @@ class SpecialistResearchGraph:
         graph = StateGraph(_SpecialistGraphState, context_schema=SpecialistRuntime)
         graph.add_node("supervisor", self._supervisor_node)
         graph.add_node("filing_worker", self._filing_node)
+        graph.add_node("parallel_filing_worker", self._parallel_filing_node)
         graph.add_node("structured_data_worker", self._structured_node)
         graph.add_node("table_worker", self._table_node)
         graph.add_node("evidence_analyst", self._analyst_node)
@@ -233,21 +294,18 @@ class SpecialistResearchGraph:
                 ExecutionPath.UNSUPPORTED.value: "unsupported_path",
             },
         )
-        graph.add_edge("supervisor", "filing_worker")
+        graph.add_conditional_edges("supervisor", self._fan_out_filing_tasks)
+        graph.add_edge("parallel_filing_worker", "structured_data_worker")
+        graph.add_conditional_edges(
+            "filing_worker",
+            lambda state: state["route"].selected_path.value,
+            {"FAST": "evidence_analyst", "RESEARCH": "structured_data_worker"},
+        )
         graph.add_edge("structured_data_worker", "table_worker")
         graph.add_edge("table_worker", "evidence_analyst")
         graph.add_edge("financial_reasoner", "report_writer")
         graph.add_edge("report_writer", "claim_verifier")
         graph.add_edge("claim_verifier", END)
-        # FAST branches around the RESEARCH-only specialists.
-        graph.add_conditional_edges(
-            "filing_worker",
-            self._after_filing,
-            {
-                "fast": "evidence_analyst",
-                "research": "structured_data_worker",
-            },
-        )
         graph.add_conditional_edges(
             "evidence_analyst",
             self._after_analyst,
@@ -264,10 +322,6 @@ class SpecialistResearchGraph:
         return state["route"].selected_path.value
 
     @staticmethod
-    def _after_filing(state: _SpecialistGraphState) -> str:
-        return "fast" if state["route"].selected_path == ExecutionPath.FAST else "research"
-
-    @staticmethod
     def _after_analyst(state: _SpecialistGraphState) -> str:
         return "fast" if state["route"].selected_path == ExecutionPath.FAST else "research"
 
@@ -276,6 +330,19 @@ class SpecialistResearchGraph:
     ) -> dict[str, Any]:
         context = runtime.context
         context.register_plan()
+        assignments: list[SpecialistTaskAssignment] = []
+        pre_results: list[SpecialistTaskResult] = []
+        if self.retriever_concurrency_safe:
+            groups = _filing_query_groups(state.get("plan"))
+            context.deduplicated_query_count = sum(len(group) - 1 for group in groups.values())
+            assignments, pre_results = _build_filing_assignments(
+                plan=state.get("plan"),
+                groups=groups,
+                budget=state["route"].budget,
+                wall_time_remaining=self._remaining_wall_time(context),
+            )
+        context.parallel_task_count = len(assignments)
+        context.effective_max_concurrency = min(context.budget.max_concurrency, len(assignments))
         result = SpecialistTaskResult(
             worker_id="research_supervisor",
             status=SpecialistStatus.COMPLETE,
@@ -288,13 +355,41 @@ class SpecialistResearchGraph:
                     key="planning_warnings",
                     value=",".join(state["plan"].warnings),
                 ),) if state.get("plan") and state["plan"].warnings else ()
+            ), SpecialistObservation(
+                key="retrieval_assignments",
+                value=str(len(assignments)),
+            ), SpecialistObservation(
+                key="deduplicated_query_tasks",
+                value=str(context.deduplicated_query_count),
+            ), SpecialistObservation(
+                key="max_concurrency",
+                value=str(context.effective_max_concurrency),
             )),
         )
         context.save_result(result)
         return {
             "trace": [*state.get("trace", ()), "supervisor"],
             "specialist_results": [*state.get("specialist_results", ()), result],
+            "filing_assignments": assignments,
+            "filing_pre_results": pre_results,
         }
+
+    def _fan_out_filing_tasks(
+        self,
+        state: _SpecialistGraphState,
+    ) -> list[Send] | str:
+        if not self.retriever_concurrency_safe:
+            return "filing_worker"
+        assignments = state.get("filing_assignments", ())
+        if not assignments:
+            return "structured_data_worker"
+        return [
+            Send(
+                "parallel_filing_worker",
+                {"filing_assignment": assignment},
+            )
+            for assignment in assignments
+        ]
 
     def _filing_node(
         self, state: _SpecialistGraphState, runtime: Runtime[SpecialistRuntime]
@@ -310,18 +405,142 @@ class SpecialistResearchGraph:
             "evidence_ids": sorted(set(state.get("evidence_ids", ())) | set(task_result.evidence_ids)),
         }
 
+    def _parallel_filing_node(
+        self, state: _SpecialistGraphState, runtime: Runtime[SpecialistRuntime]
+    ) -> dict[str, Any]:
+        context = runtime.context
+        assignment = state["filing_assignment"]
+        budget = assignment.budget.model_copy(update={
+            "max_wall_time_seconds": min(
+                assignment.budget.max_wall_time_seconds, self._remaining_wall_time(context)
+            ),
+        })
+        worker_runtime = SpecialistRuntime(
+            request_id=context.request_id,
+            ledger=EvidenceLedger(request_id=context.request_id),
+            budget=budget,
+            requirements=context.requirements,
+            plan=context.plan,
+            retriever=context.retriever,
+            ticker_by_company=context.ticker_by_company,
+        )
+        started = time.perf_counter()
+        snapshot = LedgerSnapshot(request_id=context.request_id)
+        context.parallel_task_tracker.enter()
+        try:
+            task_result = FilingResearchWorker().run(assignment.tasks, worker_runtime).model_copy(
+                update={"task_ids": assignment.task_ids},
+            )
+            snapshot = worker_runtime.ledger.snapshot()
+            context.stage_retrieval_artifacts(assignment.task_id, worker_runtime)
+        except Exception as error:
+            task_result = SpecialistTaskResult(
+                worker_id="filing_research_worker",
+                status=SpecialistStatus.FAILED,
+                task_ids=assignment.task_ids,
+                missing_requirement_ids=assignment.evidence_requirement_ids,
+                observations=(SpecialistObservation(
+                    key="isolated_worker_failure",
+                    value=type(error).__name__,
+                ),),
+                tool_calls=worker_runtime.budget_tracker.tool_calls,
+                retrieval_calls=worker_runtime.budget_tracker.retrieval_calls,
+                candidate_chunks=worker_runtime.budget_tracker.candidate_chunks,
+                elapsed_ms=max(0.0, (time.perf_counter() - started) * 1000),
+                error_code=type(error).__name__,
+            )
+        finally:
+            context.parallel_task_tracker.exit()
+        receipt = ParallelFilingReceipt(
+            assignment_id=assignment.task_id,
+            task_result=task_result,
+            ledger_snapshot=snapshot,
+        )
+        return {"filing_receipts": {assignment.task_id: receipt}}
+
+    @staticmethod
+    def _remaining_wall_time(context: SpecialistRuntime) -> float:
+        return max(0.0, context.budget.max_wall_time_seconds - context.budget_tracker.elapsed_seconds)
+
     def _structured_node(
         self, state: _SpecialistGraphState, runtime: Runtime[SpecialistRuntime]
     ) -> dict[str, Any]:
-        task_result = StructuredFinancialDataWorker(runtime.context.sec_client).run(
+        context = runtime.context
+        filing_results, filing_evidence = self._merge_parallel_filing_results(state, context)
+        task_result = StructuredFinancialDataWorker(context.sec_client).run(
             tuple(state.get("plan").tasks if state.get("plan") else ()),
-            runtime.context,
+            context,
         )
+        trace = list(state.get("trace", ()))
+        if self.retriever_concurrency_safe:
+            trace.append("filing_worker")
         return {
-            "trace": [*state.get("trace", ()), "structured_data_worker"],
-            "specialist_results": [*state.get("specialist_results", ()), task_result],
-            "evidence_ids": sorted(set(state.get("evidence_ids", ())) | set(task_result.evidence_ids)),
+            "trace": [*trace, "structured_data_worker"],
+            "specialist_results": [
+                *state.get("specialist_results", ()),
+                *filing_results,
+                task_result,
+            ],
+            "evidence_ids": sorted(
+                set(state.get("evidence_ids", ()))
+                | filing_evidence
+                | set(task_result.evidence_ids)
+            ),
         }
+
+    @staticmethod
+    def _merge_parallel_filing_results(
+        state: _SpecialistGraphState,
+        context: SpecialistRuntime,
+    ) -> tuple[list[SpecialistTaskResult], set[str]]:
+        receipts = state.get("filing_receipts", {})
+        assignments = {item.task_id: item for item in state.get("filing_assignments", ())}
+        workers = {
+            key: context.take_retrieval_artifacts(key)
+            for key, receipt in receipts.items()
+            if receipt.task_result.status != SpecialistStatus.FAILED
+        }
+        chunk_versions: dict[str, tuple[str, Any]] = {}
+        conflicted_chunks: set[str] = set()
+        for worker in workers.values():
+            for chunk_id, chunk in worker.source_chunks.items():
+                version = (worker.evidence_id_by_chunk_id[chunk_id], chunk.get("text"))
+                if chunk_versions.setdefault(chunk_id, version) != version:
+                    conflicted_chunks.add(chunk_id)
+        results = list(state.get("filing_pre_results", ()))
+        evidence_ids: set[str] = set()
+        candidate_ids: set[str] = set()
+        total_candidates = 0
+        for assignment_id in sorted(receipts):
+            receipt = receipts[assignment_id]
+            result = receipt.task_result
+            context.budget_tracker.tool_calls += result.tool_calls
+            context.budget_tracker.retrieval_calls += result.retrieval_calls
+            context.budget_tracker.candidate_chunks += result.candidate_chunks
+            if result.status != SpecialistStatus.FAILED:
+                worker = workers[assignment_id]
+                try:
+                    if conflicted_chunks.intersection(worker.source_chunks):
+                        raise LedgerConflictError("retrieval workers disagreed on chunk identity")
+                    context.ledger.merge(receipt.ledger_snapshot)
+                except (LedgerConflictError, LedgerReferenceError) as error:
+                    assignment = assignments[assignment_id]
+                    result = result.model_copy(update={
+                        "status": SpecialistStatus.FAILED,
+                        "task_ids": assignment.task_ids,
+                        "evidence_ids": (),
+                        "missing_requirement_ids": assignment.evidence_requirement_ids,
+                        "error_code": type(error).__name__,
+                    })
+                else:
+                    context.merge_retrieval_artifacts(worker)
+                    candidate_ids.update(worker.source_chunks)
+                    total_candidates += len(worker.source_chunks)
+            results.append(result)
+            evidence_ids.update(result.evidence_ids)
+        context.duplicate_candidate_chunks = total_candidates - len(candidate_ids)
+        results.sort(key=lambda item: (item.worker_id, item.task_ids, item.status.value))
+        return results, evidence_ids
 
     def _table_node(
         self, state: _SpecialistGraphState, runtime: Runtime[SpecialistRuntime]
@@ -539,6 +758,119 @@ def _ticker_lookup(router: ComplexityRouter, explicit: dict[str, str]) -> dict[s
             if company and tickers:
                 lookup.setdefault(" ".join(company.casefold().split()), tickers[0])
     return lookup
+
+
+def _task_specific_query(task: ResearchTask) -> str:
+    if not (task.company_name and task.metric_id and task.period):
+        return (task.query or "").strip()
+    metric = task.metric_id.replace("_", " ")
+    return " ".join((task.company_name, metric, task.period, *task.form_types))
+
+
+def _filing_query_groups(
+    plan: ResearchPlan | None,
+) -> dict[str, tuple[ResearchTask, ...]]:
+    grouped: dict[str, list[ResearchTask]] = defaultdict(list)
+    if plan is None:
+        return {}
+    for task in plan.tasks:
+        if task.query is None or task.source_availability.value == "MISSING":
+            continue
+        query = _task_specific_query(task)
+        normalized = " ".join(query.casefold().split())
+        if normalized:
+            grouped[normalized].append(task.model_copy(update={"query": query}))
+    return {
+        key: tuple(sorted(grouped[key], key=lambda item: item.task_id))
+        for key in sorted(grouped)
+    }
+
+
+def _build_filing_assignments(
+    *,
+    plan: ResearchPlan | None,
+    groups: dict[str, tuple[ResearchTask, ...]],
+    budget: RouteBudget,
+    wall_time_remaining: float,
+) -> tuple[list[SpecialistTaskAssignment], list[SpecialistTaskResult]]:
+    tasks = plan.tasks if plan else ()
+    if not tasks:
+        return [], []
+    max_assignments = min(
+        len(groups),
+        budget.max_tool_calls,
+        budget.max_retrieval_calls,
+    )
+    if wall_time_remaining <= 0 or budget.max_concurrency == 0:
+        max_assignments = 0
+    selected_groups = list(groups.items())[:max_assignments]
+    selected_task_ids = {
+        task.task_id for _, grouped_tasks in selected_groups for task in grouped_tasks
+    }
+    omitted_tasks = [
+        task for task in tasks
+        if task.task_id not in selected_task_ids
+    ]
+    pre_results: list[SpecialistTaskResult] = []
+    if omitted_tasks:
+        reason = "worker_budget_or_wall_time_reached" if groups else "task_has_no_retrieval_query"
+        pre_results.append(SpecialistTaskResult(
+            worker_id="filing_research_worker",
+            status=SpecialistStatus.PARTIAL,
+            task_ids=tuple(sorted(task.task_id for task in omitted_tasks)),
+            missing_requirement_ids=tuple(sorted({req for task in omitted_tasks for req in task.requirement_ids})),
+            observations=(SpecialistObservation(key="skipped_tasks", value=reason),),
+        ))
+
+    if not selected_groups:
+        return [], pre_results
+
+    base_candidates, extra_candidates = divmod(
+        budget.max_candidate_chunks,
+        len(selected_groups),
+    )
+    assignments: list[SpecialistTaskAssignment] = []
+    for index, (normalized_query, grouped_tasks) in enumerate(selected_groups):
+        candidate_limit = min(10, base_candidates + int(index < extra_candidates))
+        if candidate_limit <= 0:
+            pre_results.append(SpecialistTaskResult(
+                worker_id="filing_research_worker",
+                status=SpecialistStatus.PARTIAL,
+                task_ids=tuple(task.task_id for task in grouped_tasks),
+                missing_requirement_ids=tuple(sorted({req for task in grouped_tasks for req in task.requirement_ids})),
+                observations=(SpecialistObservation(key="budget", value="candidate_budget_exhausted"),),
+            ))
+            continue
+        task_ids = tuple(sorted(task.task_id for task in grouped_tasks))
+        requirement_ids = tuple(sorted({req for task in grouped_tasks for req in task.requirement_ids}))
+        assignment_id = f"query-{hashlib.sha256(normalized_query.encode('utf-8')).hexdigest()[:16]}"
+        representative = grouped_tasks[0]
+        metric = (representative.metric_id or "financial fact").replace("_", " ")
+        objective = (
+            f"Find {metric} for {representative.company_name or 'the requested company'}"
+            + (f" in {representative.period}" if representative.period else "")
+        )
+        worker_budget = RouteBudget(
+            max_graph_steps=1,
+            max_tool_calls=1,
+            max_retrieval_calls=1,
+            max_llm_calls=0,
+            max_candidate_chunks=candidate_limit,
+            max_context_tokens=0,
+            max_concurrency=1,
+            max_wall_time_seconds=max(0.0, min(budget.max_wall_time_seconds, wall_time_remaining)),
+            max_planned_tasks=len(grouped_tasks),
+        )
+        assignments.append(SpecialistTaskAssignment(
+            task_id=assignment_id,
+            task_ids=task_ids,
+            objective=objective,
+            allowed_tools=("filing_retriever.retrieve",),
+            evidence_requirement_ids=requirement_ids,
+            budget=worker_budget,
+            tasks=grouped_tasks,
+        ))
+    return assignments, pre_results
 
 
 def _ordered_report_chunks(runtime: SpecialistRuntime) -> list[dict[str, Any]]:

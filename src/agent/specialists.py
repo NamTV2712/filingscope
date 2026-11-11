@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import threading
 import time
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP, localcontext
@@ -11,6 +12,7 @@ from typing import Any, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from src.agent.complexity_router import RouteBudget
 from src.decision.models import (
     DecisionBudget,
     DecisionResult,
@@ -72,6 +74,20 @@ class SpecialistTaskResult(BaseModel):
     error_code: str | None = None
 
 
+class SpecialistTaskAssignment(BaseModel):
+    """Explicit capability and budget packet for one independent worker."""
+
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    task_id: str = Field(min_length=1)
+    task_ids: tuple[str, ...] = Field(min_length=1)
+    objective: str = Field(min_length=1)
+    allowed_tools: tuple[str, ...] = ()
+    evidence_requirement_ids: tuple[str, ...] = ()
+    budget: RouteBudget
+    tasks: tuple[ResearchTask, ...] = Field(min_length=1)
+
+
 class ChunkRetriever(Protocol):
     def retrieve(self, query: str, top_k: int = 5, **filters: Any) -> list[Any]: ...
 
@@ -110,6 +126,27 @@ class _RuntimeBudget:
         return max(0, self.budget.max_candidate_chunks - self.candidate_chunks)
 
 
+class _ParallelTaskTracker:
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._active = 0
+        self._peak = 0
+
+    def enter(self) -> None:
+        with self._lock:
+            self._active += 1
+            self._peak = max(self._peak, self._active)
+
+    def exit(self) -> None:
+        with self._lock:
+            self._active = max(0, self._active - 1)
+
+    @property
+    def peak(self) -> int:
+        with self._lock:
+            return self._peak
+
+
 @dataclass
 class SpecialistRuntime:
     """Per-invocation dependencies and ephemeral source-text storage.
@@ -140,6 +177,13 @@ class SpecialistRuntime:
     generation: AnswerGenerationResult | None = None
     verification: VerificationResult | None = None
     calculations: list[DerivedCalculation] = field(default_factory=list)
+    parallel_task_tracker: _ParallelTaskTracker = field(default_factory=_ParallelTaskTracker)
+    effective_max_concurrency: int = 0
+    parallel_task_count: int = 0
+    deduplicated_query_count: int = 0
+    duplicate_candidate_chunks: int = 0
+    _pending_workers: dict[str, "SpecialistRuntime"] = field(default_factory=dict, init=False, repr=False)
+    _artifact_lock: Any = field(default_factory=threading.Lock, init=False, repr=False)
     budget_tracker: _RuntimeBudget = field(init=False)
     registered: bool = False
 
@@ -156,6 +200,22 @@ class SpecialistRuntime:
 
     def save_result(self, result: SpecialistTaskResult) -> None:
         self.specialist_results.append(result)
+
+    def stage_retrieval_artifacts(self, assignment_id: str, worker: "SpecialistRuntime") -> None:
+        with self._artifact_lock:
+            self._pending_workers[assignment_id] = worker
+
+    def take_retrieval_artifacts(self, assignment_id: str) -> "SpecialistRuntime":
+        return self._pending_workers.pop(assignment_id)
+
+    def merge_retrieval_artifacts(self, worker: "SpecialistRuntime") -> None:
+        """Keep each selected chunk and its citation pointer together at fan-in."""
+        for chunk_id, chunk in worker.source_chunks.items():
+            if chunk_id not in self.source_chunks:
+                self.source_chunks[chunk_id] = chunk
+                self.evidence_id_by_chunk_id[chunk_id] = worker.evidence_id_by_chunk_id[chunk_id]
+                self.preferred_evidence_by_chunk_id[chunk_id] = worker.preferred_evidence_by_chunk_id[chunk_id]
+            self.chunk_tasks.setdefault(chunk_id, set()).update(worker.chunk_tasks[chunk_id])
 
 
 class FilingResearchWorker:
@@ -311,26 +371,26 @@ class TableEvidenceWorker:
         # Filing retrieval is the primary candidate path. Spend remaining
         # retrieval budget on a table-shaped query only for tasks that have not
         # yet produced a matching table chunk.
+        table_queries: dict[str, list[dict[str, Any]]] = {}
         for task in (runtime.plan.tasks if runtime.plan else ()):
             if task.task_id in table_tasks_seen or task.query is None or task.source_availability.value == "MISSING":
                 continue
-            if not runtime.budget_tracker.remaining_candidates():
-                observations.append(SpecialistObservation(key="table_budget", value="candidate_limit_reached"))
-                break
-            if runtime.retriever is None or not runtime.budget_tracker.can_start(retrieval=True):
-                observations.append(SpecialistObservation(key="table_budget", value="retrieval_or_tool_budget_reached"))
-                break
-            runtime.budget_tracker.charge(retrieval=True)
-            top_k = min(10, runtime.budget_tracker.remaining_candidates())
             query = f"{task.query} consolidated financial statement table"
-            try:
-                found = runtime.retriever.retrieve(query, top_k=top_k)
-            except Exception as error:
-                observations.append(SpecialistObservation(key="table_retrieval_error", value=type(error).__name__))
-                continue
-            normalized = [_chunk_mapping(item) for item in found]
+            key = " ".join(query.casefold().split())
+            if key not in table_queries:
+                top_k = min(10, runtime.budget_tracker.remaining_candidates())
+                if not top_k or runtime.retriever is None or not runtime.budget_tracker.can_start(retrieval=True):
+                    observations.append(SpecialistObservation(key="table_budget", value="budget_or_retriever_unavailable"))
+                    continue
+                runtime.budget_tracker.charge(retrieval=True)
+                try:
+                    found = runtime.retriever.retrieve(query, top_k=top_k)
+                    table_queries[key] = [_chunk_mapping(item) for item in found[:top_k]]
+                except Exception as error:
+                    table_queries[key] = []
+                    observations.append(SpecialistObservation(key="table_retrieval_error", value=type(error).__name__))
             table_candidates = [
-                item for item in normalized
+                item for item in table_queries[key]
                 if item.get("chunk_id") and _is_table_chunk(item)
                 and _chunk_matches_task(item, task, runtime.ticker_by_company)
             ]
@@ -341,12 +401,12 @@ class TableEvidenceWorker:
                     value=f"no_table_candidate:{task.task_id}",
                 ))
                 continue
-            for rank, chunk in enumerate(table_candidates[:top_k]):
+            for rank, chunk in enumerate(table_candidates):
                 chunk_id = str(chunk["chunk_id"])
                 existing = runtime.source_chunks.get(chunk_id)
                 if existing is None:
                     if not runtime.budget_tracker.remaining_candidates():
-                        break
+                        continue
                     runtime.source_chunks[chunk_id] = chunk
                     runtime.budget_tracker.candidate_chunks += 1
                 elif _score(chunk) > _score(existing):
@@ -864,9 +924,6 @@ class FinancialReasoner:
                     input_task_ids = tuple(sorted({task for item in input_records for task in item.task_ids}))
                     input_requirements = tuple(sorted({
                         req for item in input_records for req in item.requirement_ids
-                    } | {
-                        item.requirement_id for item in runtime.requirements.evidence
-                        if item.entity_id == entity.entity_id and item.metric_id == metric_id
                     }))
                     all_periods = f"{earlier} to {later}"
                     calculation = DerivedCalculation.create(
@@ -947,7 +1004,7 @@ def _source_record(
     discovered_by: tuple[str, ...],
 ) -> EvidenceRecord:
     ticker = chunk.get("ticker")
-    company = chunk.get("company") or task.company_name
+    company = chunk.get("company")
     doc_name = chunk.get("doc_name")
     document_id = chunk.get("document_id") or doc_name
     if document_id is None and chunk.get("source_url"):
@@ -1053,6 +1110,10 @@ def _numeric_source_record(
         unit = fact.currency
     else:
         unit = "unknown"
+    supporting_tasks = {
+        task.task_id for task in (runtime.plan.tasks if runtime.plan else ())
+        if requirement_id in task.requirement_ids
+    }
     return EvidenceRecord.from_source(
         request_id=runtime.request_id,
         document_id=base.document_id,
@@ -1080,8 +1141,8 @@ def _numeric_source_record(
         discovered_by=base.discovered_by,
         source_revision=base.source_revision,
         evidence_status=base.evidence_status,
-        task_ids=base.task_ids,
-        requirement_ids=tuple(sorted(set((*base.requirement_ids, requirement_id)))),
+        task_ids=tuple(sorted(set(base.task_ids) | supporting_tasks)),
+        requirement_ids=(requirement_id,) if supporting_tasks else (),
     )
 
 
@@ -1193,6 +1254,7 @@ __all__ = [
     "FinancialReasoner",
     "SpecialistObservation",
     "SpecialistRuntime",
+    "SpecialistTaskAssignment",
     "SpecialistStatus",
     "SpecialistTaskResult",
     "StructuredFinancialDataWorker",
