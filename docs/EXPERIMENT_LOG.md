@@ -375,6 +375,19 @@ The log separates software-contract checks from answer-quality evidence.
   quality and end-to-end efficiency across research configurations.
   [Reproduction and limitations](PARALLEL_RESEARCH.md)
 
+## M9 — Structured Financial Intelligence
+
+- **Hypothesis** Original filing focus plus dates, period type and provenance
+  can distinguish fiscal facts that share the same Company Facts FY and FP.
+- **Experiment** Replay the M8 selector from `6dc25ff` and the M9 resolver on
+  six Apple slots and eight ineligible rows. Check two additional Microsoft
+  slots, a wrong CIK and revision/currency decisions with hermetic tests.
+- **Result** Apple exact value and accession coverage rose from 5/6 to 6/6.
+  The new resolver accepted zero of eight ineligible rows versus eight for
+  M8. Both additional Microsoft facts matched. The wrong CIK was rejected.
+- **Decision** Adopt the versioned selector and its explicit revision basis.
+  The fixture results describe the sampled financial facts. [M9 report](FINANCIAL_FACT_ARCHITECTURE.md)
+
 ## Planned experiments
 
 Each planned experiment must add its exact hypothesis, baseline, changed

@@ -1,6 +1,6 @@
 # FilingScope Architecture
 
-## Current implementation (P0–P5 and M1–M8)
+## Current implementation (P0–P5 and M1–M9)
 
 ### Offline document and evaluation paths
 
@@ -192,6 +192,15 @@ private runtime storage. The next stage merges the worker ledgers and
 records failures before running the SEC worker. The existing evidence
 analyst consumes the merged sources. [M8 validation](PARALLEL_RESEARCH.md)
 
+## M9 structured financial intelligence
+
+The Company Facts worker resolves an explicit company, concept, fiscal
+interval, unit and filing revision before creating a ledger record. The
+evidence analyst normalizes scale across structured and filing evidence.
+Explicit revision requests use resolved SEC facts with their filing
+accessions. The reasoner checks basis and period compatibility before
+calculating. [M9 fact policy and validation](FINANCIAL_FACT_ARCHITECTURE.md)
+
 ## Target: separate logical planes
 
 ```text
@@ -215,8 +224,8 @@ connected to the M7 execution graph or P5 answer path. M4 adds `src/research/`
 with a standalone runtime Corpus Map and corpus-aware task planner. M5 adds a
 finite complexity router; M7 executes its route through a finite sequential
 specialist graph and an in-memory M6 ledger. These components remain outside
-P5. The XBRL worker only supports a narrow standard-tag path; M9 owns advanced
-fact reconciliation. M8 adds filing fan-out for adapters that support
+P5. M9 resolves standard US GAAP and IFRS concepts with fiscal and revision
+provenance. M8 adds filing fan-out for adapters that support
 concurrent retrieval. `src/decision/`,
 `src/verification/`, and `src/agent/adaptive_retrieval.py` remain the starting
 points; extend them instead of replacing them with broad framework

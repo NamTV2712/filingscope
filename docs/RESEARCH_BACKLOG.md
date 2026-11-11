@@ -13,7 +13,7 @@ tested work only; design notes are not completion evidence.
 | M6 | Shared Evidence Ledger | Complete; request-scoped in-memory blackboard | [Ledger report](EVIDENCE_LEDGER.md): stable IDs, atomic/idempotent merge and dedup, provenance links, financial facts, derived-fact inputs, claims and verification relations |
 | M7 | Specialist research graph | Complete; sequential, bounded workflow | [Specialist graph report](SPECIALIST_RESEARCH_GRAPH.md): filing/table/XBRL/evidence/reasoner/writer/verifier contracts; 4-node FAST, 8-node RESEARCH, 1-node UNSUPPORTED paths; 20 focused tests, no answer-quality benchmark |
 | M8 | Bounded parallel independent tasks | Complete | [M8 report](PARALLEL_RESEARCH.md) covers concurrency, budgets, duplicate work, failure isolation and a controlled latency comparison |
-| M9 | SEC XBRL and fact normalization | Can be researched with M7 | Company/tag/period/unit/accession/amendment fixture coverage |
+| M9 | SEC XBRL and fact normalization | Complete | [M9 fixture replay](FINANCIAL_FACT_ARCHITECTURE.md) covers CIK, concept, date interval, currency, provenance, amendments and changed comparatives |
 | M10 | Docling and structure-aware parsing experiment | After failure subset selection | pypdf comparison with fidelity, retrieval, time, RAM, disk measurements |
 | M11 | Atomic claims and bounded correction | After ledger | claim/evidence/calculation graph, verifier benchmark, one bounded correction |
 | M12 | Provenance-sensitive hard negatives | Seed from M2 diagnostic misses | Frozen company/year/context-confusable test cohort |

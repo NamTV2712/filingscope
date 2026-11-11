@@ -3,13 +3,14 @@
 Audit refreshed: 2026-11-12<br>
 Branch: `main`<br>
 Audited repository: `D:\Project\filingscope`<br>
-Audited source commit: `2131e3cda186874b5bd1dc17a516454256437b99`<br>
+Audited source commit: `aad24377da2075ccb6e1c4d55106dc480c6309e5`<br>
 Initial audit baseline: `956cef412d765395b5a7f0b773f821a58686a35a`
 
 This refresh reflects P0–P5, M1 runtime compatibility, M2 retrieval
 diagnostics, M3 candidate policy, M4 corpus-aware planning, M5 finite
 complexity routing, M6's in-memory Evidence Ledger, M7's specialist graph
-and narrow Company Facts path, and M8's bounded filing fan-out. P0–P4 behavior and the
+and narrow Company Facts path, M8's bounded filing fan-out and M9's
+structured fact resolution. P0–P4 behavior and the
 completed P5 provider benchmark remain preserved. Source benchmark data,
 model caches, and generated run artifacts remain local and git-ignored.
 
@@ -54,7 +55,7 @@ model caches, and generated run artifacts remain local and git-ignored.
 - Specialist execution: `src/agent/specialists.py` implements bounded filing,
   table, Company Facts, sufficiency, and Decimal reasoning workers. The graph
   registers evidence and claims in the M6 ledger and calls the P4 verifier.
-  XBRL concept/period reconciliation is intentionally incomplete until M9.
+  M9 binds SEC facts to the CIK, concept, currency, period and accession.
 - Generation and evaluation: `src/generation/` contains a provider-agnostic
   answer interface plus a Groq adapter; `src/evaluation/` includes P1
   retrieval metrics and the P5 A0–A5 pipeline, lexical/numeric answer metrics,
@@ -135,11 +136,11 @@ model caches, and generated run artifacts remain local and git-ignored.
    there is no real-candidate feature observer or runtime adapter. P2
    sufficiency, candidate acceptance, and P4 claim verification remain separate
    decisions rather than one evidence-control flow.
-3. **Financial facts.** M7 adds a narrow standard-tag SEC Company Facts path
-   that preserves concept, period label, unit, accession, source URL, and
-   source IDs. It does not resolve tag drift, duration/instant equivalence,
-   fiscal-calendar differences, amendment precedence, or restatement conflicts;
-   custom taxonomy and broader unit normalization are still missing.
+3. **Financial facts.** M9 resolves standard Company Facts concepts, units,
+   fiscal intervals and filing revisions. Company Facts is entity-wide.
+   Custom taxonomy, segment facts and foreign exchange conversion need
+   separate evidence. Historical date alignment without Submissions data
+   uses conservative interval and filing-lag rules.
 4. **Planning and routing.** M4 adds rule-based corpus-conditioned planning
    and M5 adds a deterministic FAST/RESEARCH/UNSUPPORTED router. Both are
    standalone; neither is integrated in P5. The route taxonomy still depends
@@ -300,8 +301,7 @@ or financial-calculation accuracy benchmark was run.
 
 ## Next milestone recommendation
 
-M1–M8 are validated. M8's synthetic run measures concurrent scheduling at
-equal call volume and tests ledger merge order and worker isolation.
-Continue with M9 using official SEC Company Facts fixtures that exercise
-concepts, duration, fiscal periods, units and filing revisions.
+M1–M9 are validated. The M9 resolver matched eight filing slots and refused
+eight ineligible rows. Continue with the M10 comparison of pypdf and
+Docling on frozen filing failures.
 [Research agenda](RESEARCH_AGENDA.md)
