@@ -130,6 +130,26 @@ answer generation. The planner remains standalone and does not alter the P5
 path or dense retrieval default. See
 [`CORPUS_AWARE_PLANNING.md`](CORPUS_AWARE_PLANNING.md).
 
+## M5 finite complexity routing
+
+`src/agent/complexity_router.py` compiles a deterministic LangGraph with
+`classify_request` followed by one terminal branch: `fast_path`,
+`research_path`, or `unsupported_path`. The first two prepare bounded M4 plans;
+the unsupported branch assigns zero downstream call budget. Route profiles
+carry graph-step, tool, retrieval, LLM, candidate, context-token, concurrency,
+wall-time, and task caps. M5 enforces graph steps, planned task count, and
+planned retrieval count. The other caps require retrieval/generation
+executors, which are not part of this milestone. No branch invokes a model,
+provider, retriever, or worker, and the router does not change P5 behavior.
+
+The authored 56-case policy fixture has 100% class agreement, but it is not
+independent semantic validation. In the label-free 150-case FinanceBench route
+distribution, the M4 Corpus Map selected 36 FAST, 10 RESEARCH, and 104
+UNSUPPORTED routes. Unknown metrics, period-scope gaps, and unresolved company
+names explain the high unsupported share. Answer quality and actual agent
+invocations were not measured. See
+[`COMPLEXITY_ROUTING.md`](COMPLEXITY_ROUTING.md).
+
 ## Target: separate logical planes
 
 ```text
@@ -150,10 +170,11 @@ provenance + entity/metric/period + source authority + numeric consistency
 This is still a target architecture. M3 adds `src/policy/` as an independent,
 typed candidate-decision component with a deterministic policy, but it is not
 yet connected to P5 retrieval or final answer release. M4 adds `src/research/`
-with a standalone runtime Corpus Map and corpus-aware task planner, but it is
-not wired into the P5 answer path. The repository has no persistent Evidence
-Ledger, XBRL fact path, complexity router, specialist graph, or request-facing
-UI. `src/decision/`,
+with a standalone runtime Corpus Map and corpus-aware task planner. M5 adds a
+standalone finite complexity router that prepares those plans but does not
+execute retrieval or generation. Neither M4 nor M5 is wired into P5. The
+repository has no persistent Evidence Ledger, XBRL fact path, specialist
+worker graph, or request-facing UI. `src/decision/`,
 `src/verification/`, and `src/agent/adaptive_retrieval.py` remain the starting
 points; extend them instead of replacing them with broad framework
 abstractions. See [`CURRENT_ARCHITECTURE_AUDIT.md`](CURRENT_ARCHITECTURE_AUDIT.md)
@@ -169,8 +190,9 @@ the limitation that the policy is not yet part of the P5 answer path and its
 fixtures do not measure financial-document accuracy. M4's standalone
 Corpus-Map-conditioned planner is complete and measured; dense remains the
 retrieval baseline, and P5 integration is deferred pending downstream
-evaluation. Bounded routing, a shared ledger, specialist work, parallel
-research, SEC XBRL, document parser comparisons, advanced verification, hard
-negatives, and agent ablations follow in M5–M14.
+evaluation. M5's deterministic router and route-budget contract are complete
+but are not connected to retrieval, generation, or P5. M6's shared ledger,
+specialist work, parallel research, SEC XBRL, parser comparisons, advanced
+verification, hard negatives, and agent ablations follow in M6–M14.
 M15 may add a local evidence-first interface. Cloud deployment is out of scope
 unless explicitly requested.

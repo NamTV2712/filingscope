@@ -3,12 +3,12 @@
 Audit refreshed: 2026-11-11<br>
 Branch: `main`<br>
 Audited repository: `D:\Project\filingscope`<br>
-Audited commit: `0be938d31cf3a76b5b0baa31023bd4354ce571a3`<br>
+Audited source commit: `0fffebc0d5d0a6b88532e3c3b0969a9f3246509f`<br>
 Initial audit baseline: `956cef412d765395b5a7f0b773f821a58686a35a`
 
 This refresh reflects the committed P0–P5 repository, M1 runtime compatibility
-check, M2 retrieval diagnostics, M3 candidate policy, and M4 corpus-aware
-planning. P0–P4 behavior and
+check, M2 retrieval diagnostics, M3 candidate policy, M4 corpus-aware
+planning, and M5 finite complexity routing. P0–P4 behavior and
 the completed P5 provider benchmark remain preserved. Source benchmark data,
 model caches, and generated run artifacts remain local and git-ignored.
 
@@ -40,6 +40,10 @@ model caches, and generated run artifacts remain local and git-ignored.
   Map and emits bounded, typed research tasks from question requirements.
   Missing versus unknown source states are kept explicit. The planner is not
   yet wired into the P5 answer path.
+- Complexity routing: `src/agent/complexity_router.py` compiles a deterministic
+  LangGraph with FAST, RESEARCH, and zero-budget UNSUPPORTED branches. It
+  prepares bounded research plans but invokes no retrieval, model, provider,
+  or agent and remains outside the P5 path.
 - Generation and evaluation: `src/generation/` contains a provider-agnostic
   answer interface plus a Groq adapter; `src/evaluation/` includes P1
   retrieval metrics and the P5 A0–A5 pipeline, lexical/numeric answer metrics,
@@ -57,6 +61,7 @@ model caches, and generated run artifacts remain local and git-ignored.
 | Decision | `EvidenceDecisionLayer.assess/decide(question, chunks, budget)` | Deterministic slot coverage, not calibrated probability or general semantic support. |
 | Candidate policy | `DeterministicDecisionBackend.decide(features)` | Typed observations and hard rules; synthetic cases only; not integrated into P5. |
 | Research planning | `QuestionOnlyPlanner.plan(question)` / `CorpusAwarePlanner.plan(question)` | Standalone M4 component; map is metadata-only and planner is not yet connected to a retriever or answer flow. |
+| Complexity routing | `ComplexityRouter.route(question)` | Standalone M5 graph; deterministic rules, no retrieval/generation execution, and not integrated into P5. |
 | Adaptive retrieval | `AdaptiveRetrievalController.run(question, initial_chunks, budget)` | One bounded flow over the existing retriever; no planner/corpus map. |
 | Generation | `AnswerGenerator.generate(question, evidence_chunks)` | Provider call is not itself the evidence authority. |
 | Verification | `ClaimLevelVerifier.verify(question, answer, evidence_chunks)` | Lexical topical anchors and deterministic number parsing can miss paraphrases or valid facts. |
@@ -85,6 +90,11 @@ model caches, and generated run artifacts remain local and git-ignored.
   0.1567 overall and from 0.0889 to 0.1111 held-out. It remains below dense
   P1 Recall@10 of 0.4167; corpus-aware p95 BM25 latency was 1,051 ms. No answer
   generation was evaluated.
+- M5's 56-case hand-authored route fixture has 100% rule agreement; it is not
+  independently labeled. In the label-free 150-question run, the frozen map
+  selected 36 FAST, 10 RESEARCH, and 104 UNSUPPORTED paths. Unknown metrics,
+  incomplete periods, and unresolved companies remain common. No answer or
+  agent quality was measured; see [`COMPLEXITY_ROUTING.md`](COMPLEXITY_ROUTING.md).
 - The provider-backed P5 run had interrupted attempts before the completed
   run. Completed case outputs and reported usage are preserved; prior-run token
   usage was unavailable and is represented by a conservative upper bound.
@@ -103,9 +113,10 @@ model caches, and generated run artifacts remain local and git-ignored.
    is no tag drift, duration/instant, unit, accession, amendment, or
    restatement-aware fact model.
 4. **Planning and routing.** M4 adds rule-based corpus-conditioned planning
-   and a compact metadata map, but it is standalone and supports only the
-   current alias/period rules. There is no complexity/cost router, planner
-   integration in P5, or specialist task interface.
+   and M5 adds a deterministic FAST/RESEARCH/UNSUPPORTED router. Both are
+   standalone; neither is integrated in P5. The route taxonomy still depends
+   on the current company, metric, and period vocabulary, with 104/150
+   FinanceBench questions routed unsupported under the map-aware run.
 5. **Generation/verification.** The verifier splits answer text into clauses
    and creates local claim IDs, but no durable claim graph joins claims,
    calculation objects, and evidence IDs. Atomic semantic verification and a
@@ -135,7 +146,8 @@ model caches, and generated run artifacts remain local and git-ignored.
 - Evidence Policy Engine integration with a real-candidate observer and the
   end-to-end evaluation path;
 - corpus-aware planner integration into the answer and retrieval path;
-- explicit FAST/STANDARD/DEEP complexity routing and budget profiles;
+- execute the FAST/RESEARCH route within its declared budgets and evaluate
+  request-level outcomes;
 - shared Evidence Ledger and specialist task/result contracts;
 - SEC company-facts/submissions path with provenance and fiscal normalization;
 - deterministic calculation objects consumed by the report writer;
@@ -216,10 +228,31 @@ allocation was 473,289,904 bytes; process RSS was not measured. See
 The full regression suite after M4 implementation passed with 242 passed and
 3 skipped tests.
 
+## M5 validation update
+
+M5 adds a finite LangGraph with a classifier and exactly one terminal path.
+FAST uses a maximum of four graph steps, two retrieval calls, one LLM call,
+10 candidate chunks, and 8,000 context tokens. RESEARCH allows eight steps,
+six retrieval calls, three LLM calls, 50 candidates, and 24,000 context
+tokens. UNSUPPORTED permits no downstream calls. Planned graph steps, tasks,
+and retrieval calls are checked in this milestone; candidate, context,
+concurrency, and execution-time enforcement belongs to the future execution
+nodes.
+
+The 56-case balanced synthetic fixture passed with 100% class agreement and no
+path mistakes; hand-authored labels make this a behavior check only. On 150
+unlabeled FinanceBench questions, map-aware routing selected 36 FAST, 10
+RESEARCH, and 104 UNSUPPORTED paths versus 4/0/146 with the question-only
+alias catalog. Actual retrieval, LLM, tool, and agent calls, token usage, and
+cost were all zero. The map-aware route p50/p95 was 4.320/11.891 ms. Full
+metrics and limitations are in [`COMPLEXITY_ROUTING.md`](COMPLEXITY_ROUTING.md).
+The full regression suite passed with 247 passed and 3 skipped tests; `uv pip
+check` reported no incompatible installed packages.
+
 ## Next milestone recommendation
 
-M1–M4 are validated. Continue with M5: finite complexity and cost routing over
-the research task contract. Preserve the dense retrieval baseline; keep M4
-planning standalone until downstream quality and budget effects are measured.
-The sequence is in
+M1–M5 are validated. Continue with M6: a deterministic shared Evidence Ledger
+over the M3 policy, M4 planning, and M5 route contracts. Preserve the dense
+retrieval baseline; keep routing outside P5 until its downstream quality and
+budget effects are measured. The sequence is in
 [`RESEARCH_AGENDA.md`](RESEARCH_AGENDA.md).

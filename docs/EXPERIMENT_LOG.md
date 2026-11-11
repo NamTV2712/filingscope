@@ -241,6 +241,57 @@ The log separates software-contract checks from answer-quality evidence.
   `0be938d31cf3a76b5b0baa31023bd4354ce571a3`. Evaluation case-set SHA-256:
   `e73869cb631d51670f23afa38bfb2a47bd955b7c6e3e727663bea1fd856fc6cd`.
 
+## M5 — Finite complexity routing
+
+- **Hypothesis:** Deterministic complexity classes with separate finite route
+  budgets can keep bounded lookups on FAST, send cross-entity/causal/broad
+  requests to RESEARCH, and stop unsupported or predictive requests before
+  downstream tools run.
+- **Baseline / changed variable:** No finite route graph existed. The
+  question-only alias catalog was compared with the same router initialized
+  from the frozen M4 Corpus Map. A separate balanced synthetic fixture checks
+  each decision rule. No worker, retrieval, generation, or answer path runs in
+  this milestone.
+- **Dataset/config:** 56 hand-authored questions, eight per each of seven
+  classes; plus 150 unlabeled FinanceBench questions on the frozen P1 index
+  `3ea92c895826e46ccf03ee52248771cc83e779e90b1660c390d29f2c4abfd18f` (84
+  documents, 28,849 chunks), split 60/45/45. Only question strings reach the
+  router. Synthetic fixture SHA-256:
+  `f30f9c3554753c962bb98e870f859aa7acabfb40957918c21be1304fb5b8457d`;
+  FinanceBench question-set SHA-256:
+  `9fc32b9e6d789b7bb4b4ebcfd843c102dab5cc87ee6644e783ca9128674d6c96`.
+  Full protocol and route tables are in `COMPLEXITY_ROUTING.md`.
+- **Result:** The synthetic fixture had 100% class agreement and macro F1,
+  zero unnecessary RESEARCH selections among its 32 expected non-research
+  cases, zero incorrect FAST selections among 24 expected research cases, and
+  zero unsupported-path errors. These are authored rule fixtures, not
+  independent intent labels. On FinanceBench, question-only routing selected
+  4 FAST / 0 RESEARCH / 146 UNSUPPORTED. Corpus Map-aware routing selected 36
+  FAST / 10 RESEARCH / 104 UNSUPPORTED. The map moved 42 requests out of
+  UNSUPPORTED, but 104 remain unclassified for execution; unknown metrics,
+  insufficient period scope, and unresolved companies are the main reasons.
+- **Latency/resources:** Question-only p50/p95 was 3.438/5.316 ms; map-aware
+  p50/p95 was 4.320/11.891 ms. Router initialization took 14.404 ms for both
+  configurations. The 1,811.6 ms evaluation measured 1,968,146 bytes of peak
+  incremental Python allocation; process RSS was not measured. Loading the
+  runtime map is excluded. Zero actual retrieval/tool/agent/provider calls,
+  model tokens, and cost. Corpus-aware planning produced 68 planned queries;
+  these were not executed.
+- **Interpretation:** Corpus metadata makes more known companies routable,
+  but class counts on unlabeled questions do not establish route correctness.
+  The narrow metric/period vocabulary is a material limitation. Budget checks
+  cover graph steps, planned tasks, and planned retrieval counts; the
+  candidate, context, concurrency, and execution-time caps need enforcement
+  inside later execution nodes. LangGraph is used for explicit typed state and
+  finite conditional edges; no performance comparison against plain Python
+  control flow was run.
+- **Decision:** **ADOPT** the finite deterministic route contract as the M6
+  entry point; **KEEP** unsupported requests at zero downstream budget and
+  preserve dense retrieval. Do not claim answer-quality or multi-agent gains.
+  Source commit `0fffebc0d5d0a6b88532e3c3b0969a9f3246509f`; source fingerprint
+  `db6a2cadc922512bae188d6ced044c35c803c9a8f6febd33715d2f713f6c1f57`; the
+  fingerprinted source tree was clean. No deployment performed.
+
 ## Planned experiments
 
 Each planned experiment must add its exact hypothesis, baseline, changed

@@ -71,4 +71,5 @@ claim verification, or final response release policy. Evaluate the typed
 contract against externally annotated financial evidence and connect it to a
 request path only after false-accept behavior is measured on real candidates.
 M4 subsequently added a standalone runtime Corpus Map and corpus-aware
-planner; M5 finite complexity routing is next.
+planner. M5 finite complexity routing is complete as a standalone component;
+see [`COMPLEXITY_ROUTING.md`](COMPLEXITY_ROUTING.md).

@@ -9,7 +9,7 @@ tested work only; design notes are not completion evidence.
 | M2 | Explain dense over hybrid with stage diagnostics | Complete | [150-case report](RETRIEVAL_DIAGNOSTICS_RESULTS.md): candidate recall, fusion/pool/filter/reranker metrics, split results, latency, resources, and provenance |
 | M3 | Candidate Evidence Policy Engine and decision benchmark | Complete; synthetic behavior benchmark only | Versioned schema/policy, hard constraints, 60-case decision report and replay tests; see [M3 report](EVIDENCE_POLICY_EVALUATION.md) |
 | M4 | Runtime Corpus Map and corpus-aware planning | Complete; standalone research component, not wired into P5 | [150-case report](CORPUS_AWARE_PLANNING.md): BM25 Recall@10 +4.34 pp overall and +2.22 pp held-out; 10/10 absent-company calls avoided; p95 latency trade-off recorded |
-| M5 | Finite complexity/cost routing | Next | Router correctness, unnecessary research rate, quality/cost/latency study |
+| M5 | Finite complexity/cost routing | Complete; standalone router, no workers invoked | [Routing report](COMPLEXITY_ROUTING.md): 56 authored fixtures, budget checks, and 150 unlabeled FinanceBench route distribution; downstream answer quality remains unmeasured |
 | M6 | Shared Evidence Ledger | After policy and planning contracts | Stable IDs, deterministic merge/dedup, provenance and derived-fact tests |
 | M7 | Specialist capabilities | After ledger | Filing/table/evidence/reasoner interfaces; XBRL research can proceed in M9 |
 | M8 | Bounded parallel independent tasks | After sequential graph works | Concurrency, budget, duplicate work and failure isolation tests |

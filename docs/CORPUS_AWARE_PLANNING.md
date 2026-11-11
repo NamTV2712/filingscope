@@ -109,8 +109,10 @@ absolute retrieval quality remains weak, and this BM25 experiment is far below
 the unchanged dense baseline's P1 Recall@10 of 0.4167. The planner therefore
 remains a measured research component. Keep the explicit availability states
 and bounded local targets; do not replace dense retrieval or claim an answer
-quality gain. M5 can build on the typed task contract and measure downstream
-quality and budget effects before any integration.
+quality gain. M5 consumes this contract as a bounded standalone route planner;
+its results are in
+[`COMPLEXITY_ROUTING.md`](COMPLEXITY_ROUTING.md). Retrieval and P5 integration
+remain deferred.
 
 The benchmark artifact was generated from source commit
 `0be938d31cf3a76b5b0baa31023bd4354ce571a3`. The full regression suite passed

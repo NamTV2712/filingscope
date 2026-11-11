@@ -28,8 +28,15 @@ consistency, sufficiency, verification, abstention, and release.
   component and 150-case BM25 comparison. Corpus-aware planning improved
   Recall@10 by 4.34 points overall and 2.22 points held-out, but p95 BM25
   latency rose to 1,051 ms and the absolute BM25 result remains below dense.
-  Keep dense as the baseline; M5 finite complexity routing is next. See
+  Keep dense as the baseline; see
   [`CORPUS_AWARE_PLANNING.md`](CORPUS_AWARE_PLANNING.md).
+- M5 finite complexity routing is complete as a standalone LangGraph with
+  FAST, RESEARCH, and zero-budget UNSUPPORTED branches. The authored 56-case
+  behavior fixture has 100% class agreement, but this is not independent
+  labeling. On the unlabeled 150-case FinanceBench question set, the frozen
+  Corpus Map selected 36 FAST, 10 RESEARCH, and 104 UNSUPPORTED routes. No
+  retrieval or answer quality was measured. See
+  [`COMPLEXITY_ROUTING.md`](COMPLEXITY_ROUTING.md).
 - Deployment is explicitly out of scope. M15 may deliver a local research UI.
 
 ## Milestones
@@ -40,7 +47,7 @@ consistency, sufficiency, verification, abstention, and release.
 | M2 | Candidate recall, fusion, pool-size, metadata, and reranker diagnostics | Complete; dense baseline retained |
 | M3 | Versioned Evidence Policy Engine and separate decision benchmark | Complete; synthetic contract only |
 | M4 | Runtime Corpus Map and corpus-aware task planner | Complete; measured, not integrated into P5 |
-| M5 | Finite complexity router with FAST/STANDARD/DEEP budgets | Planned |
+| M5 | Finite complexity router with FAST/RESEARCH/UNSUPPORTED budgets | Complete; standalone route and plan only |
 | M6 | Deterministically merged shared Evidence Ledger | Planned |
 | M7 | Filing, XBRL, table, evidence, and financial reasoning capabilities | Planned |
 | M8 | Bounded parallel fan-out/fan-in for independent work | Planned |

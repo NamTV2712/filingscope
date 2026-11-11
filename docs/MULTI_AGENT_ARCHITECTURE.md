@@ -6,8 +6,22 @@ No multi-agent graph is implemented. The current adaptive controller is a
 bounded single retrieval controller. M1/P5 is an offline end-to-end evaluation
 path, not a supervisor/worker system. M2 diagnostics and M3 policy contracts
 are complete. M4 adds a standalone corpus-aware planner and typed task
-contract, but does not connect it to P5 or a supervisor/worker graph. M5 finite
-routing comes next, before specialist graph work.
+contract. M5 adds a finite LangGraph classifier with FAST, RESEARCH, and
+UNSUPPORTED branches, but it does not call workers or connect to P5. M6 adds
+the shared Evidence Ledger before specialist graph work.
+
+## Current M5 route graph
+
+```text
+START → classify_request → FAST | RESEARCH | UNSUPPORTED → END
+```
+
+The route is deterministic, has no loops or checkpoint store, and only prepares
+a bounded M4 plan. It invokes no retriever, provider, LLM, or agent. The
+56-case authored fixture has 100% behavior agreement but is not independent
+quality evidence. On 150 unlabeled FinanceBench questions, the Corpus Map
+selected 36 FAST, 10 RESEARCH, and 104 UNSUPPORTED routes. Details and the
+high unsupported rate are in [`COMPLEXITY_ROUTING.md`](COMPLEXITY_ROUTING.md).
 
 ## Target planes
 
@@ -38,9 +52,9 @@ question → risk/complexity router ── simple ──→ targeted retrieval
                                calculate → write → verify → release/abstain
 ```
 
-LangGraph is preferred only if explicit state, conditional routing,
-fan-out/fan-in, bounded loops, and traceable execution outperform or simplify
-plain Python control flow. No worker may write the final answer. Workers should
+M5 uses LangGraph for typed state, conditional routing, and an inspectable finite
+trace. It has not been benchmarked against equivalent plain Python control
+flow. No worker may write the final answer. Workers should
 receive task IDs, allowed tools, required evidence, and explicit budgets, and
 return evidence IDs, structured observations, missing requirements, status,
 and measured usage. Do not copy raw filing context into a supervisor prompt.
