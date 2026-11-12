@@ -431,6 +431,20 @@ The log separates software-contract checks from answer-quality evidence.
 - **Decision** Retain unfiltered dense as the baseline. Preserve the mask as
   a research variant. [M12 resources, splits and categories](HARD_NEGATIVE_RETRIEVAL.md)
 
+## M13 — Multi-Agent Ablation
+
+- **Hypothesis** Corpus-aware tasks, specialist handoffs and structured
+  facts can improve grounded answers. Smart routing may trade coverage for
+  fewer calls.
+- **Experiment** Run A0–A4 and B0–B5 on 24 fixed questions, a shared P1
+  index, the deterministic report writer and nine SEC snapshots.
+- **Result** B4 returned three exact grounded answers and B5 returned one.
+  B5 reduced retrieval calls per case from 1.792 to 0.917 and p95 from
+  260.433 ms to 170.972 ms. Both released zero unsupported answers.
+- **Decision** Adopt candidate screening and catalog consistency. Preserve
+  both graph modes and use the observed table and fiscal failures in later
+  experiments. [M13 provenance and resources](ABLATION_STUDY.md)
+
 ## Planned experiments
 
 Each planned experiment must add its exact hypothesis, baseline, changed

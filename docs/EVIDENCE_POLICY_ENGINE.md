@@ -70,6 +70,13 @@ or Jev/TypeSafe integration is included. M3 does not replace P2 sufficiency,
 claim verification, or final response release policy. Evaluate the typed
 contract against externally annotated financial evidence and connect it to a
 request path only after false-accept behavior is measured on real candidates.
+M13 integrates candidate policy into the specialist evidence analyst. The
+gate records typed decisions per candidate and requirement, removes
+candidates rejected for every slot, and passes eligible observations to P2
+for final sufficiency checks. The candidate gate treats a filing's report
+year as publication metadata, since comparative facts can have a different
+period. [M13 controlled replay](ABLATION_STUDY.md)
+
 M4 subsequently added a standalone runtime Corpus Map and corpus-aware
 planner. M5 finite complexity routing is complete as a standalone component;
 see [`COMPLEXITY_ROUTING.md`](COMPLEXITY_ROUTING.md).

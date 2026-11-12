@@ -3,16 +3,17 @@
 Audit refreshed: 2026-11-12<br>
 Branch: `main`<br>
 Audited repository: `D:\Project\filingscope`<br>
-Audited source commit: `b9d53ed7424d5837386a69c0355543c28a12df33`<br>
+Audited source commit: `91f3ee5a7cdfb6a4091b4360354bc764cc4b9eb3`<br>
 Initial audit baseline: `956cef412d765395b5a7f0b773f821a58686a35a`
 
 This refresh reflects P0–P5, M1 runtime compatibility, M2 retrieval
 diagnostics, M3 candidate policy, M4 corpus-aware planning, M5 finite
 complexity routing, M6's in-memory Evidence Ledger, M7's specialist graph
 and narrow Company Facts path, M8's bounded filing fan-out, M9's
-structured fact resolution, M10's PDF parser comparison, and M11's atomic
-verification and bounded release policy, and M12's provenance-sensitive
-retrieval benchmark. P0–P4 behavior and the
+structured fact resolution, M10's PDF parser comparison, M11's atomic
+verification and bounded release policy, M12's provenance-sensitive
+retrieval benchmark, and M13's graph ablation and candidate-policy integration.
+P0–P4 behavior and the
 completed P5 provider benchmark remain preserved. Source benchmark data,
 model caches, and generated run artifacts remain local and git-ignored.
 
@@ -326,7 +327,16 @@ Query-derived company, period and form filters improved overall recall but
 excluded a valid quarterly filing and did not improve held-out recall. The
 full suite passed with 335 tests and 3 skips. [M12 report](HARD_NEGATIVE_RETRIEVAL.md)
 
+## M13 validation update
+
+The specialist graph screens candidates with the M3 policy and shares the
+planner's catalog through sufficiency and verification. The 24-case ablation
+recovered three independently grounded answers in forced research with SEC
+replay and one with smart routing. The routing variant used fewer calls and
+missed two of the recovered answers. The full suite passed with 338 tests and
+3 skips. [M13 ablation](ABLATION_STUDY.md)
+
 ## Next milestone
 
-M13 compares the routed and specialist research configurations against the
-preserved retrieval and single-agent baselines. [Research agenda](RESEARCH_AGENDA.md)
+M14 completes the parent-child and context expansion comparisons and tests
+advanced retrieval on fixed evidence. [Research agenda](RESEARCH_AGENDA.md)

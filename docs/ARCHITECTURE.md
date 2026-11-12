@@ -226,6 +226,15 @@ physical pages and chunk IDs. Filing year, disclosure type and revision
 basis can make identical numbers unsuitable for a particular request.
 [M12 cohort and ranking results](HARD_NEGATIVE_RETRIEVAL.md)
 
+## M13 evidence policy and ablation
+
+The specialist graph records a candidate decision for every observed
+requirement slot before downstream evidence sufficiency. The same company
+catalog is shared across planning, sufficiency and verification. Adapters
+that support document scopes can honor the corpus-aware planner's targets.
+The ablation compares solo and specialist configurations with pinned dense
+retrieval and SEC snapshots. [M13 results and failure modes](ABLATION_STUDY.md)
+
 ## Target: separate logical planes
 
 ```text
@@ -243,9 +252,8 @@ provenance + entity/metric/period + source authority + numeric consistency
         → deterministic ANSWER / PARTIAL / ABSTAIN / REJECTED release policy
 ```
 
-This is still a target architecture. M3 adds `src/policy/` as an independent,
-typed candidate-decision component with a deterministic policy, but it is not
-connected to the M7 execution graph or P5 answer path. M4 adds `src/research/`
+The specialist graph now applies the independent M3 candidate policy. The
+P5 evaluation keeps its historical policy and verifier. M4 adds `src/research/`
 with a standalone runtime Corpus Map and corpus-aware task planner. M5 adds a
 finite complexity router; M7 executes its route through a finite sequential
 specialist graph and an in-memory M6 ledger. These components remain outside

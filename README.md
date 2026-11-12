@@ -263,7 +263,8 @@ metric, leakage, and reproduction details.
 | M10 | PDF parser and structure-aware chunk comparison | Complete. pypdf remains the default. [Results](docs/DOCUMENT_INTELLIGENCE.md) |
 | M11 | Source-linked atomic verification and bounded correction | Complete. [Results](docs/ADVANCED_VERIFICATION.md) |
 | M12 | Financial hard-negative retrieval | Complete. [24-case provenance benchmark](docs/HARD_NEGATIVE_RETRIEVAL.md) |
-| M13–M14 | Multi-agent ablation and advanced retrieval | Planned |
+| M13 | Controlled solo and specialist ablation | Complete. [24-case results](docs/ABLATION_STUDY.md) |
+| M14 | Advanced retrieval experiments | Planned |
 | M15 | Local evidence-first research UX | Planned; no deployment |
 
 No answer quality or end-to-end agent performance claims are made by the

@@ -67,7 +67,7 @@ consistency, sufficiency, verification, abstention, and release.
 | M10 | pypdf vs Docling and structure-aware document experiment | Complete. [Parser and retrieval results](DOCUMENT_INTELLIGENCE.md) |
 | M11 | Atomic claim graph, semantic support checks, contradictions, bounded correction | Complete. [Claim and release replay](ADVANCED_VERIFICATION.md) |
 | M12 | Company/year/context hard-negative retrieval benchmark | Complete. [Fixed corpus and results](HARD_NEGATIVE_RETRIEVAL.md) |
-| M13 | Multi-agent and smart-router ablation against retrieval/evidence baselines | Planned |
+| M13 | Multi-agent and smart-router ablation against retrieval/evidence baselines | Complete. [Controlled results](ABLATION_STUDY.md) |
 | M14 | ColBERT/multivectors/GraphRAG/HippoRAG/LightRAG only after earlier evidence | Planned |
 | M15 | Local evidence-first research interface and safe progress trace | Planned; do not deploy |
 

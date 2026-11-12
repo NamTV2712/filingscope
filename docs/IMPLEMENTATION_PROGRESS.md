@@ -39,23 +39,28 @@ Deployment: none; explicitly out of scope
   passed with 332 tests and 3 skips. [M11 validation](ADVANCED_VERIFICATION.md)
 - M12 adds a 24-case hard-negative retrieval benchmark with five categories.
   Source `b9d53ed7424d5837386a69c0355543c28a12df33`. Dense stays the baseline.
+  Docs `55d23ae4a5a31066969fdd61d7385e5908647aa0`.
   The full suite passed with 335 tests and 3 skips. [M12 validation](HARD_NEGATIVE_RETRIEVAL.md)
+- M13 adds candidate screening and compares solo, forced research and smart
+  routing. Source `91f3ee5a7cdfb6a4091b4360354bc764cc4b9eb3`. The full suite
+  passed with 338 tests and 3 skips. [M13 validation](ABLATION_STUDY.md)
 
 ## Current milestone
 
-M13 multi-agent ablation is next. The M12 ranking report is complete at
-`data/financebench/hard_negative_runs/m12-results.json`.
+M14 advanced retrieval experiments are next. The M13 full report is complete
+at `data/financebench/ablation_runs/m13-results.json`. The nine SEC snapshots
+are preserved in `data/financebench/ablation_runs/m13-sec/`.
 
 ## Exact next steps
 
-1. Read specification sections V and W and inspect `docs/ABLATION_STUDY.md`,
-   the P5 evaluation artifacts and the current specialist graph contracts.
-2. Freeze a comparable cohort and specify the active components for B0–B5.
-   Run the ablation through the actual retrieval and specialist paths.
-3. Record quality, provenance, resource use and routing errors. Validate,
-   commit and push M13 before starting M14.
+1. Read specification sections I and Z. Complete R6's parent-child and
+   small-to-big context comparisons using the M10/M12 evidence and M13
+   filing-table failures.
+2. Research and evaluate ColBERT, Qdrant multivectors, GraphRAG, HippoRAG
+   and LightRAG. Compare evidence recovery and resource costs with the
+   permanent dense baseline and keep demonstrated improvements.
+3. Document, test, commit and push M14 before starting M15.
 
 ## Remaining milestones
 
-M13 multi-agent ablation, M14 advanced retrieval experiments and M15 local
-research UX. Do not deploy.
+M14 advanced retrieval experiments and M15 local research UX. Do not deploy.

@@ -104,3 +104,12 @@ and measured usage. Do not copy raw filing context into a supervisor prompt.
 - trace safe progress events without exposing private chain-of-thought;
 - measured B0–B5 ablation; retain the simplest route if extra workers do not
   improve grounded quality per call, token, second, or dollar.
+
+## M13 ablation and policy integration
+
+The specialist graph now screens candidate facts with the M3 policy before
+sufficiency. Research adapters can honor planned document scope. The
+24-case study compared forced research and normal routing on the same
+local evidence. Forced research with Company Facts recovered three grounded
+answers. Normal routing recovered one and used fewer retrieval calls.
+[Detailed ablation](ABLATION_STUDY.md)
