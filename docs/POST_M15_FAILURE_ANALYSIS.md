@@ -152,8 +152,10 @@ HTTP route. The full regression suite passed 354 tests with three
 pre-existing missing-local-filing skips. Syntax and Git whitespace checks
 passed. A second benchmark reproduced every trace, classification and
 oracle outcome after excluding timings and peak memory. The M13 labels,
-page annotations and oracle code are used by
-the offline evaluator. The website UI files are unchanged.
+page annotations and oracle code are used by the offline evaluator.
+A follow-up removes indirect startup imports of the historical label
+modules by giving the local backend a separate source inventory and
+frozen-artifact loader. The website UI files are unchanged.
 
 **Decision** Adopt the diagnostic harness. Proceed to Q2 with a typed
 quarterly SEC handoff and strict table-column ownership. The phase gate

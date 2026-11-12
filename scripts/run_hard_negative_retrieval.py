@@ -14,57 +14,19 @@ from typing import Any
 import numpy as np
 from rank_bm25 import BM25Okapi
 
-from configs.hard_negatives import CASES, M2_SEED_CASES, P1_CORPUS_FINGERPRINT, P1_EMBEDDING_REVISION, P1_INDEX_ID
-from scripts.run_financebench_retrieval import _canonical_sha256, _corpus_fingerprint, _sha256_file
-from scripts.run_retrieval_diagnostics import _nearest_rank, _read_jsonl, _write_json_atomic
+from configs.financebench import P1_CORPUS_FINGERPRINT, P1_EMBEDDING_REVISION, P1_INDEX_ID, P1_RUN as DEFAULT_RUN
+from configs.hard_negatives import CASES, M2_SEED_CASES
+from scripts.run_retrieval_diagnostics import _nearest_rank, _write_json_atomic
 from src.decision.company_catalog import CompanyCatalog
 from src.evaluation.hard_negative_retrieval import resolve_passages, score_case, summarize
 from src.evaluation.retrieval_diagnostics import metadata_filters_from_question
+from src.retrieval.frozen_artifacts import load_frozen_corpus as _load_corpus, load_frozen_vectors as _load_vectors
 from src.retrieval.hybrid_retriever import _tokenize
 
 
-DEFAULT_RUN = Path("data/financebench/runs") / P1_INDEX_ID
 SPLITS = ("development", "validation", "held_out")
 TOP_K = 50
 RANDOM_SEED = 20261112
-
-
-def _load_corpus(directory: Path) -> list[dict[str, Any]]:
-    manifest = json.loads((directory / "index_manifest.json").read_text(encoding="utf-8"))
-    if manifest["index_id"] != P1_INDEX_ID or manifest["corpus_fingerprint"] != P1_CORPUS_FINGERPRINT:
-        raise ValueError("Index manifest does not match the frozen P1 corpus")
-    chunks = _read_jsonl(directory / "corpus_chunks.jsonl")
-    if len(chunks) != manifest["point_count"] or _corpus_fingerprint(chunks) != P1_CORPUS_FINGERPRINT:
-        raise ValueError("Chunk content or metadata differs from the frozen P1 corpus")
-    return sorted(chunks, key=lambda row: row["chunk_id"])
-
-
-def _load_vectors(directory: Path, chunks: list[dict[str, Any]]) -> np.ndarray:
-    path = directory / "embedded_chunks.jsonl"
-    manifest_path = directory / "embedding_manifest.json"
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    index = json.loads((directory / "index_manifest.json").read_text(encoding="utf-8"))
-    if (
-        manifest["corpus_fingerprint"] != P1_CORPUS_FINGERPRINT
-        or manifest["embedding_model_revision"] != P1_EMBEDDING_REVISION
-        or index["embedding_manifest_sha256"] != _canonical_sha256(manifest)
-        or manifest["embedded_file_sha256"] != _sha256_file(path)
-    ):
-        raise ValueError("Embedding artifacts do not match the frozen P1 index")
-    positions = {row["chunk_id"]: position for position, row in enumerate(chunks)}
-    vectors = np.empty((len(chunks), manifest["vector_dimension"]), dtype=np.float32)
-    with path.open(encoding="utf-8") as handle:
-        for line in handle:
-            row = json.loads(line)
-            position = positions.pop(row["chunk_id"])
-            vectors[position] = row["embedding"]
-    if positions or not np.isfinite(vectors).all():
-        raise ValueError("Missing or invalid frozen P1 vectors")
-    norms = np.linalg.norm(vectors, axis=1, keepdims=True)
-    if (norms == 0).any():
-        raise ValueError("P1 contains a zero-length vector")
-    vectors /= norms
-    return vectors
 
 
 class _QueryFilters:

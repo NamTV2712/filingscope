@@ -147,13 +147,13 @@ class ResearchHandler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
-    from configs.hard_negatives import P1_EMBEDDING_REVISION, P1_INDEX_ID
-    from configs.multi_agent_ablation import COMPANY_TICKERS, SEC_CUTOFF, SEC_ISSUERS
-    from scripts.run_hard_negative_retrieval import DEFAULT_RUN, _load_corpus, _load_vectors
+    from configs.financebench import P1_EMBEDDING_REVISION, P1_INDEX_ID, P1_RUN
+    from configs.sec_snapshots import COMPANY_TICKERS, SEC_CUTOFF, SEC_ISSUERS
+    from src.retrieval.frozen_artifacts import load_frozen_corpus, load_frozen_vectors
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int, default=8765)
-    parser.add_argument("--p1-run", type=Path, default=DEFAULT_RUN)
+    parser.add_argument("--p1-run", type=Path, default=P1_RUN)
     parser.add_argument("--sec-dir", type=Path, default=Path("data/financebench/ablation_runs/m13-sec"))
     parser.add_argument("--threads", type=int, default=6)
     args = parser.parse_args()
@@ -170,8 +170,8 @@ def main() -> None:
 
     torch.set_num_threads(args.threads)
     print("Loading the frozen FinanceBench index and SEC snapshots…", flush=True)
-    chunks = _load_corpus(args.p1_run)
-    vectors = _load_vectors(args.p1_run, chunks)
+    chunks = load_frozen_corpus(args.p1_run)
+    vectors = load_frozen_vectors(args.p1_run, chunks)
     sec = CompanyFactsReplay(args.sec_dir, SEC_ISSUERS, latest_filed=SEC_CUTOFF)
     graph = SpecialistResearchGraph(
         router=ComplexityRouter(CorpusMap.from_chunks(chunks, index_generation_id=P1_INDEX_ID)),

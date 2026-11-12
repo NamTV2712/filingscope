@@ -1,12 +1,31 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from http.client import HTTPConnection
 from threading import Thread
 
 from scripts.run_local_research import LocalResearchServer
 from src.agent.specialist_graph import SpecialistResearchGraph
 from src.local_research import _public_url, public_result
+
+
+def test_runtime_startup_does_not_import_benchmark_labels_or_oracles() -> None:
+    check = """
+import sys
+from scripts.run_local_research import main
+sys.argv = ["run_local_research", "--help"]
+try:
+    main()
+except SystemExit as error:
+    assert error.code == 0
+assert {
+    "configs.multi_agent_ablation", "configs.hard_negatives",
+    "src.evaluation.oracle_interventions", "src.evaluation.m13_failure_replay",
+}.isdisjoint(sys.modules)
+"""
+    subprocess.run([sys.executable, "-c", check], capture_output=True, check=True, timeout=15)
 
 
 def test_source_links_accept_only_credential_free_http() -> None:

@@ -90,6 +90,10 @@ model-based entailment workflow remain deferred for Q1. [RAGChecker](https://git
 
 ## Reproduction
 
+Run the Q1 reproduction at commit
+`c3cafdbd64031af706d728df33d9c7e6704bfc5a` so subsequent runtime
+improvements do not change the frozen replay.
+
 Use the pinned P1 corpus, vectors and page cache in the original workspace,
 and the nine hash-verified M13 SEC snapshots through 2024-12-31. The published
 historical artifact is an additional provenance input. If reconstructing it,

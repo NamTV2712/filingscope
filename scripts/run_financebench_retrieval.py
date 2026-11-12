@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import itertools
 import json
 import logging
@@ -44,7 +43,9 @@ from src.evaluation.retrieval_adapter import (
 )
 from src.evaluation.retrieval_metrics import evaluate_retrieval
 from src.ingestion.pdf_ingestion import chunk_pdf_pages, extract_pdf_pages
+from src.retrieval.canonical_json import canonical_sha256 as _canonical_sha256, sha256_file as _sha256_file
 from src.retrieval.embedder import Embedder
+from src.retrieval.frozen_artifacts import corpus_fingerprint as _corpus_fingerprint
 from src.retrieval.hybrid_retriever import HybridRetriever
 from src.retrieval.vector_store import VectorStore
 
@@ -53,24 +54,6 @@ DATA_DIR = Path("data/financebench")
 SOURCE_CASES = DATA_DIR / "source" / "financebench_open_source.jsonl"
 SOURCE_METADATA = DATA_DIR / "source" / "financebench_document_information.jsonl"
 SOURCE_MANIFEST = DATA_DIR / "source_manifest.json"
-
-
-def _sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as file:
-        for block in iter(lambda: file.read(1024 * 1024), b""):
-            digest.update(block)
-    return f"sha256:{digest.hexdigest()}"
-
-
-def _canonical_sha256(value: Any) -> str:
-    encoded = json.dumps(
-        value,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
-    return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
 
 
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -313,25 +296,6 @@ def _build_corpus(
             )
     chunks.sort(key=lambda chunk: chunk["chunk_id"])
     return chunks, stats_by_document
-
-
-def _corpus_fingerprint(chunks: list[dict[str, Any]]) -> str:
-    stable_records = [
-        {
-            key: chunk.get(key)
-            for key in (
-                "chunk_id",
-                "company",
-                "doc_name",
-                "page_number",
-                "section",
-                "text",
-                "token_count",
-            )
-        }
-        for chunk in sorted(chunks, key=lambda item: item["chunk_id"])
-    ]
-    return _canonical_sha256(stable_records)
 
 
 def _load_or_build_embeddings(

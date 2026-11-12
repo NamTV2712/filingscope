@@ -1,11 +1,9 @@
 """M12 offline judgments on the frozen P1 corpus. Page indexes are zero-based."""
 
+from configs.financebench import P1_CORPUS_FINGERPRINT, P1_EMBEDDING_REVISION, P1_INDEX_ID
 from src.evaluation.hard_negative_retrieval import HardNegative, HardNegativeCase, NegativeType, Passage
 
 
-P1_INDEX_ID = "3ea92c895826e46ccf03ee52248771cc83e779e90b1660c390d29f2c4abfd18f"
-P1_CORPUS_FINGERPRINT = "sha256:9f45dcd8586fe1f52a8b5b48c0dfeeb201498c166f78b01a5a3acd6c00662c48"
-P1_EMBEDDING_REVISION = "e9b6763023c676ca8431644204f50c2b100d9aab"
 M2_SEED_CASES = (
     "financebench_id_01928", "financebench_id_01930", "financebench_id_01912",
     "financebench_id_04417", "financebench_id_00685", "financebench_id_01275", "financebench_id_01902",
