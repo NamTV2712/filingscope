@@ -6,7 +6,7 @@ import re
 import time
 from collections.abc import Mapping, Sequence
 from decimal import Decimal
-from math import ceil
+from math import ceil, isfinite
 from typing import Any, Protocol
 
 import tiktoken
@@ -174,17 +174,22 @@ class GroqAnswerGenerator:
         model_id: str = GENERATOR_MODEL_ID,
         max_output_tokens: int = GENERATOR_MAX_OUTPUT_TOKENS,
         client: Any | None = None,
+        timeout_seconds: float | None = None,
     ):
         if not api_key:
             raise ValueError("A Groq API key must be supplied explicitly")
         if not 1 <= max_output_tokens <= GENERATOR_MAX_OUTPUT_TOKENS:
             raise ValueError(f"max_output_tokens must be between 1 and {GENERATOR_MAX_OUTPUT_TOKENS}")
+        if timeout_seconds is not None and (not isfinite(timeout_seconds) or timeout_seconds <= 0):
+            raise ValueError("Provider timeout must be positive and finite")
         self.model_id = model_id
         self.max_output_tokens = max_output_tokens
+        self.timeout_seconds = timeout_seconds
         if client is None:
             from groq import Groq
 
-            client = Groq(api_key=api_key, max_retries=0)
+            options = {} if timeout_seconds is None else {"timeout": timeout_seconds}
+            client = Groq(api_key=api_key, max_retries=0, **options)
         self.client = client
 
     def estimate(self, question: str, evidence_chunks: Sequence[Mapping[str, Any]]) -> tuple[int, Decimal]:

@@ -31,6 +31,14 @@ def test_claim_period_stays_quarterly_and_ungrouped_numbers_are_not_truncated():
     assert (value.pair.numeric_value, value.pair.period) == ("2024", "FY2025")
 
 
+def test_company_identifier_is_not_parsed_as_part_of_a_financial_claim():
+    value, = extract_period_value_mentions("3M reported revenue of USD 8,325 million for Q2 FY2023.")
+    assert (Decimal(value.pair.numeric_value), value.pair.scale, value.pair.period) == (Decimal(8325), "million", "Q2 FY2023")
+    assert not extract_period_value_mentions("3M and product SKU 3P12")
+    amount, = extract_period_value_mentions("The contract totaled USD 3M.")
+    assert (amount.pair.numeric_value, amount.pair.currency, amount.pair.scale) == ("3", "USD", "million")
+
+
 def test_multirow_quarter_columns_keep_ytd_negatives_missing_cells_and_footnotes():
     text = """Condensed Consolidated Statements of Income
     Three Months Ended September 30, Nine Months Ended September 30,

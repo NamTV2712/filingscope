@@ -8,7 +8,6 @@ import time
 import uuid
 from collections import defaultdict
 from collections.abc import Callable
-from decimal import Decimal
 from typing import Annotated, Any, Literal, TypedDict
 
 from langgraph.graph import END, START, StateGraph
@@ -33,22 +32,26 @@ from src.agent.specialists import (
     TableEvidenceWorker,
     _normalize_filing_statements,
 )
-from src.decision.models import DecisionResult, EvidenceCoverage
+from src.decision.models import CoverageStatus, DecisionResult, EvidenceCoverage, EvidenceFact
 from src.decision.company_catalog import DEFAULT_COMPANY_ALIASES
 from src.decision.policy import EvidenceDecisionLayer
 from src.generation.answer_generator import (
     AnswerGenerationResult,
     AnswerGenerator,
-    build_generation_messages,
-    estimate_prompt_tokens,
     is_fallback_answer,
 )
+from src.generation.grounded_writer import (
+    ApprovedSource, DeterministicWriter, GroundedReportInput, OptionalProviderWriter, ProviderLimits,
+    calculation_sentence, fact_sentence,
+)
 from src.ingestion.sec_client import SECEdgarClient
-from src.ingestion.company_facts import RevisionKind, RevisionPolicy, requested_revision_policies
+from src.ingestion.company_facts import RevisionPolicy, requested_revision_policies
 from src.ingestion.chunker import count_tokens
 from src.ledger.evidence_ledger import EvidenceLedger, LedgerConflictError, LedgerReferenceError
 from src.ledger.models import (
+    CalculationValidationStatus,
     DerivedCalculation,
+    EvidenceRecord,
     GeneratedClaim,
     LedgerSnapshot,
 )
@@ -58,7 +61,7 @@ from src.research.planner import ResearchPlan, ResearchTask
 from src.verification.atomic_claim_verifier import AtomicClaimVerifier
 from src.verification.claim_verifier import ClaimLevelVerifier
 from src.verification.models import ClaimAssessment, ResponseDisposition, VerificationResult
-from src.verification.response_policy import INSUFFICIENT_EVIDENCE_ANSWER, verify_and_release
+from src.verification.response_policy import verify_and_release
 
 
 SpecialistExecutionStatus = Literal[
@@ -170,15 +173,22 @@ class SpecialistResearchGraph:
         retriever: Any | None = None,
         sec_client: SECEdgarClient | None = None,
         generator: AnswerGenerator | None = None,
+        provider_limits: ProviderLimits | None = None,
+        max_correction_passes: Literal[0, 1] = 1,
         verifier: ClaimLevelVerifier | None = None,
         ticker_by_company: dict[str, str] | None = None,
         retriever_concurrency_safe: bool | None = None,
         use_evidence_policy: bool = True,
     ):
+        if max_correction_passes not in (0, 1):
+            raise ValueError("The release policy supports zero or one correction pass")
         self.router = router or ComplexityRouter()
         self.retriever = retriever
         self.sec_client = sec_client
         self.generator = generator
+        self.provider_writer = OptionalProviderWriter(generator, provider_limits) if generator is not None else None
+        self.deterministic_writer = DeterministicWriter()
+        self.max_correction_passes = max_correction_passes
         self.verifier = verifier or AtomicClaimVerifier(catalog=self.router.extractor.catalog)
         self.candidate_gate = CandidateEvidenceGate() if use_evidence_policy else None
         self.ticker_by_company = _ticker_lookup(self.router, ticker_by_company or {})
@@ -703,12 +713,14 @@ class SpecialistResearchGraph:
         context = runtime.context
         tools_before = context.budget_tracker.tool_calls
         llm_before = context.budget_tracker.llm_calls
-        answer = self._write_report(state["question"], context)
+        report = _approved_report_input(context)
+        context.report_input = report
+        answer = self._write_report(report, context)
         result = SpecialistTaskResult(
             worker_id="report_writer",
             status=SpecialistStatus.PARTIAL if is_fallback_answer(answer.answer) else SpecialistStatus.COMPLETE,
             task_ids=tuple(task.task_id for task in (state.get("plan").tasks if state.get("plan") else ())),
-            evidence_ids=tuple(sorted(context.evidence_id_by_chunk_id.values())),
+            evidence_ids=tuple(sorted(source.records[0].evidence_id for source in report.sources)),
             observations=(SpecialistObservation(
                 key="writer",
                 value="fallback" if is_fallback_answer(answer.answer) else answer.model_id,
@@ -736,7 +748,7 @@ class SpecialistResearchGraph:
         if isinstance(verifier, AtomicClaimVerifier):
             release = verify_and_release(
                 verifier, state["question"], answer, chunks, context.requirements,
-                can_correct=lambda: context.budget_tracker.can_start(tools=0),
+                can_correct=lambda: self.max_correction_passes == 1 and context.budget_tracker.can_start(tools=0),
             )
             context.correction_passes = release.correction_passes
             if release.correction_passes:
@@ -779,10 +791,8 @@ class SpecialistResearchGraph:
         self, verification: VerificationResult, context: SpecialistRuntime, version: str,
     ) -> VerificationResult:
         linked = self._link_verification_to_ledger(verification, context)
-        rendered_calculations = {
-            statement: calculation.calculation_id
-            for calculation, statement in _render_calculation_entries(context)
-        }
+        rendered_calculations = {statement: calculation.calculation_id for calculation, statement
+                                 in self.deterministic_writer.calculation_entries(context.report_input)} if context.report_input else {}
         assessments = []
         for assessment in linked.claims:
             legacy = assessment.claim_type is None
@@ -825,72 +835,28 @@ class SpecialistResearchGraph:
             "status": "UNSUPPORTED",
         }
 
-    def _write_report(self, question: str, runtime: SpecialistRuntime) -> AnswerGenerationResult:
-        started = time.perf_counter()
-        coverage = runtime.coverage
-        if coverage is None or not coverage.sufficient:
-            return _fallback_result()
-        chunks = _ordered_report_chunks(runtime)
-        arithmetic = {
-            operation.operation for operation in runtime.requirements.operations
-            if operation.operation in {"growth", "difference", "ratio", "average"}
-        }
-        if arithmetic:
-            requested = {
-                (operation, entity.canonical_name, metric.metric_id)
-                for operation in arithmetic
-                for entity in runtime.requirements.entities
-                for metric in runtime.requirements.metrics if metric.quantitative
-            }
-            calculated = {(item.operation, item.company, item.metric_id) for item in runtime.calculations}
-            if not requested or not requested.issubset(calculated):
-                return _fallback_result()
-        if runtime.calculations:
-            answer = _render_calculations(runtime)
-            if answer:
-                return AnswerGenerationResult(
-                    answer=answer,
-                    model_id="filingscope-deterministic-report-writer",
-                    prompt_tokens=0,
-                    completion_tokens=0,
-                    latency_ms=max(0.0, (time.perf_counter() - started) * 1000),
-                )
-        if runtime.generator is None or runtime.require_structured_facts or runtime.deterministic_lookup:
-            answer = _render_lookup(runtime)
-            if answer:
-                return AnswerGenerationResult(
-                    answer=answer,
-                    model_id="filingscope-deterministic-report-writer",
-                    prompt_tokens=0,
-                    completion_tokens=0,
-                    latency_ms=max(0.0, (time.perf_counter() - started) * 1000),
-                )
-            return _fallback_result()
-        messages = build_generation_messages(question, chunks)
-        estimated_tokens = estimate_prompt_tokens(messages)
-        runtime.budget_tracker.context_tokens = estimated_tokens
-        if estimated_tokens > runtime.budget.max_context_tokens:
-            return _fallback_result()
-        if not runtime.budget_tracker.can_start(llm=True):
-            return _fallback_result()
-        runtime.budget_tracker.charge(llm=True)
-        runtime.budget_tracker.input_tokens = None
-        runtime.budget_tracker.output_tokens = None
-        try:
-            generated = runtime.generator.generate(question, chunks)
-        except Exception:
-            return _fallback_result()
-        runtime.budget_tracker.input_tokens = generated.prompt_tokens
-        runtime.budget_tracker.output_tokens = generated.completion_tokens
-        if not generated.answer.strip():
-            return _fallback_result()
-        if is_fallback_answer(generated.answer):
-            return generated
-        runtime.budget_tracker.context_tokens = max(
-            estimated_tokens,
-            generated.prompt_tokens or 0,
-        )
-        return generated
+    def _write_report(self, report: GroundedReportInput, runtime: SpecialistRuntime) -> AnswerGenerationResult:
+        budget = runtime.budget_tracker
+
+        def start_attempt(tokens: int) -> None:
+            budget.charge(llm=True)
+            budget.context_tokens = tokens
+            budget.input_tokens = budget.output_tokens = None
+
+        if self.provider_writer is not None:
+            timeout = getattr(self.provider_writer.generator, "timeout_seconds", None) or 0.0
+            generated = self.provider_writer.write(
+                report, max_context_tokens=runtime.budget.max_context_tokens,
+                can_attempt=lambda: budget.can_start(llm=True) and timeout <= self._remaining_wall_time(runtime),
+                start_attempt=start_attempt,
+            )
+            if generated is not None:
+                budget.input_tokens = generated.prompt_tokens
+                budget.output_tokens = generated.completion_tokens
+                budget.context_tokens = max(budget.context_tokens, generated.prompt_tokens or 0)
+                if not is_fallback_answer(generated.answer):
+                    return generated
+        return self.deterministic_writer.write(report)
 
     @staticmethod
     def _link_verification_to_ledger(
@@ -1047,7 +1013,38 @@ def _build_filing_assignments(
     return assignments, pre_results
 
 
+def _approved_report_input(runtime: SpecialistRuntime) -> GroundedReportInput:
+    coverage = runtime.coverage
+    facts_by_chunk: dict[str, list[EvidenceFact]] = defaultdict(list)
+    if coverage is not None:
+        for finding in coverage.findings:
+            if finding.status == CoverageStatus.FOUND:
+                for fact in finding.facts:
+                    facts_by_chunk[fact.evidence_id].append(fact)
+    records_by_chunk: dict[str, list[EvidenceRecord]] = defaultdict(list)
+    for record in runtime.ledger.snapshot().evidence_records:
+        if record.chunk_id in facts_by_chunk:
+            records_by_chunk[record.chunk_id].append(record)
+    sources = []
+    for chunk in _ordered_report_chunks(runtime):
+        chunk_id = chunk["chunk_id"]
+        preferred = runtime.preferred_evidence_by_chunk_id.get(chunk_id)
+        records = records_by_chunk.get(chunk_id, ())
+        if preferred is not None and any(record.evidence_id == preferred for record in records):
+            ordered_records = tuple(sorted(records, key=lambda record: (record.evidence_id != preferred, record.evidence_id)))
+            sources.append(ApprovedSource(dict(chunk), ordered_records, tuple(facts_by_chunk[chunk_id])))
+    return GroundedReportInput(
+        requirements=runtime.requirements, coverage=coverage, sources=tuple(sources),
+        calculations=tuple(calculation for calculation in runtime.calculations
+                           if calculation.validation_status == CalculationValidationStatus.VALID),
+        revision_policy=runtime.xbrl_revision_policy if runtime.require_structured_facts else None,
+        deterministic_lookup=runtime.deterministic_lookup,
+    )
+
+
 def _ordered_report_chunks(runtime: SpecialistRuntime) -> list[dict[str, Any]]:
+    if runtime.report_input is not None:
+        return runtime.report_input.verification_chunks
     return [
         runtime.source_chunks[key] for key in sorted(runtime.source_chunks)
         if key not in runtime.rejected_chunk_ids
@@ -1083,27 +1080,11 @@ def _render_lookup(runtime: SpecialistRuntime) -> str:
             citations = [citation_number] if citation_number is not None else []
             if not citations:
                 continue
-            entity = next(
-                (item.canonical_name for item in coverage.requirements.entities if item.entity_id == fact.entity_id),
-                fact.entity_id,
-            ).rstrip(".")
-            metric = next(
-                (item.display_name for item in coverage.requirements.metrics if item.metric_id == fact.metric_id),
-                fact.metric_id.replace("_", " "),
-            )
-            period = f" for {fact.period}" if fact.period else ""
             markers = " ".join(f"[Source {number}]" for number in citations)
             evidence_id = runtime.preferred_evidence_by_chunk_id.get(fact.evidence_id)
             provenance = runtime.ledger.evidence(evidence_id).xbrl_provenance if evidence_id else None
-            basis = ""
-            if provenance is not None and runtime.require_structured_facts:
-                basis = {
-                    RevisionKind.ORIGINAL: " in the original filing",
-                    RevisionKind.REFILED: " in a later filing with the same value",
-                    RevisionKind.AMENDMENT: " in the amended filing",
-                    RevisionKind.COMPARATIVE_REVISION: " as revised in a later comparative filing",
-                }[provenance.revision_kind]
-            sentences.append(f"{entity} reported {metric} of {fact.value}{period}{basis}. {markers}")
+            revision = provenance.revision_kind if provenance is not None and runtime.require_structured_facts else None
+            sentences.append(f"{fact_sentence(coverage.requirements, fact, revision)} {markers}")
     return " ".join(sentences)
 
 
@@ -1132,43 +1113,9 @@ def _render_calculation_entries(runtime: SpecialistRuntime) -> list[tuple[Derive
         })
         if not citations:
             continue
-        marker_text = " ".join(f"[Source {number}]" for number in citations)
-        value = _decimal_text(calculation.result)
-        basis = ""
-        if runtime.require_structured_facts:
-            basis = (
-                " using the revised filing values"
-                if runtime.xbrl_revision_policy == RevisionPolicy.LATEST
-                else " using the original filing values"
-            )
-        if calculation.operation == "growth":
-            sentence = (
-                f"{calculation.company or 'The company'} {calculation.metric_id.replace('_', ' ')} "
-                f"growth was {value}% from {calculation.fiscal_period}{basis}. {marker_text}"
-            )
-        else:
-            unit = calculation.currency or calculation.unit or "units"
-            sentence = (
-                f"The absolute {calculation.metric_id.replace('_', ' ')} difference was "
-                f"{unit} {value} across {calculation.fiscal_period}{basis}. {marker_text}"
-            )
-        entries.append((calculation, sentence))
+        revision = runtime.xbrl_revision_policy if runtime.require_structured_facts else None
+        entries.append((calculation, calculation_sentence(calculation, citations, revision)))
     return entries
-
-
-def _fallback_result() -> AnswerGenerationResult:
-    return AnswerGenerationResult(
-        answer=INSUFFICIENT_EVIDENCE_ANSWER,
-        model_id="filingscope-no-answer",
-        prompt_tokens=0,
-        completion_tokens=0,
-        latency_ms=0.0,
-    )
-
-
-def _decimal_text(value: Decimal) -> str:
-    rendered = format(value, "f")
-    return rendered.rstrip("0").rstrip(".") if "." in rendered else rendered
 
 
 def _execution_status(status: str, verification: VerificationResult | None) -> str:

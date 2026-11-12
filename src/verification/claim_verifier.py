@@ -401,7 +401,6 @@ class ClaimLevelVerifier:
             lambda match: " " * len(match.group(0)),
             statement,
         )
-        mentions = extract_period_value_mentions(statement_for_values)
         metric_hits: list[tuple[int, int, str]] = []
         for metric in metrics:
             metric_hits.extend((start, end, metric.metric_id) for start, end, _ in _find_spans(statement, metric.aliases))
@@ -409,6 +408,22 @@ class ClaimLevelVerifier:
         possible_entity_ids = list(dict.fromkeys((*claim_entities, *question_entities)))
         for entity_id in possible_entity_ids:
             entity_hits.extend((start, end, entity_id) for start, end, _ in _find_spans(statement, catalog.aliases_for(entity_id)))
+        # Preserve compact amounts for verification and mask a resolved company subject.
+        subject_candidates = [hit for hit in entity_hits if any(char.isdigit() for char in statement[hit[0]:hit[1]])]
+        if subject_candidates:
+            explicit_values = extract_period_value_mentions(statement_for_values)
+            first_amount = min((mention.start for mention in explicit_values), default=len(statement))
+            subjects: dict[str, tuple[int, int]] = {}
+            for start, end, entity_id in sorted(subject_candidates, key=lambda hit: (hit[0], -hit[1])):
+                subject_ending = re.match(r"\s*['’]s\b|\s+(?:reported|recorded|posted|had|earned|generated)\b",
+                                          statement[end:], re.I)
+                before_metric = any(end <= metric_start and not statement[end:metric_start].strip()
+                                    for metric_start, _, _ in metric_hits)
+                if end <= first_amount and (subject_ending or before_metric):
+                    subjects.setdefault(entity_id, (start, end))
+            for start, end in subjects.values():
+                statement_for_values = statement_for_values[:start] + " " * (end - start) + statement_for_values[end:]
+        mentions = extract_period_value_mentions(statement_for_values, allow_unmarked_attached=True)
         values: list[ClaimValue] = []
         for mention in mentions:
             metric_id = _nearest_id(mention.start, metric_hits, metrics[0].metric_id if len(metrics) == 1 else None)

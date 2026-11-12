@@ -23,7 +23,7 @@ _VALUE_RE = re.compile(
     rf"(?<![\w.])(?P<currency>{_CURRENCY_TOKEN})?\s*"
     r"(?P<number>\(?-?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?\)?)"
     r"\s*(?P<percent>%|percent\b)?\s*"
-    r"(?P<scale>\b(?:billion|million|thousand|bn|mm|m)\b)?",
+    r"(?P<scale>(?:billion|million|thousand|bn|mm|m)\b)?",
     re.I,
 )
 _STRICT_NUMBER_RE = re.compile(
@@ -77,13 +77,20 @@ def _nearest_period(periods: tuple[PeriodMention, ...], start: int, end: int) ->
     return next(iter(nearest)) if len(nearest) == 1 else None
 
 
-def _value_matches_and_periods(text: str) -> tuple[list[re.Match], tuple[PeriodMention, ...]]:
-    values = [
-        match for match in _VALUE_RE.finditer(text)
-        if not _YEAR_RE.fullmatch(match.group("number")) or any(
-            match.group(field) for field in ("currency", "percent", "scale")
-        )
-    ]
+def _value_matches_and_periods(
+    text: str, *, allow_unmarked_attached: bool = False,
+) -> tuple[list[re.Match], tuple[PeriodMention, ...]]:
+    values = []
+    for match in _VALUE_RE.finditer(text):
+        number_end = match.end("number")
+        attached_letter = text[number_end:number_end + 1].isalpha()
+        has_unit = bool(match["percent"] or match["scale"])
+        attached_amount = match["scale"] and (match["currency"] or allow_unmarked_attached)
+        if attached_letter and not (match["percent"] or attached_amount):
+            continue
+        if _YEAR_RE.fullmatch(match["number"]) and not (match["currency"] or has_unit):
+            continue
+        values.append(match)
     periods = tuple(
         item for item in period_mentions(text)
         if not any(match.start() <= item.start and item.end <= match.end() for match in values)
@@ -260,7 +267,9 @@ def extract_period_value_pairs(
     return tuple(unique.values())
 
 
-def extract_period_value_mentions(text: str) -> tuple[PeriodValueMention, ...]:
+def extract_period_value_mentions(
+    text: str, *, allow_unmarked_attached: bool = False,
+) -> tuple[PeriodValueMention, ...]:
     """Extract individual answer-side values while retaining their locations.
 
     This uses the same conservative value and period parser as evidence facts.
@@ -268,7 +277,7 @@ def extract_period_value_mentions(text: str) -> tuple[PeriodValueMention, ...]:
     financial values.
     """
     mentions: list[PeriodValueMention] = []
-    values, periods = _value_matches_and_periods(text)
+    values, periods = _value_matches_and_periods(text, allow_unmarked_attached=allow_unmarked_attached)
     for match in values:
         pair = _parse_value(match.group(0), text)
         if pair is None:

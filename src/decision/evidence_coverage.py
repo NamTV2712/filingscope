@@ -132,21 +132,23 @@ def _normalized_facts(
 ) -> tuple[EvidenceFact, ...] | None:
     if not metric.quantitative and chunk.get("source_type") != "XBRL_FACT":
         return None
-    values = chunk.get("normalized_facts")
+    approved = chunk.get("approved_facts")
+    values = approved if approved is not None else chunk.get("normalized_facts")
     if values is None and chunk.get("source_type") != "XBRL_FACT":
         return None
     if not isinstance(values, tuple):
         return ()
+    source_url = chunk.get("source_url") or chunk.get("source_repository_url") or chunk.get("filing_url")
     return tuple(
         fact for fact in values
         if isinstance(fact, EvidenceFact)
         and fact.evidence_id == chunk.get("chunk_id")
         and fact.document_id == (chunk.get("doc_name") or chunk.get("document_id"))
-        and fact.source_url == chunk.get("source_url")
+        and fact.source_url == source_url
         and fact.entity_id == entity_id
         and fact.metric_id == metric.metric_id
-        and fact.period_identity is not None
-        and fact.period_identity.label == fact.period
+        and (approved is not None and fact.period_identity is None
+             or fact.period_identity is not None and fact.period_identity.label == fact.period)
         and _kind_matches(fact, metric)
     )
 

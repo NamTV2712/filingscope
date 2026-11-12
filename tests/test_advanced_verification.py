@@ -91,6 +91,29 @@ def test_conflicting_cited_endpoints_cannot_verify_growth_direction():
     assert result.claims[0].status == ClaimStatus.UNVERIFIABLE
 
 
+def test_comparison_uncertainty_and_speculation_are_distinct_claim_types():
+    verifier = AtomicClaimVerifier()
+    evidence = [_financial_chunk(chunk_id="endpoints")]
+    question = "Did Apple's revenue grow from FY2023 to FY2024?"
+    result = verifier.verify(question, "Apple revenue grew from FY2023 to FY2024 [Source 1].", evidence)
+    assert result.claims[0].claim_type == "comparison" and result.claims[0].status == ClaimStatus.SUPPORTED
+    assert len(result.claims[0].requirement_ids) == 2
+    for text, kind in (("Apple may report revenue of USD 110 billion in FY2024.", "speculation"),
+                       ("There is not enough evidence for Apple's revenue in FY2024.", "uncertainty")):
+        result = verifier.verify(question, f"{text.rstrip('.')} [Source 1].", evidence)
+        assert result.claims[0].claim_type == kind
+        assert result.claims[0].status != ClaimStatus.SUPPORTED
+
+
+def test_abbreviated_extra_amount_is_still_checked_in_numeric_claims():
+    evidence = [_financial_chunk(chunk_id="revenue")]
+    result = AtomicClaimVerifier().verify(
+        "What was Apple's FY2024 revenue?",
+        "Apple FY2024 revenue was USD 110 billion and 3M in additional expense [Source 1].", evidence,
+    )
+    assert result.disposition != ResponseDisposition.VERIFIED
+
+
 def test_original_value_cannot_verify_a_restated_claim():
     evidence = {**_financial_chunk(chunk_id="original"), "revision_kind": "ORIGINAL"}
     result = AtomicClaimVerifier().verify(

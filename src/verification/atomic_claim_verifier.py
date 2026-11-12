@@ -39,6 +39,8 @@ _INDUSTRY = re.compile(
 )
 _INDUSTRY_TAIL = re.compile(r"^(?:\s+and\s+(?:serves|provides|sells|supplies)\b.*)?[.!?]*$", re.I)
 _INCREASE = re.compile(r"\b(?:grew|increased|rose|gained)\b", re.I)
+_UNCERTAINTY = re.compile(r"\b(?:insufficient evidence|not enough evidence|cannot determine|unable to verify|could not verify)\b", re.I)
+_SPECULATION = re.compile(r"\b(?:may|might|could|would|expects?|forecasts?|projects?)\b", re.I)
 
 
 class _ClaimLimitExceeded(ValueError):
@@ -265,12 +267,16 @@ class AtomicClaimVerifier(ClaimLevelVerifier):
         self, draft: ClaimDraft, assessment: ClaimAssessment, question_requirements: QuestionRequirements,
         layer: EvidenceDecisionLayer, catalog: CompanyCatalog, cited_chunks: list[dict[str, Any]],
     ) -> ClaimAssessment:
-        calculation = (
-            draft.operation is not None or assessment.calculation is not None
-            or "growth_direction_matches_cited_values" in assessment.reason_codes
-        )
-        if calculation:
+        calculation = draft.operation is not None or assessment.calculation is not None
+        comparison = "growth_direction_matches_cited_values" in assessment.reason_codes
+        if assessment.status != ClaimStatus.SUPPORTED and _UNCERTAINTY.search(draft.statement):
+            claim_type = "uncertainty"
+        elif assessment.status != ClaimStatus.SUPPORTED and _SPECULATION.search(draft.statement):
+            claim_type = "speculation"
+        elif calculation:
             claim_type = "calculation"
+        elif comparison:
+            claim_type = "comparison"
         elif draft.values or draft.has_unparsed_numeric_value:
             claim_type = "financial_fact"
         elif draft.metric_ids:
@@ -292,13 +298,14 @@ class AtomicClaimVerifier(ClaimLevelVerifier):
             )
             sources = tuple(sorted({fact.evidence_id for fact in facts if
                 self._compare_value(value, (fact,))[0] == ClaimStatus.SUPPORTED}))
-        elif calculation:
+        elif calculation or comparison:
             sources = self._calculation_sources(draft, question_requirements, layer, cited_chunks)
 
-        periods = (draft.periods or question_requirements.periods) if calculation else draft.periods
-        if calculation and len(periods) >= 2:
+        uses_endpoints = calculation or comparison
+        periods = (draft.periods or question_requirements.periods) if uses_endpoints else draft.periods
+        if uses_endpoints and len(periods) >= 2:
             periods = (periods[0], periods[-1])
-        if not calculation and draft.values and draft.values[0].period:
+        if not uses_endpoints and draft.values and draft.values[0].period:
             periods = (draft.values[0].period,)
         requirements = tuple(item.requirement_id for item in question_requirements.evidence if
             item.entity_id in draft.entity_ids and item.metric_id in draft.metric_ids

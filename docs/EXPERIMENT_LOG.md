@@ -549,6 +549,19 @@ The log separates software-contract checks from answer-quality evidence.
   Retain the Dense baseline and keep heavier rerankers in evaluation.
   [Phase report](POST_M15_RETRIEVAL_UTILITY.md)
 
+## Q6 — Grounded writer and atomic release
+
+- **Experiment** Replay the same real filing requests through the unified
+  deterministic path and exercise the P5 adapter and new writer with a
+  fixed-draft provider transport on seven source-backed requests.
+- **Result** The default reached 30/30 grounded exact from 26/30, with
+  four 3M recoveries and no unsupported releases. M13 and direct-fact
+  outcomes held. The mocked provider removed the extra same-page fact,
+  rejected the sign error, and withheld the missing-citation draft.
+- **Decision** Adopt the shared approved-evidence input. Keep deterministic
+  mode as default and gate the optional provider by explicit process caps.
+  Hosted Q6 quality was not run. [Phase report](POST_M15_GROUNDED_WRITER.md)
+
 ## Planned experiments
 
 Each planned experiment must add its exact hypothesis, baseline, changed

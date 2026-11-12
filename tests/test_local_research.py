@@ -21,11 +21,18 @@ try:
 except SystemExit as error:
     assert error.code == 0
 assert {
-    "configs.multi_agent_ablation", "configs.hard_negatives",
+    "configs.multi_agent_ablation", "configs.hard_negatives", "configs.retrieval_utility",
     "src.evaluation.oracle_interventions", "src.evaluation.m13_failure_replay",
 }.isdisjoint(sys.modules)
 """
     subprocess.run([sys.executable, "-c", check], capture_output=True, check=True, timeout=15)
+
+
+def test_local_provider_flag_requires_all_budgets_before_opening_the_server() -> None:
+    completed = subprocess.run([sys.executable, "-m", "scripts.run_local_research", "--provider-run"],
+                               capture_output=True, text=True, timeout=15)
+    assert completed.returncode == 2
+    assert "requires positive call, input, output, and finite cost limits" in completed.stderr
 
 
 def test_source_links_accept_only_credential_free_http() -> None:

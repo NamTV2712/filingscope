@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+from decimal import Decimal
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -13,6 +14,7 @@ from typing import Any
 
 from src.agent.research_progress import ResearchProgress
 from src.agent.specialist_graph import SpecialistResearchGraph
+from src.generation.grounded_writer import ProviderLimits
 from src.local_research import public_result
 
 
@@ -124,7 +126,16 @@ class ResearchHandler(BaseHTTPRequestHandler):
             self._headers(HTTPStatus.OK, "application/x-ndjson; charset=utf-8")
             question, mode = inputs
             try:
+                provider = getattr(self.server.graph, "provider_writer", None)
+                prior_calls = provider.usage.attempted_calls if provider else 0
                 execution = self.server.graph.run(question, force_research=mode == "research", on_progress=self._progress)
+                if provider and provider.usage.attempted_calls != prior_calls:
+                    usage = provider.usage
+                    LOGGER.info("Provider %s attempts=%d responses=%d observed_input=%d observed_output=%d "
+                                "reported_cost_usd=%s reserved_cost_usd=%s missing_usage=%d budget_breached=%s",
+                                getattr(provider.generator, "model_id", "injected"), usage.attempted_calls, usage.responses,
+                                usage.observed_input_tokens, usage.observed_output_tokens, usage.reported_cost_usd,
+                                usage.cost_upper_bound_usd, usage.missing_usage_responses, usage.budget_breached)
                 self._event({"type": "result", "result": public_result(execution)})
             except (ConnectionError, TimeoutError):
                 return
@@ -159,9 +170,42 @@ def main() -> None:
                         help="Rank scoped filing evidence by requested statement slots or use Dense alone")
     parser.add_argument("--sec-dir", type=Path, default=Path("data/financebench/ablation_runs/m13-sec"))
     parser.add_argument("--threads", type=int, default=6)
+    parser.add_argument("--provider-run", action="store_true", help="Enable the budgeted Groq narrative writer")
+    parser.add_argument("--max-provider-calls", type=int)
+    parser.add_argument("--max-provider-input-tokens", type=int)
+    parser.add_argument("--max-provider-output-tokens", type=int)
+    parser.add_argument("--max-provider-cost-usd", type=Decimal)
+    parser.add_argument("--max-correction-passes", type=int, choices=(0, 1), default=1)
     args = parser.parse_args()
     if not 1 <= args.threads <= 16 or not 0 <= args.port <= 65535:
         parser.error("use 1–16 threads and a valid loopback port")
+    budget_options = {"max_calls": args.max_provider_calls, "max_input_tokens": args.max_provider_input_tokens,
+                      "max_output_tokens": args.max_provider_output_tokens, "max_cost_usd": args.max_provider_cost_usd}
+    provider_limits = None
+    generator = None
+    if args.provider_run:
+        from pydantic import ValidationError
+
+        try:
+            provider_limits = ProviderLimits(**budget_options)
+        except ValidationError:
+            parser.error("--provider-run requires positive call, input, output, and finite cost limits")
+        from configs.end_to_end import GENERATOR_MAX_OUTPUT_TOKENS
+        from configs.settings import settings
+        from src.generation.answer_generator import GroqAnswerGenerator
+
+        key = settings.groq_api_key.get_secret_value()
+        if not key:
+            parser.error("--provider-run requires GROQ_API_KEY in the local environment")
+        generator = GroqAnswerGenerator(
+            api_key=key, max_output_tokens=min(GENERATOR_MAX_OUTPUT_TOKENS, provider_limits.max_output_tokens),
+            timeout_seconds=10.0,
+        )
+        LOGGER.setLevel(logging.INFO)
+        LOGGER.addHandler(logging.StreamHandler())
+        LOGGER.info("Enabled provider groq model=%s", generator.model_id)
+    elif any(value is not None for value in budget_options.values()):
+        parser.error("provider limits require --provider-run")
 
     import torch
 
@@ -189,6 +233,9 @@ def main() -> None:
             pdf_pages=pages, statement_ranker=statement_ranker,
         ),
         sec_client=sec,
+        generator=generator,
+        provider_limits=provider_limits,
+        max_correction_passes=args.max_correction_passes,
         ticker_by_company=COMPANY_TICKERS,
     )
     with LocalResearchServer(args.port, graph) as server:

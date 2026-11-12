@@ -33,6 +33,18 @@ pages that contain the requested metric and fiscal period. Use
 `--retrieval-policy dense` to replay the Dense control.
 [Retrieval evaluation](POST_M15_RETRIEVAL_UTILITY.md)
 
+## Writer configuration
+
+The default writer formats approved filing facts and verified calculations
+locally. For an authorized hosted experiment, enable `--provider-run`
+with `--max-provider-calls`, `--max-provider-input-tokens`,
+`--max-provider-output-tokens`, and `--max-provider-cost-usd`. Each limit
+applies to the server process. The writer uses the configured Groq
+credential in the local environment and logs model and usage totals.
+The same atomic verifier checks both writers. Use
+`--max-correction-passes 0` to disable the default single revision pass.
+[Grounded writer evaluation](POST_M15_GROUNDED_WRITER.md)
+
 ## Evidence boundaries
 
 - Progress is an allowlisted lifecycle enum. The response stream carries

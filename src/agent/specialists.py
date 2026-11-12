@@ -29,6 +29,7 @@ from src.generation.answer_generator import (
     AnswerGenerationResult,
     AnswerGenerator,
 )
+from src.generation.grounded_writer import GroundedReportInput
 from src.ingestion.sec_client import SECEdgarClient
 from src.ingestion.company_facts import (
     CompanyFactsResolver,
@@ -52,7 +53,8 @@ from src.policy.candidate_gate import CandidateEvidenceGate
 from src.policy.evidence_policy import EvidencePolicyDecision
 from src.research.planner import ResearchPlan, ResearchTask
 from src.verification.claim_verifier import ClaimLevelVerifier
-from src.verification.models import VerificationResult
+from src.verification.models import CalculationOperand, CalculationOperation, CalculationRequest, VerificationResult
+from src.verification.numerical_verifier import NumericalOperationVerifier
 
 
 class SpecialistStatus(StrEnum):
@@ -201,6 +203,7 @@ class SpecialistRuntime:
     coverage: EvidenceCoverage | None = None
     decision: DecisionResult | None = None
     generation: AnswerGenerationResult | None = None
+    report_input: GroundedReportInput | None = None
     verification: VerificationResult | None = None
     correction_passes: int = 0
     candidate_decisions: tuple[EvidencePolicyDecision, ...] = ()
@@ -1070,6 +1073,18 @@ class FinancialReasoner:
                             else abs(later_number - earlier_number)
                         )
                         result_value = raw_result.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                    is_growth = operation.operation == "growth"
+                    verified = NumericalOperationVerifier().verify(CalculationRequest(
+                        operation=CalculationOperation.PERCENTAGE_GROWTH if is_growth else CalculationOperation.DIFFERENCE,
+                        operands=(CalculationOperand(value=earlier_number, currency=earlier_currency, scale="unit"),
+                                  CalculationOperand(value=later_number, currency=later_currency, scale="unit")),
+                        reported_value=result_value, reported_kind="percent" if is_growth else "amount",
+                        reported_currency=None if is_growth else earlier_currency,
+                        reported_scale=None if is_growth else "unit",
+                    ))
+                    if not verified.passed:
+                        notes.append(SpecialistObservation(key="calculation_skipped", value=verified.reason_code))
+                        continue
                     input_ids = (*earlier_evidence_ids, *later_evidence_ids)
                     normalized_inputs = tuple(
                         [str(earlier_number) for _ in earlier_evidence_ids]
@@ -1098,7 +1113,7 @@ class FinancialReasoner:
                         unit="%" if operation.operation == "growth" else earlier_unit,
                         currency=None if operation.operation == "growth" else earlier_currency,
                         rounding_policy="Decimal ROUND_HALF_UP to 2 places after normalization",
-                        validation_status=CalculationValidationStatus.PENDING,
+                        validation_status=CalculationValidationStatus.VALID,
                         task_ids=input_task_ids,
                         requirement_ids=input_requirements,
                     )
@@ -1134,7 +1149,7 @@ def _chunk_mapping(value: Any) -> dict[str, Any]:
     else:
         raise TypeError("retrieval chunks must be mappings or structured objects")
     return {key: item for key, item in data.items()
-            if key not in {"normalized_facts", "filing_page_checked", "revision_kind"}}
+            if key not in {"normalized_facts", "approved_facts", "filing_page_checked", "revision_kind"}}
 
 
 def _score(chunk: dict[str, Any]) -> float:
