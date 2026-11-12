@@ -188,6 +188,7 @@ class SpecialistRuntime:
     decision: DecisionResult | None = None
     generation: AnswerGenerationResult | None = None
     verification: VerificationResult | None = None
+    correction_passes: int = 0
     calculations: list[DerivedCalculation] = field(default_factory=list)
     parallel_task_tracker: _ParallelTaskTracker = field(default_factory=_ParallelTaskTracker)
     effective_max_concurrency: int = 0

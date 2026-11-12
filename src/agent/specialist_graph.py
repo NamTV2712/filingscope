@@ -46,8 +46,10 @@ from src.ledger.models import (
     LedgerSnapshot,
 )
 from src.research.planner import ResearchPlan, ResearchTask
+from src.verification.atomic_claim_verifier import AtomicClaimVerifier
 from src.verification.claim_verifier import ClaimLevelVerifier
 from src.verification.models import ClaimAssessment, ResponseDisposition, VerificationResult
+from src.verification.response_policy import INSUFFICIENT_EVIDENCE_ANSWER, verify_and_release
 
 
 SpecialistExecutionStatus = Literal[
@@ -62,6 +64,7 @@ class SpecialistUsage(BaseModel):
     tool_calls: int = Field(ge=0)
     retrieval_calls: int = Field(ge=0)
     llm_calls: int = Field(ge=0)
+    correction_passes: int = Field(default=0, ge=0, le=1)
     candidate_chunks: int = Field(ge=0)
     parallel_task_count: int = Field(default=0, ge=0)
     max_concurrency: int = Field(default=0, ge=0)
@@ -160,7 +163,7 @@ class SpecialistResearchGraph:
         self.retriever = retriever
         self.sec_client = sec_client
         self.generator = generator
-        self.verifier = verifier or ClaimLevelVerifier()
+        self.verifier = verifier or AtomicClaimVerifier()
         self.ticker_by_company = _ticker_lookup(self.router, ticker_by_company or {})
         self.retriever_concurrency_safe = (
             retriever is not None
@@ -247,6 +250,7 @@ class SpecialistResearchGraph:
             tool_calls=runtime.budget_tracker.tool_calls,
             retrieval_calls=runtime.budget_tracker.retrieval_calls,
             llm_calls=runtime.budget_tracker.llm_calls,
+            correction_passes=runtime.correction_passes,
             candidate_chunks=runtime.budget_tracker.candidate_chunks,
             parallel_task_count=runtime.parallel_task_count,
             max_concurrency=runtime.effective_max_concurrency,
@@ -622,30 +626,25 @@ class SpecialistResearchGraph:
         self, state: _SpecialistGraphState, runtime: Runtime[SpecialistRuntime]
     ) -> dict[str, Any]:
         context = runtime.context
-        verification = context.verifier.verify(
-            state["question"],
-            state.get("answer", ""),
-            _ordered_report_chunks(context),
-        )
-        verification = self._link_verification_to_ledger(verification, context)
-        for assessment in verification.claims:
-            calculation_id = _calculation_for_claim(assessment, context)
-            claim = GeneratedClaim.create(
-                claim_id=assessment.claim_id,
-                request_id=context.request_id,
-                claim_text=assessment.statement,
-                claim_type=assessment.status.value,
-                supporting_evidence_ids=assessment.evidence_ids,
-                calculation_id=calculation_id,
-                requirement_ids=tuple(item.requirement_id for item in context.requirements.evidence),
+        answer = state.get("answer", "")
+        chunks = _ordered_report_chunks(context)
+        verifier = context.verifier
+        if isinstance(verifier, AtomicClaimVerifier):
+            release = verify_and_release(
+                verifier, state["question"], answer, chunks, context.requirements,
+                can_correct=lambda: context.budget_tracker.can_start(tools=0),
             )
-            context.ledger.add_claim(claim)
+            context.correction_passes = release.correction_passes
+            if release.correction_passes:
+                self._record_verification(release.initial, context, "M11-draft")
+            answer = release.answer
+            verification = self._record_verification(release.result, context, "M11")
+        else:
+            verification = self._record_verification(verifier.verify(state["question"], answer, chunks), context, "P4")
         context.verification = verification
-        context.ledger.add_verification(
-            verification,
-            verifier_id="claim-level-verifier",
-            verifier_version="P4",
-        )
+        generation = state.get("generation")
+        if generation is not None:
+            context.generation = generation.model_copy(update={"answer": answer})
         result = SpecialistTaskResult(
             worker_id="claim_verifier",
             status=(
@@ -656,14 +655,48 @@ class SpecialistResearchGraph:
                 else SpecialistStatus.UNKNOWN
             ),
             evidence_ids=tuple(sorted({item for claim in verification.claims for item in claim.evidence_ids})),
-            observations=(SpecialistObservation(key="disposition", value=verification.disposition.value),),
+            observations=(
+                SpecialistObservation(key="disposition", value=verification.disposition.value),
+                SpecialistObservation(key="correction_passes", value=str(context.correction_passes)),
+            ),
         )
         context.save_result(result)
         return {
             "trace": [*state.get("trace", ()), "claim_verifier"],
             "specialist_results": [*state.get("specialist_results", ()), result],
             "status": verification.disposition.value,
+            "answer": answer,
         }
+
+    def _record_verification(
+        self, verification: VerificationResult, context: SpecialistRuntime, version: str,
+    ) -> VerificationResult:
+        linked = self._link_verification_to_ledger(verification, context)
+        rendered_calculations = {
+            statement: calculation.calculation_id
+            for calculation, statement in _render_calculation_entries(context)
+        }
+        assessments = []
+        for assessment in linked.claims:
+            legacy = assessment.claim_type is None
+            claim = GeneratedClaim.create(
+                claim_id=assessment.claim_id if legacy else None,
+                request_id=context.request_id,
+                claim_text=assessment.statement,
+                claim_type=assessment.claim_type or assessment.status.value,
+                supporting_evidence_ids=assessment.evidence_ids if legacy else assessment.supporting_evidence_ids,
+                cited_evidence_ids=None if legacy else assessment.evidence_ids,
+                calculation_id=rendered_calculations.get(assessment.statement),
+                requirement_ids=(
+                    tuple(item.requirement_id for item in context.requirements.evidence)
+                    if legacy else assessment.requirement_ids
+                ),
+            )
+            context.ledger.add_claim(claim)
+            assessments.append(assessment.model_copy(update={"claim_id": claim.claim_id}))
+        linked = linked.model_copy(update={"claims": tuple(assessments)})
+        context.ledger.add_verification(linked, verifier_id="claim-level-verifier", verifier_version=version)
+        return linked
 
     @staticmethod
     def _unsupported_node(
@@ -753,16 +786,19 @@ class SpecialistResearchGraph:
         verification: VerificationResult,
         runtime: SpecialistRuntime,
     ) -> VerificationResult:
+        def ledger_ids(chunk_ids: tuple[str, ...]) -> tuple[str, ...]:
+            return tuple(sorted({
+                ledger_id for chunk_id in chunk_ids
+                if (ledger_id := runtime.preferred_evidence_by_chunk_id.get(chunk_id)
+                    or runtime.evidence_id_by_chunk_id.get(chunk_id)) is not None
+            }))
+
         linked_claims: list[ClaimAssessment] = []
         for claim in verification.claims:
-            evidence_ids = tuple(sorted({
-                runtime.preferred_evidence_by_chunk_id.get(chunk_id)
-                or runtime.evidence_id_by_chunk_id.get(chunk_id)
-                for chunk_id in claim.evidence_ids
-                if runtime.preferred_evidence_by_chunk_id.get(chunk_id)
-                or runtime.evidence_id_by_chunk_id.get(chunk_id)
+            linked_claims.append(claim.model_copy(update={
+                "evidence_ids": ledger_ids(claim.evidence_ids),
+                "supporting_evidence_ids": ledger_ids(claim.supporting_evidence_ids),
             }))
-            linked_claims.append(claim.model_copy(update={"evidence_ids": evidence_ids}))
         return verification.model_copy(update={"claims": tuple(linked_claims)})
 
 
@@ -961,9 +997,15 @@ def _render_lookup(runtime: SpecialistRuntime) -> str:
 
 
 def _render_calculations(runtime: SpecialistRuntime) -> str:
+    return " ".join(statement for _, statement in _render_calculation_entries(runtime))
+
+
+def _render_calculation_entries(runtime: SpecialistRuntime) -> list[tuple[DerivedCalculation, str]]:
+    if not runtime.calculations:
+        return []
     chunks = _ordered_report_chunks(runtime)
     order = {str(item["chunk_id"]): index for index, item in enumerate(chunks, start=1)}
-    sentences: list[str] = []
+    entries: list[tuple[DerivedCalculation, str]] = []
     snapshot = runtime.ledger.snapshot()
     evidence_by_id = {item.evidence_id: item for item in snapshot.evidence_records}
     for calculation in runtime.calculations:
@@ -999,34 +1041,13 @@ def _render_calculations(runtime: SpecialistRuntime) -> str:
                 f"The absolute {calculation.metric_id.replace('_', ' ')} difference was "
                 f"{unit} {value} across {calculation.fiscal_period}{basis}. {marker_text}"
             )
-        sentences.append(sentence)
-    return " ".join(sentences)
-
-
-def _calculation_for_claim(
-    claim: ClaimAssessment,
-    runtime: SpecialistRuntime,
-) -> str | None:
-    cited = set(claim.evidence_ids)
-    for calculation in runtime.calculations:
-        input_chunks = {
-            runtime.ledger.evidence(evidence_id).chunk_id
-            for evidence_id in calculation.input_evidence_ids
-        }
-        supporting = {
-            runtime.preferred_evidence_by_chunk_id.get(str(chunk_id))
-            or runtime.evidence_id_by_chunk_id.get(str(chunk_id))
-            for chunk_id in input_chunks if chunk_id
-        }
-        supporting.discard(None)
-        if supporting and supporting.issubset(cited):
-            return calculation.calculation_id
-    return None
+        entries.append((calculation, sentence))
+    return entries
 
 
 def _fallback_result() -> AnswerGenerationResult:
     return AnswerGenerationResult(
-        answer="I could not find sufficient information in the available documents to answer this question with confidence.",
+        answer=INSUFFICIENT_EVIDENCE_ANSWER,
         model_id="filingscope-no-answer",
         prompt_tokens=0,
         completion_tokens=0,

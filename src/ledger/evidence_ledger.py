@@ -380,7 +380,7 @@ class EvidenceLedger:
 
     def _add_claim_unlocked(self, claim: GeneratedClaim) -> GeneratedClaim:
         self._validate_request_and_requirements(claim.request_id, claim.requirement_ids)
-        missing = set(claim.supporting_evidence_ids) - self._evidence.keys()
+        missing = set(claim.linked_citation_ids) - self._evidence.keys()
         if missing:
             raise LedgerReferenceError("claim references missing evidence: " + ", ".join(sorted(missing)))
         if claim.calculation_id is not None and claim.calculation_id not in self._calculations:
@@ -403,8 +403,10 @@ class EvidenceLedger:
             missing = set(assessment.evidence_ids) - self._evidence.keys()
             if missing:
                 raise LedgerReferenceError("verification references missing evidence: " + ", ".join(sorted(missing)))
-            if not set(assessment.evidence_ids).issubset(claim.supporting_evidence_ids):
+            if not set(assessment.evidence_ids).issubset(claim.linked_citation_ids):
                 raise LedgerReferenceError("verification cites evidence not linked to its generated claim")
+            if not set(assessment.supporting_evidence_ids).issubset(claim.supporting_evidence_ids):
+                raise LedgerReferenceError("verification support is not linked to its generated claim")
         current = self._verifications.get(record.verification_id)
         if current is not None and current != record:
             raise LedgerConflictError(f"conflicting verification ID: {record.verification_id}")

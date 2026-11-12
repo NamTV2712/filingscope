@@ -226,6 +226,24 @@ class ClaimLevelVerifier:
         self._provided_catalog = catalog
         self._numerical_verifier = numerical_verifier or NumericalOperationVerifier()
 
+    def _claim_statements(self, answer: str, layer: EvidenceDecisionLayer) -> list[str]:
+        return _split_clauses(answer)
+
+    @staticmethod
+    def _is_fallback(answer: str) -> bool:
+        return bool(_FALLBACK_RE.search(answer))
+
+    def _describe_assessment(
+        self,
+        draft: ClaimDraft,
+        assessment: ClaimAssessment,
+        question_requirements: Any,
+        layer: EvidenceDecisionLayer,
+        catalog: CompanyCatalog,
+        cited_chunks: list[dict[str, Any]],
+    ) -> ClaimAssessment:
+        return assessment
+
     def verify(
         self,
         question: str,
@@ -240,7 +258,7 @@ class ClaimLevelVerifier:
         catalog = self._provided_catalog or CompanyCatalog.from_document_rows(rows)
         layer = EvidenceDecisionLayer(catalog=catalog)
         question_requirements = layer.extractor.extract(question)
-        if _FALLBACK_RE.search(answer):
+        if self._is_fallback(answer):
             return VerificationResult(
                 disposition=ResponseDisposition.ABSTAIN,
                 reason_codes=("fallback_answer",),
@@ -255,7 +273,7 @@ class ClaimLevelVerifier:
 
         assessments: list[ClaimAssessment] = []
         valid_citation_count = invalid_citation_count = 0
-        for index, statement in enumerate(_split_clauses(answer), start=1):
+        for index, statement in enumerate(self._claim_statements(answer, layer), start=1):
             citations, marker_count, invalid_count, citation_status, citation_reasons = _citation_details(
                 statement,
                 len(chunks),
@@ -280,7 +298,7 @@ class ClaimLevelVerifier:
                 cited_chunks=cited_chunks,
             )
             if citation_status != CitationStatus.VALID:
-                assessments.append(ClaimAssessment(
+                assessment = ClaimAssessment(
                     claim_id=draft.claim_id,
                     statement=statement,
                     status=ClaimStatus.UNVERIFIABLE,
@@ -288,16 +306,19 @@ class ClaimLevelVerifier:
                     citations=citations,
                     evidence_ids=cited_ids,
                     reason_codes=citation_reasons,
-                ))
-                continue
-            assessments.append(self._assess_claim(
-                draft=draft,
-                question=question,
-                question_requirements=question_requirements,
-                layer=layer,
-                catalog=catalog,
-                cited_chunks=cited_chunks,
-                evidence_ids=cited_ids,
+                )
+            else:
+                assessment = self._assess_claim(
+                    draft=draft,
+                    question=question,
+                    question_requirements=question_requirements,
+                    layer=layer,
+                    catalog=catalog,
+                    cited_chunks=cited_chunks,
+                    evidence_ids=cited_ids,
+                )
+            assessments.append(self._describe_assessment(
+                draft, assessment, question_requirements, layer, catalog, cited_chunks,
             ))
 
         supported = sum(item.status == ClaimStatus.SUPPORTED for item in assessments)
@@ -855,8 +876,8 @@ class ClaimLevelVerifier:
         if metric is None:
             return None
         facts = self._facts_for(entity_id=draft.entity_ids[0], metric=metric, periods=periods, layer=layer, chunks=chunks)
-        first = next((fact for fact in facts if period_matches(periods[0], fact.period)), None)
-        last = next((fact for fact in facts if period_matches(periods[-1], fact.period)), None)
+        first = self._direction_operand(facts, periods[0])
+        last = self._direction_operand(facts, periods[-1])
         if first is None or last is None or first.scale not in _SCALE_FACTORS or last.scale not in _SCALE_FACTORS:
             return ClaimStatus.UNVERIFIABLE, "growth_direction_inputs_missing"
         if first.currency != last.currency or first.currency is None:
@@ -870,6 +891,10 @@ class ClaimLevelVerifier:
         return (ClaimStatus.SUPPORTED, "growth_direction_matches_cited_values") if matches else (
             ClaimStatus.CONTRADICTED, "growth_direction_conflicts_with_cited_values"
         )
+
+    @staticmethod
+    def _direction_operand(facts: tuple[EvidenceFact, ...], period: str) -> EvidenceFact | None:
+        return next((fact for fact in facts if period_matches(period, fact.period)), None)
 
     @staticmethod
     def _combine_statuses(statuses: list[ClaimStatus]) -> ClaimStatus:

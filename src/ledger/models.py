@@ -465,6 +465,7 @@ class GeneratedClaim(BaseModel):
     claim_text: str = Field(min_length=1, max_length=4_000)
     claim_type: str = Field(min_length=1)
     supporting_evidence_ids: tuple[str, ...] = ()
+    cited_evidence_ids: tuple[str, ...] | None = None
     calculation_id: str | None = None
     requirement_ids: tuple[str, ...] = ()
     verification_status: ClaimStatus | None = None
@@ -477,11 +478,13 @@ class GeneratedClaim(BaseModel):
         claim_type: str,
         request_id: str,
         supporting_evidence_ids: tuple[str, ...] = (),
+        cited_evidence_ids: tuple[str, ...] | None = None,
         calculation_id: str | None = None,
         requirement_ids: tuple[str, ...] = (),
         claim_id: str | None = None,
     ) -> "GeneratedClaim":
         evidence_ids = _tuple_values(supporting_evidence_ids, sort=True)
+        cited_ids = None if cited_evidence_ids is None else _tuple_values(cited_evidence_ids, sort=True)
         requirement_ids = _tuple_values(requirement_ids, sort=True)
         identity = {
             "request_id": request_id,
@@ -490,12 +493,15 @@ class GeneratedClaim(BaseModel):
             "supporting_evidence_ids": evidence_ids,
             "calculation_id": calculation_id,
         }
+        if cited_ids is not None:
+            identity["cited_evidence_ids"] = cited_ids
         return cls(
             claim_id=claim_id or _stable_id("claim", identity),
             request_id=request_id,
             claim_text=claim_text,
             claim_type=claim_type,
             supporting_evidence_ids=evidence_ids,
+            cited_evidence_ids=cited_ids,
             calculation_id=calculation_id,
             requirement_ids=requirement_ids,
         )
@@ -504,9 +510,28 @@ class GeneratedClaim(BaseModel):
     def validate_claim_references(self) -> "GeneratedClaim":
         if tuple(sorted(set(self.supporting_evidence_ids))) != self.supporting_evidence_ids:
             raise ValueError("claim evidence IDs must be unique and sorted")
+        if self.cited_evidence_ids is not None:
+            if tuple(sorted(set(self.cited_evidence_ids))) != self.cited_evidence_ids:
+                raise ValueError("claim citation IDs must be unique and sorted")
+            if not set(self.supporting_evidence_ids).issubset(self.cited_evidence_ids):
+                raise ValueError("claim supporting evidence must be cited")
         if tuple(sorted(set(self.requirement_ids))) != self.requirement_ids:
             raise ValueError("claim requirement IDs must be unique and sorted")
         return self
+
+    @property
+    def linked_citation_ids(self) -> tuple[str, ...]:
+        return self.supporting_evidence_ids if self.cited_evidence_ids is None else self.cited_evidence_ids
+
+
+def _verification_id(payload: dict[str, Any]) -> str:
+    result = payload["result"]
+    if all(claim.claim_type is None and not claim.supporting_evidence_ids and not claim.requirement_ids
+           for claim in result.claims):
+        result = result.model_dump(mode="python", exclude={"claims": {"__all__": {
+            "claim_type", "supporting_evidence_ids", "requirement_ids",
+        }}})
+    return _stable_id("ver", {**payload, "result": result})
 
 
 class VerificationRecord(BaseModel):
@@ -535,11 +560,11 @@ class VerificationRecord(BaseModel):
             "verifier_version": verifier_version,
             "result": result,
         }
-        return cls(verification_id=_stable_id("ver", payload), **payload)
+        return cls(verification_id=_verification_id(payload), **payload)
 
     @model_validator(mode="after")
     def validate_verification_identity(self) -> "VerificationRecord":
-        expected = _stable_id("ver", {
+        expected = _verification_id({
             "request_id": self.request_id,
             "verifier_id": self.verifier_id,
             "verifier_version": self.verifier_version,
@@ -638,8 +663,8 @@ class LedgerSnapshot(BaseModel):
         for claim in self.claims:
             if claim.request_id != self.request_id:
                 raise ValueError("claim belongs to another request")
-            if not set(claim.supporting_evidence_ids).issubset(evidence):
-                raise ValueError("claim references missing supporting evidence")
+            if not set(claim.linked_citation_ids).issubset(evidence):
+                raise ValueError("claim references missing evidence")
             if claim.calculation_id is not None and claim.calculation_id not in calculations:
                 raise ValueError("claim references an unknown calculation")
             if not set(claim.requirement_ids).issubset(reqs):
@@ -652,10 +677,11 @@ class LedgerSnapshot(BaseModel):
                     raise ValueError("verification references an unknown generated claim")
                 if not set(assessment.evidence_ids).issubset(evidence):
                     raise ValueError("verification references missing evidence")
-                if not set(assessment.evidence_ids).issubset(
-                    claims[assessment.claim_id].supporting_evidence_ids
-                ):
+                claim = claims[assessment.claim_id]
+                if not set(assessment.evidence_ids).issubset(claim.linked_citation_ids):
                     raise ValueError("verification cites evidence not linked to its generated claim")
+                if not set(assessment.supporting_evidence_ids).issubset(claim.supporting_evidence_ids):
+                    raise ValueError("verification support is not linked to its generated claim")
         observed_statuses: dict[str, list[ClaimStatus]] = {
             claim_id: [] for claim_id in claims
         }

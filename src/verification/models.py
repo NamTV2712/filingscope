@@ -114,6 +114,9 @@ class ClaimAssessment(BaseModel):
     evidence_ids: tuple[str, ...] = ()
     calculation: CalculationVerification | None = None
     reason_codes: tuple[str, ...] = ()
+    claim_type: Literal["financial_fact", "calculation", "qualitative", "unclassified"] | None = None
+    supporting_evidence_ids: tuple[str, ...] = ()
+    requirement_ids: tuple[str, ...] = ()
 
 
 class VerificationResult(BaseModel):

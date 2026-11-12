@@ -7,9 +7,10 @@ from typing import Any
 from src.agent.complexity_router import ComplexityRouter, ExecutionPath
 from src.agent.specialist_graph import SpecialistResearchGraph
 from src.agent.specialists import SpecialistStatus
+from src.generation.answer_generator import AnswerGenerationResult
 from src.ingestion.company_facts import RevisionKind
 from src.ledger.models import EvidenceSourceType
-from src.verification.models import ResponseDisposition
+from src.verification.models import ClaimStatus, ResponseDisposition
 
 
 class FakeRetriever:
@@ -97,6 +98,37 @@ def _annual_chunk(
         "text": "Revenue was $110 billion in FY2024.",
         "score": 0.9,
     }
+
+
+def test_specialist_releases_only_rechecked_claims_and_keeps_draft_audit() -> None:
+    class DraftGenerator:
+        def generate(self, question, chunks):
+            return AnswerGenerationResult(
+                answer=(
+                    "Apple revenue was $110 billion in FY2024 [Source 1]. "
+                    "Apple net income was $999 billion in FY2024 [Source 1]."
+                ),
+                model_id="fixture", prompt_tokens=50, completion_tokens=30, latency_ms=0.0,
+            )
+
+    graph = SpecialistResearchGraph(retriever=FakeRetriever([_annual_chunk()]), generator=DraftGenerator())
+    result = graph.run("What was Apple's revenue in FY2024?", request_id="m11-revision")
+
+    assert result.status == "PARTIAL"
+    assert result.usage.correction_passes == 1
+    assert result.usage.llm_calls == 1
+    assert result.usage.graph_steps == 4
+    assert "$110 billion" in result.answer and "$999 billion" not in result.answer
+    assert result.generation is not None and result.generation.answer == result.answer
+    records = {record.verifier_version: record.result for record in result.ledger_snapshot.verifications}
+    assert records["M11"] == result.verification
+    assert records["M11-draft"].disposition == ResponseDisposition.REJECTED
+    verified, rejected = records["M11-draft"].claims
+    assert records["M11"].claims[0].claim_id == verified.claim_id
+    assert rejected.status == ClaimStatus.UNSUPPORTED
+    claim = next(item for item in result.ledger_snapshot.claims if item.claim_id == rejected.claim_id)
+    assert claim.claim_type == "financial_fact" and claim.verification_status == ClaimStatus.UNSUPPORTED
+    assert claim.cited_evidence_ids and not claim.supporting_evidence_ids
 
 
 def test_fast_route_runs_only_four_nodes_and_verifies_grounded_lookup() -> None:
@@ -187,6 +219,9 @@ def test_research_route_uses_sec_facts_and_emits_linked_growth_calculations() ->
     assert result.coverage is not None and result.coverage.sufficient
     assert len(result.calculations) == 2
     assert {str(item.result) for item in result.calculations} == {"10.00", "15.00"}
+    assert {item.calculation_id for item in result.ledger_snapshot.claims} == {
+        item.calculation_id for item in result.calculations
+    }
     assert "growth was" in result.answer
     assert result.verification is not None
     assert {
