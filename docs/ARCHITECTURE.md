@@ -201,6 +201,14 @@ Explicit revision requests use resolved SEC facts with their filing
 accessions. The reasoner checks basis and period compatibility before
 calculating. [M9 fact policy and validation](FINANCIAL_FACT_ARCHITECTURE.md)
 
+## M10 document intelligence experiment
+
+The optional Docling adapter materializes reading-order blocks and native
+table spans with physical PDF page provenance. The offline benchmark
+compares layout text from pypdf, Docling page text, and Docling chunks
+with section headings and table column labels. The standard ingestion
+path uses pypdf. [M10 comparison](DOCUMENT_INTELLIGENCE.md)
+
 ## Target: separate logical planes
 
 ```text
@@ -247,7 +255,8 @@ but are not connected to retrieval, generation, or P5. M6's in-memory shared
 ledger and deterministic merge contract are complete, but snapshots do not
 persist. M7 adds a bounded sequential specialist graph and a narrow SEC Company
 Facts path. M8 adds bounded parallel filing searches. M9 advances XBRL
-reconciliation, followed by parser comparisons, verification, hard negatives
-and agent ablations.
+reconciliation. M10 measures parser and chunking variants on known dense
+retrieval failures, followed by verification, hard negatives and agent
+ablations.
 M15 may add a local evidence-first interface. Cloud deployment is out of scope
 unless explicitly requested.

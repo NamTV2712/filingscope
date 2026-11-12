@@ -388,6 +388,22 @@ The log separates software-contract checks from answer-quality evidence.
 - **Decision** Adopt the versioned selector and its explicit revision basis.
   The fixture results describe the sampled financial facts. [M9 report](FINANCIAL_FACT_ARCHITECTURE.md)
 
+## M10 — Document Intelligence
+
+- **Hypothesis** Native document structure can recover table semantics and
+  improve retrieval on known PDF evidence misses.
+- **Experiment** Compare pypdf layout, Docling ACCURATE page text and Docling
+  section/table chunks over 226 pages and ten non-held-out dense misses.
+  Hold the embedding model, questions, source corpus and ranking constant.
+  Compare FAST and ACCURATE on five visually audited pages.
+- **Result** Both parsers recovered 6/6 text rows and 5/5 reading-order
+  sequences. Docling recovered 20/20 native header associations. Recall@10
+  was 0.50 for pypdf, 0.60 for Docling page text and 0.55 for structured
+  chunks. All three scored 0.20 on validation and 0.90 at 50 overall.
+- **Decision** Keep pypdf as the default. Docling ACCURATE took 424.444 s
+  and 3.80 GB peak working set, compared with 8.205 s and 97.2 MB for pypdf.
+  [M10 reproduction, resource use and split metrics](DOCUMENT_INTELLIGENCE.md)
+
 ## Planned experiments
 
 Each planned experiment must add its exact hypothesis, baseline, changed

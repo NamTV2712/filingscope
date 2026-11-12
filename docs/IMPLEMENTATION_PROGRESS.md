@@ -23,27 +23,34 @@ Deployment: none; explicitly out of scope
   269 tests and 3 skips. Simulated search p50 fell from 250.85 ms to 87.44 ms
   with six calls in each mode. [M8 validation](PARALLEL_RESEARCH.md)
 - M9 resolves SEC financial facts by concept, fiscal interval, unit and
-  revision. Source `aad24377da2075ccb6e1c4d55106dc480c6309e5`. Eight of
+  revision. Source `aad24377da2075ccb6e1c4d55106dc480c6309e5`. Docs
+  `7e9a287bb615d23d884768f542c8a31e3cb9e6bb`. Eight of
   eight published fixture slots matched. The full suite passed with 303
   tests and 3 skips. [M9 validation](FINANCIAL_FACT_ARCHITECTURE.md)
+- M10 benchmarks pypdf, Docling page text and structure-aware chunks on
+  five PDFs. Source `1d08a0079aaee5991c5a13e1db6fd6b4365d03ed`. pypdf
+  stays the default. The full suite passed with 306 tests and 3 skips.
+  [M10 validation and reproduction](DOCUMENT_INTELLIGENCE.md)
 
 ## Current milestone
 
-M9 is validated. M10 document intelligence is next.
+M11 advanced verification is next. M10 results and parser checkpoints are
+complete under `data/financebench/parser_runs/`. The milestone does not
+require repeating those runs.
 
 ## Exact next steps
 
-1. Read the document intelligence requirements and M10 in the specification.
-   Locate the pypdf ingestion path and known FinanceBench failure pages.
-2. Freeze a comparable subset and run the baseline and optional Docling
-   parser under the same retrieval protocol. Track evidence coverage,
-   structure, provenance, latency, memory and model/disk requirements.
-3. Retain only a demonstrated improvement and keep optional dependencies
-   isolated. Run focused and full tests, record results and commit to
-   `main`. Push and verify the remote before starting M11.
+1. Read the specification sections N and O and audit `src/verification/`,
+   the claim records under `src/ledger/` and the report-writer and
+   claim-verifier nodes in `src/agent/specialist_graph.py`.
+2. Benchmark atomic claim support and contradictions against the existing
+   verifier. Implement source-linked verification and one bounded correction
+   through the specialist graph, then validate release decisions.
+3. Record the benchmark and regression suite. Commit and push validated
+   M11 to `origin/main` before starting M12.
 
 ## Remaining milestones
 
-M10 document intelligence experiment; M11 advanced verification; M12 hard-negative
-financial retrieval benchmark; M13 multi-agent ablation; M14 advanced
+M11 advanced verification, M12 hard-negative
+financial retrieval benchmark, M13 multi-agent ablation, M14 advanced
 retrieval experiments; M15 local research UX. Do not deploy.

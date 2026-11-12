@@ -260,7 +260,8 @@ metric, leakage, and reproduction details.
 | M7 | Bounded specialist research graph | Complete; sequential fixture path, no quality benchmark |
 | M8 | Bounded parallel filing research | Complete. Simulated search p50 fell from 251 ms to 87 ms |
 | M9 | SEC financial facts and filing revisions | Complete. 8/8 published fixture slots matched |
-| M10–M14 | Document intelligence, verification, and retrieval research | Planned |
+| M10 | PDF parser and structure-aware chunk comparison | Complete. pypdf remains the default. [Results](docs/DOCUMENT_INTELLIGENCE.md) |
+| M11–M14 | Advanced verification and retrieval research | Planned |
 | M15 | Local evidence-first research UX | Planned; no deployment |
 
 No answer quality or end-to-end agent performance claims are made by the

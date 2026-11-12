@@ -3,14 +3,14 @@
 Audit refreshed: 2026-11-12<br>
 Branch: `main`<br>
 Audited repository: `D:\Project\filingscope`<br>
-Audited source commit: `aad24377da2075ccb6e1c4d55106dc480c6309e5`<br>
+Audited source commit: `1d08a0079aaee5991c5a13e1db6fd6b4365d03ed`<br>
 Initial audit baseline: `956cef412d765395b5a7f0b773f821a58686a35a`
 
 This refresh reflects P0–P5, M1 runtime compatibility, M2 retrieval
 diagnostics, M3 candidate policy, M4 corpus-aware planning, M5 finite
 complexity routing, M6's in-memory Evidence Ledger, M7's specialist graph
-and narrow Company Facts path, M8's bounded filing fan-out and M9's
-structured fact resolution. P0–P4 behavior and the
+and narrow Company Facts path, M8's bounded filing fan-out, M9's
+structured fact resolution and M10's PDF parser comparison. P0–P4 behavior and the
 completed P5 provider benchmark remain preserved. Source benchmark data,
 model caches, and generated run artifacts remain local and git-ignored.
 
@@ -299,9 +299,16 @@ passed and 3 skipped tests, and `uv pip check` reported no incompatible
 packages. These are ledger/data-contract checks; no retrieval, answer-quality,
 or financial-calculation accuracy benchmark was run.
 
-## Next milestone recommendation
+## M10 validation update
 
-M1–M9 are validated. The M9 resolver matched eight filing slots and refused
-eight ineligible rows. Continue with the M10 comparison of pypdf and
-Docling on frozen filing failures.
-[Research agenda](RESEARCH_AGENDA.md)
+M10 adds optional Docling ingestion and a structure-aware chunker for the
+offline experiment. On ten known misses, Docling page-text Recall@10 was
+0.60, structured Recall@10 was 0.55, and pypdf Recall@10 was 0.50. The
+validation split scored 0.20 across all variants. The standard PDF path
+uses pypdf. The full regression suite passed with 306 tests and 3 skips.
+[M10 report](DOCUMENT_INTELLIGENCE.md)
+
+## Next milestone
+
+M11 extends claim support and bounded correction through the specialist
+graph and Evidence Ledger. [Research agenda](RESEARCH_AGENDA.md)
