@@ -36,6 +36,9 @@ _METRIC_DEFINITIONS: tuple[MetricRequirement, ...] = (
     MetricRequirement(metric_id="free_cash_flow", display_name="free cash flow", aliases=(
         "free cash flow", "free cashflow",
     )),
+    MetricRequirement(metric_id="cash_and_equivalents", display_name="cash and cash equivalents", aliases=(
+        "cash and cash equivalents", "cash and equivalents", "cash equivalents",
+    )),
     MetricRequirement(metric_id="total_assets", display_name="total assets", aliases=("total assets",)),
     MetricRequirement(metric_id="total_liabilities", display_name="total liabilities", aliases=("total liabilities",)),
     MetricRequirement(metric_id="total_debt", display_name="total debt", aliases=(

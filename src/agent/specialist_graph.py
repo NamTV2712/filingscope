@@ -30,6 +30,7 @@ from src.agent.specialists import (
 )
 from src.decision.models import DecisionResult, EvidenceCoverage
 from src.decision.company_catalog import DEFAULT_COMPANY_ALIASES
+from src.decision.policy import EvidenceDecisionLayer
 from src.generation.answer_generator import (
     AnswerGenerationResult,
     AnswerGenerator,
@@ -39,12 +40,15 @@ from src.generation.answer_generator import (
 )
 from src.ingestion.sec_client import SECEdgarClient
 from src.ingestion.company_facts import RevisionKind, RevisionPolicy, requested_revision_policies
+from src.ingestion.chunker import count_tokens
 from src.ledger.evidence_ledger import EvidenceLedger, LedgerConflictError, LedgerReferenceError
 from src.ledger.models import (
     DerivedCalculation,
     GeneratedClaim,
     LedgerSnapshot,
 )
+from src.policy.candidate_gate import CandidateEvidenceGate
+from src.policy.evidence_policy import EvidencePolicyDecision
 from src.research.planner import ResearchPlan, ResearchTask
 from src.verification.atomic_claim_verifier import AtomicClaimVerifier
 from src.verification.claim_verifier import ClaimLevelVerifier
@@ -72,6 +76,7 @@ class SpecialistUsage(BaseModel):
     deduplicated_query_tasks: int = Field(default=0, ge=0)
     duplicate_candidate_chunks: int = Field(default=0, ge=0)
     context_tokens: int = Field(ge=0)
+    evidence_tokens: int = Field(default=0, ge=0)
     wall_time_ms: float = Field(ge=0, allow_inf_nan=False)
 
 
@@ -89,6 +94,8 @@ class SpecialistExecution(BaseModel):
     specialist_results: tuple[SpecialistTaskResult, ...]
     usage: SpecialistUsage
     evidence_ids: tuple[str, ...]
+    citation_evidence_ids: tuple[str, ...] = ()
+    candidate_decisions: tuple[EvidencePolicyDecision, ...] = ()
     answer: str
     generation: AnswerGenerationResult | None = None
     coverage: EvidenceCoverage | None = None
@@ -158,12 +165,14 @@ class SpecialistResearchGraph:
         verifier: ClaimLevelVerifier | None = None,
         ticker_by_company: dict[str, str] | None = None,
         retriever_concurrency_safe: bool | None = None,
+        use_evidence_policy: bool = True,
     ):
         self.router = router or ComplexityRouter()
         self.retriever = retriever
         self.sec_client = sec_client
         self.generator = generator
-        self.verifier = verifier or AtomicClaimVerifier()
+        self.verifier = verifier or AtomicClaimVerifier(catalog=self.router.extractor.catalog)
+        self.candidate_gate = CandidateEvidenceGate() if use_evidence_policy else None
         self.ticker_by_company = _ticker_lookup(self.router, ticker_by_company or {})
         self.retriever_concurrency_safe = (
             retriever is not None
@@ -210,6 +219,8 @@ class SpecialistResearchGraph:
             sec_client=self.sec_client,
             ticker_by_company=self.ticker_by_company,
             generator=self.generator,
+            decision_layer=EvidenceDecisionLayer(extractor=self.router.extractor),
+            candidate_gate=self.candidate_gate,
             verifier=self.verifier,
             xbrl_revision_policy=next(iter(revisions), RevisionPolicy.AS_REPORTED),
             require_structured_facts=bool(revisions),
@@ -245,6 +256,7 @@ class SpecialistResearchGraph:
         if steps > allowed_steps:
             raise RuntimeError("specialist graph exceeded its route step budget")
         snapshot = runtime.ledger.snapshot()
+        report_chunks = _ordered_report_chunks(runtime)
         usage = SpecialistUsage(
             graph_steps=steps,
             tool_calls=runtime.budget_tracker.tool_calls,
@@ -258,6 +270,7 @@ class SpecialistResearchGraph:
             deduplicated_query_tasks=runtime.deduplicated_query_count,
             duplicate_candidate_chunks=runtime.duplicate_candidate_chunks,
             context_tokens=runtime.budget_tracker.context_tokens,
+            evidence_tokens=sum(chunk.get("token_count") or count_tokens(chunk.get("text", "")) for chunk in report_chunks),
             wall_time_ms=max(0.0, (time.perf_counter() - runtime.budget_tracker.started) * 1000),
         )
         evidence_ids = set(state.get("evidence_ids", ()))
@@ -273,6 +286,11 @@ class SpecialistResearchGraph:
             specialist_results=tuple(state.get("specialist_results", ())),
             usage=usage,
             evidence_ids=tuple(sorted(evidence_ids)),
+            citation_evidence_ids=tuple(
+                runtime.preferred_evidence_by_chunk_id[chunk["chunk_id"]]
+                for chunk in report_chunks
+            ),
+            candidate_decisions=runtime.candidate_decisions,
             answer=state.get("answer", ""),
             generation=runtime.generation,
             coverage=runtime.coverage,
@@ -939,8 +957,8 @@ def _build_filing_assignments(
 def _ordered_report_chunks(runtime: SpecialistRuntime) -> list[dict[str, Any]]:
     return [
         runtime.source_chunks[key] for key in sorted(runtime.source_chunks)
-        if not runtime.require_structured_facts
-        or key in runtime.xbrl_chunk_ids
+        if key not in runtime.rejected_chunk_ids
+        and (not runtime.require_structured_facts or key in runtime.xbrl_chunk_ids)
     ]
 
 

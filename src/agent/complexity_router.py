@@ -45,7 +45,7 @@ _NUMERICAL_RE = re.compile(
     re.I,
 )
 _PREDICTIVE_RE = re.compile(
-    r"\b(?:predict|forecast|recommend|investment advice|should i buy|should i sell|"
+    r"\b(?:predict(?:s|ed|ions?)?|forecast(?:s|ed|ing)?|recommend|investment advice|should i buy|should i sell|"
     r"stock price|share price|market price)\b",
     re.I,
 )
@@ -161,6 +161,7 @@ class RouterExecution(BaseModel):
 
 class _RouterGraphState(TypedDict, total=False):
     question: str
+    force_research: bool
     decision: ComplexityDecision
     selected_path: str
     budget: RouteBudget
@@ -297,9 +298,9 @@ class ComplexityRouter:
             ),
         )
 
-    def route(self, question: str) -> RouterExecution:
+    def route(self, question: str, *, force_research: bool = False) -> RouterExecution:
         started = time.perf_counter()
-        state = self.graph.invoke({"question": question, "route_trace": []})
+        state = self.graph.invoke({"question": question, "route_trace": [], "force_research": force_research})
         elapsed_ms = max(0.0, (time.perf_counter() - started) * 1000)
         decision = state["decision"]
         budget = state["budget"]
@@ -351,6 +352,11 @@ class ComplexityRouter:
 
     def _classify_node(self, state: _RouterGraphState) -> dict[str, Any]:
         decision = self.classify(state["question"])
+        if state.get("force_research") and decision.path == ExecutionPath.FAST:
+            decision = decision.model_copy(update={
+                "path": ExecutionPath.RESEARCH,
+                "reason_codes": (*decision.reason_codes, "research_route_requested"),
+            })
         return {
             "decision": decision,
             "route_trace": ["classify_request"],

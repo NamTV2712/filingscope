@@ -43,6 +43,8 @@ from src.ledger.models import (
     FinancialFact,
     RetrievalObservation,
 )
+from src.policy.candidate_gate import CandidateEvidenceGate
+from src.policy.evidence_policy import EvidencePolicyDecision
 from src.research.planner import ResearchPlan, ResearchTask
 from src.verification.claim_verifier import ClaimLevelVerifier
 from src.verification.models import VerificationResult
@@ -175,6 +177,7 @@ class SpecialistRuntime:
     ticker_by_company: dict[str, str] = field(default_factory=dict)
     generator: AnswerGenerator | None = None
     decision_layer: EvidenceDecisionLayer = field(default_factory=EvidenceDecisionLayer)
+    candidate_gate: CandidateEvidenceGate | None = None
     verifier: ClaimLevelVerifier = field(default_factory=ClaimLevelVerifier)
     xbrl_revision_policy: RevisionPolicy = RevisionPolicy.AS_REPORTED
     require_structured_facts: bool = False
@@ -189,6 +192,8 @@ class SpecialistRuntime:
     generation: AnswerGenerationResult | None = None
     verification: VerificationResult | None = None
     correction_passes: int = 0
+    candidate_decisions: tuple[EvidencePolicyDecision, ...] = ()
+    rejected_chunk_ids: set[str] = field(default_factory=set)
     calculations: list[DerivedCalculation] = field(default_factory=list)
     parallel_task_tracker: _ParallelTaskTracker = field(default_factory=_ParallelTaskTracker)
     effective_max_concurrency: int = 0
@@ -271,7 +276,11 @@ class FilingResearchWorker:
                 runtime.budget_tracker.charge(retrieval=True)
                 top_k = min(10, runtime.budget_tracker.remaining_candidates())
                 try:
-                    found = runtime.retriever.retrieve(grouped_tasks[0].query or "", top_k=top_k)
+                    scopes = [task.target_document_ids for task in grouped_tasks]
+                    filters = {}
+                    if getattr(runtime.retriever, "supports_document_scope", False) is True and all(scopes):
+                        filters["document_ids"] = tuple(sorted({doc for scope in scopes for doc in scope}))
+                    found = runtime.retriever.retrieve(grouped_tasks[0].query or "", top_k=top_k, **filters)
                 except Exception as error:  # report an adapter failure without hiding it
                     observations.append(SpecialistObservation(
                         key="retrieval_error",
@@ -704,7 +713,7 @@ class StructuredFinancialDataWorker:
             "document_id": record.document_id,
             "doc_name": record.document_id,
             "ticker": ticker,
-            "company": resolver.company,
+            "company": task.company_name or resolver.company,
             "filing_date": fact.filing_date,
             "section": record.section,
             "source_url": fact.filing_url,
@@ -736,12 +745,20 @@ class EvidenceAnalyst:
             runtime.source_chunks[chunk_id] for chunk_id in sorted(runtime.source_chunks)
             if not runtime.require_structured_facts or chunk_id in runtime.xbrl_chunk_ids
         ]
-        runtime.coverage = runtime.decision_layer.assess(question, chunks)
+        if runtime.candidate_gate is not None:
+            screened, runtime.candidate_decisions = runtime.candidate_gate.screen(
+                runtime.requirements, chunks, runtime.decision_layer,
+            )
+            runtime.rejected_chunk_ids = {chunk["chunk_id"] for chunk in chunks} - {
+                chunk["chunk_id"] for chunk in screened
+            }
+            chunks = screened
         runtime.decision = runtime.decision_layer.decide(
             question,
             chunks,
             budget=DecisionBudget(remaining_retrieval_attempts=0),
         )
+        runtime.coverage = runtime.decision.coverage
         added: set[str] = set()
         task_ids: set[str] = set()
         for finding in runtime.coverage.findings:
