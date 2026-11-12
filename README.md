@@ -161,6 +161,21 @@ python -m scripts.embed_chunks --generation-id <new-generation-id>
 python -m scripts.index_chunks
 ```
 
+## Local research workspace
+
+Run the specialist graph on localhost with the frozen FinanceBench index
+and SEC Company Facts snapshots. Inspect source citations, evidence gaps,
+calculation inputs and verification from each research result.
+
+```powershell
+$env:HF_HUB_OFFLINE = '1'
+$env:TRANSFORMERS_OFFLINE = '1'
+uv run --offline python -m scripts.run_local_research
+```
+
+Open [FilingScope on localhost](http://127.0.0.1:8765).
+[Artifact setup and validation](docs/LOCAL_RESEARCH.md)
+
 ## FinanceBench retrieval evaluation
 
 P1 uses the public 150-case FinanceBench sample and the 84 reports referenced

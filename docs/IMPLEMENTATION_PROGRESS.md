@@ -47,20 +47,28 @@ Deployment: none; explicitly out of scope
   passed with 338 tests and 3 skips. [M13 validation](ABLATION_STUDY.md)
 - M14 compares parent-page and selective expansion, annual statement
   alignment, and five reranking methods with dense retrieval. Source
-  `c3d93459a63c290589cae95715844e743bf7692c`. The full suite passed with 343
-  tests and 3 skips. [M14 validation](ADVANCED_RETRIEVAL.md)
+  `c3d93459a63c290589cae95715844e743bf7692c`. Docs
+  `d1aceadf38b9a18b40c9938a8d61116569af4e0f`. The full suite passed with
+  343 tests and 3 skips. [M14 validation](ADVANCED_RETRIEVAL.md)
+- M15 adds a loopback-only evidence-first workspace. Source
+  `4121d0b8c2f34a7ddb409de4939d5df5b3c101da`. The full suite passed with
+  346 tests and 3 skips. [M15 validation](LOCAL_RESEARCH.md)
 
 ## Current milestone
 
-M15 is next. M14 experiments, full regression tests and compilation are complete.
+The M1–M15 sequence is implemented and validated. The specification audit
+found two reporting gaps. Section U requires one independent report
+covering all six decision points. Section W requires risk at multiple
+coverage operating points.
 
 ## Exact next steps
 
-1. Connect a local research interface to the specialist graph and project
-   approved execution events, evidence and verification into public results.
-2. Exercise verified and abstaining questions through the local interface.
-3. Run regressions, update the research reports and verify the pushed Git tip.
+1. Replay the labeled router, candidate, evidence-decision, and verification
+   fixtures through the actual control plane and report Section U binary metrics.
+2. Build the Section W risk-coverage comparison from the frozen M13 rows
+   and distinguish operating points from a calibrated confidence sweep.
+3. Finish the specification audit, run regressions and verify the final push.
 
 ## Remaining milestones
 
-M15 local research UX and the final specification audit. Do not deploy.
+Final specification audit and the two reporting gaps above. Do not deploy.

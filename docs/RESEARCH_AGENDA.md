@@ -49,7 +49,7 @@ consistency, sufficiency, verification, abstention, and release.
   quality; the graph is not wired into P5. M9 owns advanced tag, period,
   accession, amendment, and restatement handling. See
   [`SPECIALIST_RESEARCH_GRAPH.md`](SPECIALIST_RESEARCH_GRAPH.md).
-- Deployment is explicitly out of scope. M15 may deliver a local research UI.
+- M15 delivers the local research workspace over the specialist graph.
 
 ## Milestones
 
@@ -69,7 +69,7 @@ consistency, sufficiency, verification, abstention, and release.
 | M12 | Company/year/context hard-negative retrieval benchmark | Complete. [Fixed corpus and results](HARD_NEGATIVE_RETRIEVAL.md) |
 | M13 | Multi-agent and smart-router ablation against retrieval/evidence baselines | Complete. [Controlled results](ABLATION_STUDY.md) |
 | M14 | ColBERT, multivectors, and graph retrieval adaptations | Complete. [Context and reranking results](ADVANCED_RETRIEVAL.md) |
-| M15 | Local evidence-first research interface and safe progress trace | Planned; do not deploy |
+| M15 | Local evidence-first research interface and safe progress trace | Complete. [Local run and browser validation](LOCAL_RESEARCH.md) |
 
 ## Research rules
 

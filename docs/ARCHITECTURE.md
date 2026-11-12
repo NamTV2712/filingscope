@@ -287,4 +287,7 @@ fixed dense candidates with late interaction, a cross-encoder and local
 provenance graphs. The production retrieval default stays dense.
 [Advanced retrieval experiments](ADVANCED_RETRIEVAL.md)
 
-M15 adds a local evidence-first interface. Deployment is out of scope.
+M15 runs the specialist graph through a loopback-only research interface
+with the validated P1 dense snapshot and M13 SEC replay. The browser
+receives allowlisted lifecycle events and a projection of release decisions,
+claims, coverage, calculations, and sources. [Local workspace](LOCAL_RESEARCH.md)

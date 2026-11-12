@@ -141,6 +141,8 @@ SHA-256 is `e414e386c0f1af2722369a80254d3a5bdf08e89484bcd6fa45767d7bb89c80d9`.
 The SEC replay manifest SHA-256 is
 `7d7496605ca96ed0047de1c485da22156d84fde9576483984a2b66207c19add5`.
 
+### Reproduce M13
+
 ```powershell
 uv run python -m scripts.run_multi_agent_ablation --acquire-sec
 $env:HF_HUB_OFFLINE = '1'

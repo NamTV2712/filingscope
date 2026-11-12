@@ -3,7 +3,7 @@
 Audit refreshed: 2026-11-12<br>
 Branch: `main`<br>
 Audited repository: `D:\Project\filingscope`<br>
-Audited source commit: `c3d93459a63c290589cae95715844e743bf7692c`<br>
+Audited source commit: `4121d0b8c2f34a7ddb409de4939d5df5b3c101da`<br>
 Initial audit baseline: `956cef412d765395b5a7f0b773f821a58686a35a`
 
 This refresh reflects P0–P5, M1 runtime compatibility, M2 retrieval
@@ -13,7 +13,8 @@ and narrow Company Facts path, M8's bounded filing fan-out, M9's
 structured fact resolution, M10's PDF parser comparison, M11's atomic
 verification and bounded release policy, M12's provenance-sensitive
 retrieval benchmark, M13's graph ablation and candidate-policy integration,
-and M14's context expansion and reranking comparisons.
+M14's context expansion and reranking comparisons, and M15's local
+research workspace.
 P0–P4 behavior and the
 completed P5 provider benchmark remain preserved. Source benchmark data,
 model caches, and generated run artifacts remain local and git-ignored.
@@ -135,11 +136,9 @@ model caches, and generated run artifacts remain local and git-ignored.
    `EvidenceRecord`s and deterministic request-scoped merges, but snapshots do
    not persist. Source revision validity policy and cross-process storage are
    still missing.
-2. **Policy integration.** M3 now centralizes candidate observations and
-   decisions in a versioned schema, but callers must still supply features;
-   there is no real-candidate feature observer or runtime adapter. P2
-   sufficiency, candidate acceptance, and P4 claim verification remain separate
-   decisions rather than one evidence-control flow.
+2. **Policy integration.** The specialist graph runs the M3 candidate gate
+   on real retrieval candidates before the P2 analyst and M11 verifier.
+   Candidate policy and the graph are separate from the frozen P5 harness.
 3. **Financial facts.** M9 resolves standard Company Facts concepts, units,
    fiscal intervals and filing revisions. Company Facts is entity-wide.
    Custom taxonomy, segment facts and foreign exchange conversion need
@@ -150,18 +149,15 @@ model caches, and generated run artifacts remain local and git-ignored.
    standalone; neither is integrated in P5. The route taxonomy still depends
    on the current company, metric, and period vocabulary, with 104/150
    FinanceBench questions routed unsupported under the map-aware run.
-5. **Generation/verification.** The verifier splits answer text into clauses
-   and creates local claim IDs. M6 can join request-scoped claims, calculation
-   objects, and evidence IDs in memory, but P5 does not consume that ledger and
-   no durable claim graph exists. Atomic semantic verification and a bounded
-   correction pass do not exist.
+5. **Generation/verification.** M11 adds request-scoped atomic claims,
+   semantic and numerical checks, and one bounded correction. The ledger
+   currently lives in memory, and P5 uses its original verifier.
 6. **Decision calibration.** M3 has a 60-case hand-authored synthetic
    candidate benchmark. It is a policy contract check rather than external
    accuracy evidence. No probabilistic backend, measured Brier/ECE, or
    risk-coverage curve is implemented.
-7. **Application surface.** There is no user request API or local research UI.
-   Trace events, evidence coverage, calculations, and an inspectable “why this
-   answer” view remain planned. No cloud deployment is in scope.
+7. **Application surface.** The M15 browser and API run on loopback using
+   frozen artifacts. Questions, ledger snapshots and results are ephemeral.
 
 ## Duplicated or adjacent concepts
 
@@ -346,7 +342,10 @@ PageRank led Recall@10 at 0.8333, and dual-level graph ranking led nDCG@5 at
 0.5647. Dense remains the default. The full suite passed with 343 tests and
 3 skips. [M14 report](ADVANCED_RETRIEVAL.md)
 
-## Next milestone
+## M15 validation update
 
-M15 connects the specialist workflow to a local evidence-first research
-interface. [Research agenda](RESEARCH_AGENDA.md)
+The workspace displays the evidence behind a released answer or abstention.
+Five real API requests exercised SEC facts, filing retrieval, a verified
+calculation, a missing period and an unsupported request. Desktop and
+phone Chromium checks passed. The full suite passed with 346 tests and
+3 skips. [Local workspace](LOCAL_RESEARCH.md)

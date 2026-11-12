@@ -461,6 +461,20 @@ The log separates software-contract checks from answer-quality evidence.
 - **Decision** Keep dense as the default. Retain the improved rankers and
   source-column audit as opt-in research. [M14 scope and resources](ADVANCED_RETRIEVAL.md)
 
+## M15 — Local Research Workspace
+
+- **Hypothesis** The specialist contracts can expose the basis of an answer
+  or abstention through an allowlisted event stream and evidence links.
+- **Experiment** Connect the graph to the browser using frozen P1 and SEC
+  artifacts. Exercise two SEC-supported Apple answers, a Best Buy lookup
+  with filing retrieval, a missing period and an unsupported request.
+- **Result** Three verified answers and two withheld cases matched the
+  expected outcomes. The five warm graph runs took approximately 1–118 ms
+  with zero LLM calls. Chromium verified the evidence views, keyboard
+  navigation and retry on desktop and phone widths.
+- **Decision** Adopt the local workspace using the existing runtime
+  dependencies. [Reproduction and limitations](LOCAL_RESEARCH.md)
+
 ## Planned experiments
 
 Each planned experiment must add its exact hypothesis, baseline, changed
