@@ -10,6 +10,7 @@ from decimal import Decimal
 from pathlib import Path
 from statistics import mean
 
+from configs.financebench import P1_PAGE_CACHE as DEFAULT_PAGES
 from configs.hard_negatives import CASES, P1_CORPUS_FINGERPRINT, P1_INDEX_ID
 from configs.multi_agent_ablation import CASES as ABLATION_CASES
 from scripts.run_financebench_retrieval import _sha256_file
@@ -26,7 +27,6 @@ from src.ingestion.pdf_ingestion import normalize_pdf_page_text
 from src.retrieval.parent_context import PageParent, expand_contexts, page_key
 
 
-DEFAULT_PAGES = Path("data/financebench/cache/extracted_pages_d5c2a1369d9997a3055a.jsonl")
 DEFAULT_RANKINGS = Path("data/financebench/hard_negative_runs/m12-results.json")
 METRICS = {
     "revenue": "revenue", "operating income": "operating_income", "total assets": "total_assets",

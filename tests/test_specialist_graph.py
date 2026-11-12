@@ -259,6 +259,50 @@ def test_research_route_uses_sec_facts_and_emits_linked_growth_calculations() ->
         )
 
 
+def test_quarterly_sec_facts_survive_coverage_writer_and_verification() -> None:
+    sec = FakeSECCompanyFacts()
+    units = sec.facts[320193]["facts"]["us-gaap"]["RevenueFromContractWithCustomerExcludingAssessedTax"]["units"]
+    common = {
+        "accn": "0000320193-24-000069", "fy": 2024, "fp": "Q2", "form": "10-Q",
+        "filed": "2024-05-03", "end": "2024-03-30",
+    }
+    units["USD"].extend([
+        {**common, "start": "2023-10-01", "val": 210_328_000_000},
+        {**common, "start": "2023-12-31", "val": 90_753_000_000},
+    ])
+    graph = SpecialistResearchGraph(sec_client=sec)
+    for period, value in (("Q2 FY2024", "90753000000"), ("Q2 YTD FY2024", "210328000000")):
+        result = graph.run(f"What was Apple's revenue in {period}?", force_research=True)
+        assert result.status == "VERIFIED"
+        assert result.coverage.sufficient
+        fact, = result.ledger_snapshot.financial_facts
+        assert fact.period_identity.label == period
+        assert fact.normalized_value == value
+        assert fact.xbrl_provenance.accession == common["accn"]
+
+
+def test_retrieved_parent_statement_links_a_verified_answer_to_its_cell() -> None:
+    chunk = _annual_chunk()
+    chunk["reporting_periods"] = ["2024"]
+    chunk["text"] = "Revenue was USD 900 billion for FY2024."
+    retriever = FakeRetriever([chunk])
+    source = """Consolidated Statements of Income
+    Years ended December 31
+    (USD in millions) 2024 2023
+    Net sales $110,000 $100,000
+    """
+    retriever.get_source_page = lambda document, page: source if (document, page) == (chunk["doc_name"], 10) else None
+    graph = SpecialistResearchGraph(retriever=retriever)
+    result = graph.run("What was Apple's FY2024 revenue?")
+    assert result.status == "VERIFIED"
+    assert "USD 110,000,000,000" in result.answer
+    fact, = result.ledger_snapshot.financial_facts
+    assert fact.source_type == EvidenceSourceType.TABLE_EVIDENCE
+    assert (fact.original_scale, fact.table_column, fact.period_identity.label) == ("millions", 0, "FY2024")
+    record = next(item for item in result.ledger_snapshot.evidence_records if item.evidence_id in fact.evidence_ids)
+    assert (record.page, record.source_url, record.raw_value) == (11, chunk["source_url"], "$110,000")
+
+
 def test_table_worker_uses_only_remaining_retrieval_budget_for_table_queries() -> None:
     table_chunk = _annual_chunk()
     table_chunk["section"] = "financial_table"

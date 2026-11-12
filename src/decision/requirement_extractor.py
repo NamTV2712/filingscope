@@ -14,6 +14,7 @@ from src.decision.models import (
     QuestionRequirements,
 )
 from src.ingestion.company_facts import requested_currencies
+from src.ingestion.period_identity import period_mentions
 
 
 _METRIC_DEFINITIONS: tuple[MetricRequirement, ...] = (
@@ -71,13 +72,13 @@ _METRIC_DEFINITIONS: tuple[MetricRequirement, ...] = (
     ), quantitative=False, expected_value_kind="topic"),
 )
 
-_YEAR_RE = re.compile(r"(?<!\d)((?:19|20)\d{2})(?!\d)")
-_QUARTER_RE = re.compile(r"\bQ([1-4])\s*(?:FY\s*)?((?<!\d)(?:19|20)\d{2})(?!\d)", re.I)
 _RELATIVE_PERIOD_RE = re.compile(
     r"\b(?:last|past|previous|prior|latest|current|most recent)\s+(?:\d+\s+)?"
     r"(?:fiscal\s+)?years?\b",
     re.I,
 )
+_CUMULATIVE_RE = re.compile(r"\b(?:YTD|year[- ]to[- ]date|six months ended|nine months ended)\b", re.I)
+_DISCRETE_RE = re.compile(r"\b(?:discrete[- ]quarter|three months ended)\b", re.I)
 _GROWTH_RE = re.compile(
     r"\b(?:growth|grow(?:s|th|ing)?|increas(?:e|ed|ing)|decreas(?:e|ed|ing)|"
     r"trend|year.over.year|yoy|cagr)\b",
@@ -97,20 +98,7 @@ _OPERATION_RE = {
 
 
 def _periods(question: str) -> tuple[str, ...]:
-    quarters = {
-        match.start(): f"Q{match.group(1)} FY{match.group(2)}"
-        for match in _QUARTER_RE.finditer(question)
-    }
-    result: list[str] = []
-    for match in _YEAR_RE.finditer(question):
-        quarter = next(
-            (period for start, period in quarters.items() if start <= match.start() < start + 14),
-            None,
-        )
-        period = quarter or f"FY{match.group(1)}"
-        if period not in result:
-            result.append(period)
-    return tuple(result)
+    return tuple(dict.fromkeys(item.label for item in period_mentions(question)))
 
 
 def _metrics(question: str) -> tuple[MetricRequirement, ...]:
@@ -182,6 +170,16 @@ class EvidenceRequirementExtractor:
         )
         metrics = _metrics(question)
         periods = _periods(question)
+        cumulative = _CUMULATIVE_RE.search(question)
+        cumulative_unresolved = bool(cumulative and (not periods or any(not period.startswith("Q") for period in periods)))
+        if cumulative and (quarter := {"six": "Q2", "nine": "Q3"}.get(cumulative[0].casefold().split()[0])):
+            cumulative_unresolved |= any(not period.startswith(quarter) for period in periods)
+        if cumulative and not cumulative_unresolved and not _DISCRETE_RE.search(question):
+            periods = tuple(
+                period if " YTD " in period else period.replace(" ", " YTD ", 1) for period in periods
+            )
+        if cumulative and _DISCRETE_RE.search(question) and not any(" YTD " in period for period in periods):
+            cumulative_unresolved = True
         if len(periods) == 1 and re.search(r"\b(?:year.over.year|yoy)\b", question, re.I):
             period_year = re.search(r"\d{4}", periods[0])
             if period_year is not None:
@@ -214,6 +212,8 @@ class EvidenceRequirementExtractor:
             unsupported_reasons.append("metric_not_recognized")
         if relative_period:
             unsupported_reasons.append("relative_period_not_supported")
+        if cumulative_unresolved:
+            unsupported_reasons.append("cumulative_period_scope_unresolved")
         currencies = requested_currencies(question)
         if len(currencies) > 1:
             unsupported_reasons.append("multiple_requested_currencies")

@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Mapping
+from datetime import date
 from decimal import Decimal
 from enum import StrEnum
 from typing import Any
@@ -13,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from src.decision.models import EvidenceRequirement, QuestionRequirements
 from src.ingestion.company_facts import XbrlProvenance
+from src.ingestion.period_identity import PeriodIdentity
 from src.research.planner import ResearchPlan, ResearchTask
 from src.verification.models import ClaimStatus, VerificationResult
 
@@ -59,6 +61,8 @@ def _canonical(value: Any) -> Any:
         return value.value
     if isinstance(value, Decimal):
         return format(value, "f")
+    if isinstance(value, date):
+        return value.isoformat()
     if isinstance(value, BaseModel):
         return _canonical(value.model_dump(mode="python"))
     if isinstance(value, Mapping):
@@ -114,6 +118,7 @@ _EVIDENCE_ID_FIELDS = (
     "derived_from_evidence_ids",
     "calculation_id",
 )
+_CELL_ID_FIELDS = ("period_identity", "original_scale", "table_row", "table_column")
 
 
 class EvidenceRecord(BaseModel):
@@ -131,6 +136,10 @@ class EvidenceRecord(BaseModel):
     form_type: str | None = None
     filing_date: str | None = None
     fiscal_period: str | None = None
+    period_identity: PeriodIdentity | None = None
+    original_scale: str | None = None
+    table_row: int | None = Field(default=None, ge=0)
+    table_column: int | None = Field(default=None, ge=0)
     section: str | None = None
     page: int | None = Field(default=None, ge=0)
     table_id: str | None = None
@@ -241,6 +250,17 @@ class EvidenceRecord(BaseModel):
                 or self.financial_concept != f"{provenance.taxonomy}:{provenance.tag}"
             ):
                 raise ValueError("XBRL provenance must describe the record's source concept")
+            if self.period_identity is not None:
+                start = self.period_identity.start.isoformat() if self.period_identity.start else None
+                end = self.period_identity.end.isoformat() if self.period_identity.end else None
+                if (start, end) != (provenance.period_start, provenance.period_end):
+                    raise ValueError("XBRL period must match the recorded observation interval")
+        if self.period_identity is not None and self.period_identity.label != self.fiscal_period:
+            raise ValueError("the reporting label must agree with the typed period")
+        if (self.table_row is None) != (self.table_column is None):
+            raise ValueError("a table cell requires both row and column")
+        if self.table_row is not None and self.source_type != EvidenceSourceType.TABLE_EVIDENCE:
+            raise ValueError("table cell coordinates require table evidence")
         return self
 
 
@@ -256,6 +276,10 @@ def _evidence_identity(record: EvidenceRecord | Mapping[str, Any]) -> dict[str, 
         provenance = record.get("xbrl_provenance")
     if provenance is not None:
         identity["xbrl_provenance"] = provenance
+    for field in _CELL_ID_FIELDS:
+        value = record.get(field) if isinstance(record, Mapping) else getattr(record, field)
+        if value is not None:
+            identity[field] = value
     return identity
 
 
@@ -293,6 +317,10 @@ class FinancialFact(BaseModel):
     metric_id: str = Field(min_length=1)
     financial_concept: str | None = None
     fiscal_period: str | None = None
+    period_identity: PeriodIdentity | None = None
+    original_scale: str | None = None
+    table_row: int | None = Field(default=None, ge=0)
+    table_column: int | None = Field(default=None, ge=0)
     raw_value: str | None = None
     normalized_value: str | None = None
     unit: str | None = None
@@ -322,6 +350,10 @@ class FinancialFact(BaseModel):
             "metric_id": record.metric_id,
             "financial_concept": record.financial_concept,
             "fiscal_period": record.fiscal_period,
+            "period_identity": record.period_identity,
+            "original_scale": record.original_scale,
+            "table_row": record.table_row,
+            "table_column": record.table_column,
             "raw_value": record.raw_value,
             "normalized_value": record.normalized_value,
             "unit": record.unit,
@@ -352,6 +384,10 @@ def _fact_identity(fact: FinancialFact | Mapping[str, Any]) -> dict[str, Any]:
         provenance = fact.get("xbrl_provenance")
     if provenance is not None:
         identity["xbrl_provenance"] = provenance
+    for field in _CELL_ID_FIELDS:
+        value = fact.get(field) if isinstance(fact, Mapping) else getattr(fact, field)
+        if value is not None:
+            identity[field] = value
     return identity
 
 

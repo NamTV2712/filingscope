@@ -20,9 +20,11 @@ from src.decision.models import (
     DecisionBudget,
     DecisionResult,
     EvidenceCoverage,
+    EvidenceFact,
     QuestionRequirements,
 )
 from src.decision.policy import EvidenceDecisionLayer
+from src.decision.statement_columns import parse_statement_columns
 from src.generation.answer_generator import (
     AnswerGenerationResult,
     AnswerGenerator,
@@ -36,6 +38,7 @@ from src.ingestion.company_facts import (
     RevisionKind,
     RevisionPolicy,
 )
+from src.ingestion.period_identity import PeriodScope
 from src.ledger.evidence_ledger import EvidenceLedger
 from src.ledger.models import (
     CalculationValidationStatus,
@@ -691,6 +694,7 @@ class StructuredFinancialDataWorker:
             form_type=fact.form,
             filing_date=fact.filing_date,
             fiscal_period=fact.fiscal_period,
+            period_identity=fact.period_identity,
             section="xbrl_company_facts",
             metric=metric,
             metric_id=task.metric_id,
@@ -719,6 +723,20 @@ class StructuredFinancialDataWorker:
         runtime.source_chunks[chunk_id] = {
             "chunk_id": chunk_id,
             "source_type": EvidenceSourceType.XBRL_FACT.value,
+            "normalized_facts": (EvidenceFact(
+                evidence_id=chunk_id,
+                entity_id=task.entity_id or "",
+                metric_id=record.metric_id,
+                period=record.fiscal_period,
+                period_identity=record.period_identity,
+                value=value_text,
+                numeric_value=record.normalized_value,
+                currency=record.currency,
+                scale="unit",
+                value_kind="amount",
+                document_id=record.document_id,
+                source_url=record.source_url,
+            ),),
             "document_id": record.document_id,
             "doc_name": record.document_id,
             "ticker": ticker,
@@ -750,6 +768,7 @@ class EvidenceAnalyst:
     def run(self, question: str, runtime: SpecialistRuntime) -> SpecialistTaskResult:
         started = time.perf_counter()
         runtime.register_plan()
+        normalized_pages, ambiguous_rows = _normalize_filing_statements(runtime)
         chunks = [
             runtime.source_chunks[chunk_id] for chunk_id in sorted(runtime.source_chunks)
             if not runtime.require_structured_facts or chunk_id in runtime.xbrl_chunk_ids
@@ -772,6 +791,8 @@ class EvidenceAnalyst:
         task_ids: set[str] = set()
         for finding in runtime.coverage.findings:
             for fact in finding.facts:
+                if fact.numeric_value is None:
+                    continue
                 base_id = runtime.preferred_evidence_by_chunk_id.get(fact.evidence_id)
                 if base_id is None:
                     continue
@@ -804,11 +825,80 @@ class EvidenceAnalyst:
             observations=(
                 SpecialistObservation(key="sufficient", value=str(runtime.coverage.sufficient).lower()),
                 SpecialistObservation(key="financial_facts", value=str(len(added))),
+                SpecialistObservation(key="normalized_statement_pages", value=str(normalized_pages)),
+                SpecialistObservation(key="ambiguous_statement_rows", value=str(ambiguous_rows)),
             ),
             elapsed_ms=_elapsed_ms(started),
         )
         runtime.save_result(result)
         return result
+
+
+def _normalize_filing_statements(runtime: SpecialistRuntime) -> tuple[int, int]:
+    source_page = getattr(runtime.retriever, "get_source_page", None)
+    if not callable(source_page) or runtime.require_structured_facts or not any(
+        metric.quantitative for metric in runtime.requirements.metrics
+    ):
+        return 0, 0
+    catalog = runtime.decision_layer.catalog
+    observed_year_ends: dict[tuple[str, int], set[date]] = {}
+    for chunk_id in runtime.xbrl_chunk_ids:
+        for fact in runtime.source_chunks[chunk_id]["normalized_facts"]:
+            period = fact.period_identity
+            if period is not None and period.scope == PeriodScope.ANNUAL and period.end is not None:
+                observed_year_ends.setdefault((fact.entity_id, period.year), set()).add(period.end)
+    confirmed_year_ends = {key: next(iter(ends)) for key, ends in observed_year_ends.items() if len(ends) == 1}
+    inspected: dict[tuple[str, int], bool] = {}
+    normalized_pages = ambiguous_rows = 0
+    for chunk_id, chunk in sorted(runtime.source_chunks.items()):
+        document = chunk.get("doc_name")
+        page = chunk.get("page_number")
+        years = chunk.get("reporting_periods")
+        form = chunk.get("doc_type") or chunk.get("filing_type")
+        if (
+            not isinstance(document, str) or chunk.get("document_id") != document
+            or type(page) is not int or not isinstance(chunk.get("source_url"), str)
+            or not isinstance(form, str) or not isinstance(years, (list, tuple))
+            or len(years) != 1 or not re.fullmatch(r"(?:19|20)\d{2}", str(years[0]))
+        ):
+            continue
+        key = document, page
+        if key in inspected:
+            if inspected[key]:
+                chunk["normalized_facts"] = ()
+            continue
+        text = source_page(*key)
+        if text is None:
+            inspected[key] = False
+            continue
+        entity = catalog.metadata_entity_id(chunk.get("ticker"), chunk.get("company"), document)
+        if entity is None:
+            inspected[key] = False
+            continue
+        fiscal_year = int(years[0])
+        quarter = re.search(r"(?:19|20)\d{2}Q([1-4])(?:_|$)", document, re.I)
+        statement = parse_statement_columns(
+            text, form=form, fiscal_year=fiscal_year, quarter=int(quarter[1]) if quarter else None,
+            confirmed_period_end=confirmed_year_ends.get((entity, fiscal_year)),
+        )
+        inspected[key] = statement.recognized
+        if not statement.recognized:
+            continue
+        normalized_pages += 1
+        ambiguous_rows += len(statement.ambiguous_rows)
+        chunk["normalized_facts"] = tuple(
+            EvidenceFact(
+                evidence_id=chunk_id, entity_id=entity, metric_id=cell.metric_id, period=cell.period,
+                period_identity=cell.period_identity, numeric_value=format(cell.base_amount, "f"),
+                value=(f"{cell.base_amount:,f}%" if cell.value_kind == "percent"
+                       else f"{cell.currency} {cell.base_amount:,f}"),
+                raw_value=cell.raw_cell, currency=None if cell.value_kind == "percent" else cell.currency,
+                scale="unit", original_scale=cell.scale, table_row=cell.row_index, table_column=cell.column_index,
+                value_kind=cell.value_kind, document_id=document, page_number=page, source_url=chunk["source_url"],
+            )
+            for cell in statement.values if not cell.restated
+        )
+    return normalized_pages, ambiguous_rows
 
 
 class FinancialReasoner:
@@ -968,7 +1058,7 @@ class FinancialReasoner:
 
 def _chunk_mapping(value: Any) -> dict[str, Any]:
     if isinstance(value, dict):
-        return dict(value)
+        return {key: item for key, item in value.items() if key != "normalized_facts"}
     if hasattr(value, "model_dump"):
         return value.model_dump()
     if hasattr(value, "__dataclass_fields__"):
@@ -1026,7 +1116,7 @@ def _source_record(
         company=str(company) if company else None,
         ticker=str(ticker).upper() if ticker else None,
         cik=str(chunk["cik"]) if chunk.get("cik") is not None else None,
-        form_type=str(chunk.get("filing_type") or chunk.get("form_type") or "") or None,
+        form_type=str(chunk.get("filing_type") or chunk.get("form_type") or chunk.get("doc_type") or "") or None,
         filing_date=str(chunk.get("filing_date") or "") or None,
         fiscal_period=_fiscal_period(chunk),
         section=str(chunk.get("section") or "") or None,
@@ -1090,17 +1180,10 @@ def _numeric_source_record(
     fact: Any,
     requirement_id: str,
 ) -> EvidenceRecord:
-    try:
-        number = Decimal(str(fact.numeric_value))
-    except (InvalidOperation, TypeError):
-        number = Decimal(0)
-    scale_factor = {
-        "unit": Decimal(1),
-        "thousand": Decimal(1000),
-        "million": Decimal(1_000_000),
-        "billion": Decimal(1_000_000_000),
-    }.get(fact.scale or "unit", Decimal(1))
-    normalized = number * scale_factor
+    number = Decimal(fact.numeric_value)
+    exponent = {"unit": 0, "thousand": 3, "million": 6, "billion": 9}.get(fact.scale, 0)
+    sign, digits, power = number.as_tuple()
+    normalized = Decimal((sign, digits, power + exponent))
     if fact.value_kind == "percent":
         unit = "%"
     elif fact.currency:
@@ -1121,16 +1204,20 @@ def _numeric_source_record(
         form_type=base.form_type,
         filing_date=base.filing_date,
         fiscal_period=fact.period or base.fiscal_period,
+        period_identity=fact.period_identity,
+        original_scale=fact.original_scale or fact.scale,
+        table_row=fact.table_row,
+        table_column=fact.table_column,
         section=base.section,
         page=base.page,
-        table_id=base.table_id,
+        table_id=base.table_id or (f"{base.document_id}:statement:{base.page}" if fact.table_row is not None else None),
         metric=_metric_label(runtime.requirements, fact.metric_id),
         metric_id=fact.metric_id,
-        raw_value=fact.value,
-        normalized_value=str(normalized.normalize()),
+        raw_value=fact.raw_value or fact.value,
+        normalized_value=format(normalized, "f"),
         unit=unit,
         currency=fact.currency,
-        source_type=base.source_type,
+        source_type=EvidenceSourceType.TABLE_EVIDENCE if fact.table_row is not None else base.source_type,
         source_url=base.source_url,
         retrieval_method=base.retrieval_method,
         retrieval_rank=base.retrieval_rank,
@@ -1183,9 +1270,20 @@ def _compatible_operands(
     if not (earlier_xbrl and later_xbrl):
         left = [fact for fact in earlier if fact.source_type != EvidenceSourceType.XBRL_FACT]
         right = [fact for fact in later if fact.source_type != EvidenceSourceType.XBRL_FACT]
+        typed_left = [fact for fact in left if fact.period_identity is not None]
+        typed_right = [fact for fact in right if fact.period_identity is not None]
+        if typed_left or typed_right:
+            signatures = {(fact.period_identity.year_basis, fact.period_identity.scope, fact.period_identity.kind)
+                          for fact in (*typed_left, *typed_right)}
+            return (typed_left, typed_right) if typed_left and typed_right and len(signatures) == 1 else None
         return (left, right) if left and right else None
 
     selected = [*earlier_xbrl, *later_xbrl]
+    if len({
+        (fact.period_identity.year_basis, fact.period_identity.scope, fact.period_identity.kind)
+        for fact in selected if fact.period_identity is not None
+    }) > 1:
+        return None
     if len({fact.financial_concept for fact in selected}) != 1:
         return None
     durations: set[int | None] = set()

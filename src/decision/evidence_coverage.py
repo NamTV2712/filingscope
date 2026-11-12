@@ -23,6 +23,7 @@ from src.decision.period_value_parser import (
     extract_period_value_pairs,
     period_matches,
 )
+from src.ingestion.period_identity import intervals_agree
 from src.retrieval.structured_lookup import structured_lookup
 
 
@@ -112,7 +113,7 @@ def _source_metadata_conflict(chunk: Mapping[str, Any]) -> bool:
     return False
 
 
-def _kind_matches(pair: PeriodValuePair, metric: MetricRequirement) -> bool:
+def _kind_matches(pair: PeriodValuePair | EvidenceFact, metric: MetricRequirement) -> bool:
     expected = metric.expected_value_kind
     if expected == "topic":
         return False
@@ -121,6 +122,30 @@ def _kind_matches(pair: PeriodValuePair, metric: MetricRequirement) -> bool:
     if expected == "currency_per_share":
         return pair.value_kind in {"amount", "currency_per_share"}
     return pair.value_kind == "amount"
+
+
+def _normalized_facts(
+    chunk: Mapping[str, Any], metric: MetricRequirement, entity_id: str,
+) -> tuple[EvidenceFact, ...] | None:
+    if not metric.quantitative and chunk.get("source_type") != "XBRL_FACT":
+        return None
+    values = chunk.get("normalized_facts")
+    if values is None and chunk.get("source_type") != "XBRL_FACT":
+        return None
+    if not isinstance(values, tuple):
+        return ()
+    return tuple(
+        fact for fact in values
+        if isinstance(fact, EvidenceFact)
+        and fact.evidence_id == chunk.get("chunk_id")
+        and fact.document_id == (chunk.get("doc_name") or chunk.get("document_id"))
+        and fact.source_url == chunk.get("source_url")
+        and fact.entity_id == entity_id
+        and fact.metric_id == metric.metric_id
+        and fact.period_identity is not None
+        and fact.period_identity.label == fact.period
+        and _kind_matches(fact, metric)
+    )
 
 
 def _exact_structured_block(text: str, matched_line: str) -> str:
@@ -301,6 +326,18 @@ class EvidenceCoverageAnalyzer:
                 if _source_metadata_conflict(chunk):
                     source_conflict_ids[requirement.requirement_id].add(str(chunk["chunk_id"]))
                     continue
+                normalized = _normalized_facts(chunk, metric, requirement.entity_id)
+                if normalized is not None:
+                    if normalized:
+                        metric_seen[requirement.requirement_id] = True
+                    for fact in normalized:
+                        if not period_matches(requirement.period, fact.period):
+                            continue
+                        period_seen[requirement.requirement_id] = True
+                        number_seen[requirement.requirement_id] = True
+                        if requirements.requested_currency is None or fact.currency == requirements.requested_currency:
+                            candidate_facts.append(fact)
+                    continue
                 text = chunk.get("text")
                 if not isinstance(text, str):
                     continue
@@ -341,18 +378,26 @@ class EvidenceCoverageAnalyzer:
                 (
                     fact.evidence_id, fact.entity_id, fact.metric_id,
                     fact.period, fact.value, fact.currency, fact.scale,
-                    fact.value_kind, fact.document_id, fact.page_number,
+                    fact.value_kind, fact.document_id, fact.page_number, fact.period_identity,
+                    fact.table_row, fact.table_column,
                 ): fact
                 for fact in candidate_facts
             }.values())
             distinct_values = {_value_signature(fact) for fact in candidate_facts if fact.value is not None}
             distinct_periods = {fact.period for fact in candidate_facts if fact.period is not None}
+            incompatible_periods = len(distinct_periods) == 1 and not intervals_agree(
+                fact.period_identity for fact in candidate_facts if fact.period_identity is not None
+            )
             conflicted_source = bool(source_conflict_ids[requirement.requirement_id])
             contradictory_values = len(distinct_values) > 1
 
-            if conflicted_source or contradictory_values:
+            if conflicted_source or incompatible_periods or contradictory_values:
                 status = CoverageStatus.CONFLICTED
-                reason = "source_metadata_conflict" if conflicted_source else "contradictory_values_or_units"
+                reason = (
+                    "source_metadata_conflict" if conflicted_source else
+                    "incompatible_observation_periods" if incompatible_periods else
+                    "contradictory_values_or_units"
+                )
             elif (
                 len(candidate_facts) >= 1
                 and (

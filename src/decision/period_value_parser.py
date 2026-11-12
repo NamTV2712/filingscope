@@ -14,14 +14,14 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 
 from src.ingestion.company_facts import MONETARY_CURRENCIES
+from src.ingestion.period_identity import PeriodMention, period_mentions
 
 
 _YEAR_RE = re.compile(r"(?<!\d)(?:19|20)\d{2}(?!\d)")
-_QUARTER_RE = re.compile(r"\bQ([1-4])\s*(?:FY\s*)?((?<!\d)(?:19|20)\d{2})(?!\d)", re.I)
 _CURRENCY_TOKEN = "|".join((*sorted(MONETARY_CURRENCIES), r"\$", "€", "£"))
 _VALUE_RE = re.compile(
     rf"(?<![\w.])(?P<currency>{_CURRENCY_TOKEN})?\s*"
-    r"(?P<number>\(?-?\d{1,3}(?:,\d{3})*(?:\.\d+)?\)?|\(?-?\d+(?:\.\d+)?\)?)"
+    r"(?P<number>\(?-?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?\)?)"
     r"\s*(?P<percent>%|percent\b)?\s*"
     r"(?P<scale>\b(?:billion|million|thousand|bn|mm|m)\b)?",
     re.I,
@@ -64,13 +64,31 @@ def _normalize(value: str) -> str:
 
 
 def _period_at(text: str, start: int, end: int) -> str | None:
-    for match in _QUARTER_RE.finditer(text):
-        if match.start() < end and match.end() > start:
-            return f"Q{match.group(1)} FY{match.group(2)}"
-    years = [match for match in _YEAR_RE.finditer(text) if match.start() < end and match.end() > start]
-    if not years:
+    periods = {item.label for item in period_mentions(text) if item.start < end and item.end > start}
+    return next(iter(periods)) if len(periods) == 1 else None
+
+
+def _nearest_period(periods: tuple[PeriodMention, ...], start: int, end: int) -> str | None:
+    if not periods:
         return None
-    return f"FY{years[-1].group(0)}"
+    distances = [(min(abs(item.start - end), abs(start - item.end)), item.label) for item in periods]
+    distance = min(item[0] for item in distances)
+    nearest = {label for offset, label in distances if offset == distance}
+    return next(iter(nearest)) if len(nearest) == 1 else None
+
+
+def _value_matches_and_periods(text: str) -> tuple[list[re.Match], tuple[PeriodMention, ...]]:
+    values = [
+        match for match in _VALUE_RE.finditer(text)
+        if not _YEAR_RE.fullmatch(match.group("number")) or any(
+            match.group(field) for field in ("currency", "percent", "scale")
+        )
+    ]
+    periods = tuple(
+        item for item in period_mentions(text)
+        if not any(match.start() <= item.start and item.end <= match.end() for match in values)
+    )
+    return values, periods
 
 
 def period_matches(required_period: str | None, evidence_period: str | None) -> bool:
@@ -80,7 +98,7 @@ def period_matches(required_period: str | None, evidence_period: str | None) -> 
         return False
     required = _normalize(required_period)
     observed = _normalize(evidence_period)
-    if required.startswith("q"):
+    if required.startswith(("q", "cy")) or observed.startswith(("q", "cy")):
         return required == observed
     required_year = _YEAR_RE.search(required)
     observed_year = _YEAR_RE.search(observed)
@@ -88,7 +106,6 @@ def period_matches(required_period: str | None, evidence_period: str | None) -> 
         required_year
         and observed_year
         and required_year.group(0) == observed_year.group(0)
-        and not observed.startswith("q")
     )
 
 
@@ -221,21 +238,12 @@ def extract_period_value_pairs(
     for segment in segments:
         if not _matches_alias(segment, metric_aliases):
             continue
-        value_matches = [match for match in _VALUE_RE.finditer(segment)]
-        value_matches = [
-            match for match in value_matches
-            if not _YEAR_RE.fullmatch(match.group("number").replace(",", ""))
-        ]
+        value_matches, periods = _value_matches_and_periods(segment)
         for match in value_matches:
             parsed = _parse_value(match.group(0), segment)
             if parsed is None:
                 continue
-            period = _period_at(segment, match.start(), match.end())
-            if period is None:
-                years = list(_YEAR_RE.finditer(segment))
-                if years:
-                    nearest = min(years, key=lambda year: min(abs(year.start() - match.end()), abs(match.start() - year.end())))
-                    period = f"FY{nearest.group(0)}"
+            period = _nearest_period(periods, match.start(), match.end())
             pairs.append(PeriodValuePair(**{**parsed.__dict__, "period": period}))
 
     unique: dict[tuple[str, str, str, str | None, str | None, str], PeriodValuePair] = {}
@@ -260,24 +268,12 @@ def extract_period_value_mentions(text: str) -> tuple[PeriodValueMention, ...]:
     financial values.
     """
     mentions: list[PeriodValueMention] = []
-    years = list(_YEAR_RE.finditer(text))
-    for match in _VALUE_RE.finditer(text):
-        raw_number = match.group("number").replace(",", "")
-        if _YEAR_RE.fullmatch(raw_number):
-            continue
+    values, periods = _value_matches_and_periods(text)
+    for match in values:
         pair = _parse_value(match.group(0), text)
         if pair is None:
             continue
-        period = _period_at(text, match.start(), match.end())
-        if period is None and years:
-            nearest = min(
-                years,
-                key=lambda year: min(
-                    abs(year.start() - match.end()),
-                    abs(match.start() - year.end()),
-                ),
-            )
-            period = f"FY{nearest.group(0)}"
+        period = _nearest_period(periods, match.start(), match.end())
         mentions.append(
             PeriodValueMention(
                 start=match.start(),

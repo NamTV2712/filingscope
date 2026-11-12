@@ -69,6 +69,7 @@ def apple():
     ("revenue", "FY2024", 391_035_000_000, "2024-09-28", "0000320193-24-000123"),
     ("revenue", "Q2 FY2023", 94_836_000_000, "2023-04-01", "0000320193-23-000064"),
     ("revenue", "Q2 FY2024", 90_753_000_000, "2024-03-30", "0000320193-24-000069"),
+    ("revenue", "Q2 YTD FY2024", 210_328_000_000, "2024-03-30", "0000320193-24-000069"),
     ("total_assets", "FY2024", 364_980_000_000, "2024-09-28", "0000320193-24-000123"),
     ("total_liabilities", "FY2024", 308_030_000_000, "2024-09-28", "0000320193-24-000123"),
 ])
@@ -80,6 +81,7 @@ def test_apple_filing_values(apple, metric, period, value, end, accession):
     assert (fact.provenance.period_end, fact.provenance.accession) == (end, accession)
     assert fact.filing_url.endswith(f"/{accession.replace('-', '')}/{accession}-index.html")
     assert (fact.provenance.period_start is None) == (metric != "revenue")
+    assert fact.period_identity.label == period
 
 
 @pytest.mark.parametrize(("metric", "value"), [
@@ -118,6 +120,16 @@ def test_ineligible_rows_leave_the_slot_unknown(observation, metric, period):
 def test_cik_mismatch_rejects_the_whole_payload(apple):
     with pytest.raises(ValueError, match="CIK mismatch"):
         CompanyFactsResolver(apple, expected_cik=789019)
+
+
+def test_equal_values_with_two_original_accessions_are_still_ambiguous():
+    facts = payload({"us-gaap": {REVENUE: node([
+        row(391_035_000_000),
+        row(391_035_000_000, accession="0000320193-24-000124"),
+    ])}})
+    result = CompanyFactsResolver(facts, expected_cik=320193).resolve("revenue", "FY2024")
+    assert result.fact is None
+    assert result.reason == "ambiguous_original_accession"
 
 
 def test_explicit_report_date_rejects_nearby_wrong_instant():

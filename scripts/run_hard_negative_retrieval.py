@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import json
 import random
-import sys
 import time
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -18,6 +17,7 @@ from configs.financebench import P1_CORPUS_FINGERPRINT, P1_EMBEDDING_REVISION, P
 from configs.hard_negatives import CASES, M2_SEED_CASES
 from scripts.run_retrieval_diagnostics import _nearest_rank, _write_json_atomic
 from src.decision.company_catalog import CompanyCatalog
+from src.evaluation.benchmark_io import peak_memory_bytes as _peak_memory_bytes
 from src.evaluation.hard_negative_retrieval import resolve_passages, score_case, summarize
 from src.evaluation.retrieval_diagnostics import metadata_filters_from_question
 from src.retrieval.frozen_artifacts import load_frozen_corpus as _load_corpus, load_frozen_vectors as _load_vectors
@@ -63,18 +63,6 @@ class _QueryFilters:
 def _rank(scores: np.ndarray, *, positive_only: bool = False) -> list[int]:
     ranked = np.argsort(-scores, kind="stable")[:TOP_K]
     return [int(item) for item in ranked if np.isfinite(scores[item]) and (not positive_only or scores[item] > 0)]
-
-
-def _peak_memory_bytes() -> int | None:
-    if sys.platform == "win32":
-        try:
-            import psutil
-        except ImportError:
-            return None
-        return psutil.Process().memory_info().peak_wset
-    import resource
-
-    return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * (1 if sys.platform == "darwin" else 1024)
 
 
 def _cohort_report(chunks: list[dict[str, Any]], passages: dict) -> dict[str, Any]:

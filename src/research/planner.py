@@ -21,7 +21,7 @@ from src.retrieval.query_shaper import shape_retrieval_query
 PLANNER_VERSION = "1.0.0"
 DEFAULT_MAX_TASKS = 12
 _YEAR_RE = re.compile(r"(?<!\d)(?:19|20)\d{2}(?!\d)")
-_QUARTER_RE = re.compile(r"\bQ([1-4])\s*(?:FY\s*)?((?:19|20)\d{2})\b", re.I)
+_QUARTER_RE = re.compile(r"\bQ([1-4])\s*(?:YTD\s+)?(?:FY\s*)?((?:19|20)\d{2})\b", re.I)
 _FORM_PATTERNS = (
     ("10k", re.compile(r"\b(?:10\s*[-–]?\s*k|annual report|10-k)\b", re.I)),
     ("10q", re.compile(r"\b(?:10\s*[-–]?\s*q|quarterly report|10-q)\b", re.I)),

@@ -145,6 +145,17 @@ def test_non_segment_table_labels_unchanged() -> None:
     assert rows[0].label == "Total net sales"
 
 
+def test_blank_html_cell_keeps_its_period_column() -> None:
+    soup = BeautifulSoup("""
+    <table>
+      <tr><th>Metric</th><th>2025</th><th>2024</th><th>2023</th></tr>
+      <tr><td>Revenue</td><td>$120</td><td></td><td>$95</td></tr>
+    </table>
+    """, "lxml")
+    rows = extract_table_rows(soup.find("table"))
+    assert rows[0].values_by_year == {"2025": "120", "2023": "95"}
+
+
 def test_aapl_total_net_sales_table() -> None:
     raw_path = Path("data/raw/AAPL/000032019325000079.html")
     if not raw_path.exists():

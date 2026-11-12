@@ -18,6 +18,7 @@ import numpy as np
 from configs.financebench import FINANCEBENCH_GITHUB_REVISION
 from configs.settings import settings
 from src.decision.company_catalog import CompanyCatalog
+from src.evaluation.benchmark_io import write_json_atomic as _write_json_atomic
 from src.evaluation.financebench_dataset import FinanceBenchCase, load_financebench_cases
 from src.evaluation.retrieval_diagnostics import (
     fuse_ranked_ids,
@@ -55,16 +56,6 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
                 raise ValueError(f"{path}:{line_number} must contain a JSON object")
             records.append(value)
     return records
-
-
-def _write_json_atomic(path: Path, value: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(
-        json.dumps(value, indent=2, ensure_ascii=False, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
-    temporary.replace(path)
 
 
 def _git_revision() -> str | None:

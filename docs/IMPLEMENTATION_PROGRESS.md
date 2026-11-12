@@ -85,8 +85,8 @@ report and the manifest under the ignored evaluation directory.
 
 | Phase ID | Status | Last validated commit | Completed tasks | Unfinished tasks | Test status | Benchmark status | Acceptance gate | Blocking issues | Exact next action |
 |---|---|---|---|---|---|---|---|---|---|
-| Q1 | VALIDATED | Q1 attribution commit | Freeze baseline, trace M13, execute or document A–G, reproduce stable outcomes | Verify remote | 354 passed, 3 skipped | Both specialist modes replayed twice on all 24 M13 cases | 38/38 failures attributed | None | Verify the published Q1 commit. [Phase report](POST_M15_FAILURE_ANALYSIS.md) |
-| Q2 | NOT_STARTED | — | — | Financial period, table and SEC normalization | — | — | Open | Depends on Q1 | Begin with the quarterly SEC-to-coverage loss and labeled financial table pages |
+| Q1 | COMPLETE | `556beff7e772c58f85c6834cf1b8c12d42789bcd` on `origin/main` | Freeze baseline, trace M13, execute or document A–G, reproduce stable outcomes and isolate runtime imports | None | 355 passed, 3 skipped after isolation follow-up | Both specialist modes replayed twice on all 24 M13 cases | 38/38 failures attributed | None | Proceed to Q2. [Phase report](POST_M15_FAILURE_ANALYSIS.md) |
+| Q2 | VALIDATED | Q2 normalization commit | Typed period and SEC handoff, column-aware PDF/HTML extraction and paired evaluation | Verify remote | 368 passed, 3 skipped | 57/57 newly labeled cells, 9/9 SEC slots, 19/22 retrospective PDF slots | Passed on provisional cohorts | None | Verify Q2 on origin and run the direct-fact routing comparison. [Phase report](POST_M15_FINANCIAL_NORMALIZATION.md) |
 | Q3 | NOT_STARTED | — | — | Source-aware FAST routing | — | — | Open | Depends on Q2 | Replay paired B4/B5 losses with the validated Q2 contracts |
 | Q4 | NOT_STARTED | — | — | Evidence policy and selective answering | — | — | Open | Depends on Q3 | Freeze safety and risk–coverage evaluation before policy selection |
 | Q5 | NOT_STARTED | — | — | End-to-end retrieval utility | — | — | Open | Depends on Q4 | Compare controlled retrieval variants on the same cohort |

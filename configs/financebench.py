@@ -26,3 +26,4 @@ P1_INDEX_ID = "3ea92c895826e46ccf03ee52248771cc83e779e90b1660c390d29f2c4abfd18f"
 P1_CORPUS_FINGERPRINT = "sha256:9f45dcd8586fe1f52a8b5b48c0dfeeb201498c166f78b01a5a3acd6c00662c48"
 P1_EMBEDDING_REVISION = "e9b6763023c676ca8431644204f50c2b100d9aab"
 P1_RUN = Path("data/financebench/runs") / P1_INDEX_ID
+P1_PAGE_CACHE = Path("data/financebench/cache/extracted_pages_d5c2a1369d9997a3055a.jsonl")

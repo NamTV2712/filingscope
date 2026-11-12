@@ -14,6 +14,7 @@ from src.decision.period_value_parser import (
     extract_period_value_mentions,
     period_matches,
 )
+from src.ingestion.period_identity import intervals_agree
 from src.decision.policy import EvidenceDecisionLayer
 from src.verification.models import (
     CalculationOperand,
@@ -589,6 +590,8 @@ class ClaimLevelVerifier:
             facts = tuple(fact for fact in facts if period_matches(value.period, fact.period))
         if not facts:
             return ClaimStatus.UNSUPPORTED, "cited_evidence_does_not_contain_claimed_fact"
+        if not intervals_agree(fact.period_identity for fact in facts if fact.period_identity is not None):
+            return ClaimStatus.UNVERIFIABLE, "cited_observation_periods_conflict"
         signatures = {
             (fact.numeric_value, fact.currency, fact.scale, fact.value_kind)
             for fact in facts

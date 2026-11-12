@@ -12,15 +12,17 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
+from src.ingestion.period_identity import PeriodIdentity, PeriodKind
 
-COMPANY_FACTS_POLICY_VERSION = "sec-company-facts-v1"
+
+COMPANY_FACTS_POLICY_VERSION = "sec-company-facts-v2"
 MONETARY_CURRENCIES = frozenset(
     "AUD BRL CAD CHF CNY DKK EUR GBP HKD ILS INR JPY KRW MXN NOK NZD SEK SGD TWD USD ZAR".split()
 )
 _ANNUAL_FORMS = frozenset({"10-K", "20-F", "40-F"})
 _PERIODIC_FORMS = _ANNUAL_FORMS | {"10-Q"}
 _ACCESSION = re.compile(r"[0-9]{10}-[0-9]{2}-[0-9]{6}")
-_PERIOD = re.compile(r"(?:(Q[1-4]) )?FY((?:19|20)[0-9]{2})")
+_PERIOD = re.compile(r"(?:(Q[1-4]) (YTD )?)?FY((?:19|20)[0-9]{2})")
 
 # Entries are ordered only to pick a label when the original rows agree.
 # A newer tag never supersedes a different tag for the same period.
@@ -112,6 +114,19 @@ class ResolvedCompanyFact:
     form: str
     filing_url: str
     provenance: XbrlProvenance
+
+    @property
+    def period_identity(self) -> PeriodIdentity:
+        provenance = self.provenance
+        start = date.fromisoformat(provenance.period_start) if provenance.period_start else None
+        return PeriodIdentity.from_label(
+            self.fiscal_period,
+            kind=PeriodKind.DURATION if start is not None else PeriodKind.INSTANT,
+            start=start,
+            end=date.fromisoformat(provenance.period_end),
+            filing_fiscal_year=provenance.filing_fiscal_year,
+            filing_fiscal_period=provenance.filing_fiscal_period,
+        )
 
 
 @dataclass(frozen=True)
@@ -246,7 +261,7 @@ class CompanyFactsResolver:
         return self._cache[concept]
 
     def _original_period(
-        self, row: _Observation, year: int, quarter: str | None, instant: bool,
+        self, row: _Observation, year: int, quarter: str | None, instant: bool, *, year_to_date: bool = False,
     ) -> bool:
         annual_filing = quarter is None or quarter == "Q4"
         forms = _ANNUAL_FORMS if annual_filing else {"10-Q"}
@@ -257,7 +272,10 @@ class CompanyFactsResolver:
             return False
         if row.start is not None:
             days = (row.end - row.start).days + 1
-            minimum, maximum = (330, 400) if quarter is None else (70, 110)
+            if year_to_date:
+                minimum, maximum = {"Q1": (70, 110), "Q2": (155, 210), "Q3": (240, 300), "Q4": (330, 400)}[quarter]
+            else:
+                minimum, maximum = (330, 400) if quarter is None else (70, 110)
             if not minimum <= days <= maximum:
                 return False
         report_end = self.report_dates.get(row.accession)
@@ -294,7 +312,10 @@ class CompanyFactsResolver:
         match = _PERIOD.fullmatch(period or "")
         if match is None:
             return CompanyFactResolution("explicit_fiscal_period_required")
-        quarter, year_text = match.groups()
+        quarter, cumulative, year_text = match.groups()
+        instant = metric_id in _INSTANT_METRICS
+        if cumulative and instant:
+            return CompanyFactResolution("cumulative_scope_inapplicable_to_instant")
         requested_currency = normalize_currency(currency) if currency else None
         if currency and requested_currency is None:
             return CompanyFactResolution("unsupported_currency")
@@ -302,7 +323,7 @@ class CompanyFactsResolver:
         rows = tuple(row for concept in concepts for row in self._observations(concept))
         originals = [
             row for row in rows
-            if self._original_period(row, int(year_text), quarter, metric_id in _INSTANT_METRICS)
+            if self._original_period(row, int(year_text), quarter, instant, year_to_date=bool(cumulative))
             and (requested_currency is None or row.currency == requested_currency)
             and (not requested_forms or row.form.replace("-", "") in requested_forms)
         ]
@@ -319,6 +340,8 @@ class CompanyFactsResolver:
         first_rows = [row for row in originals if row.filed == first_date]
         if len({row.value for row in first_rows}) != 1:
             return CompanyFactResolution("conflicting_original_values")
+        if len({row.accession for row in first_rows}) != 1:
+            return CompanyFactResolution("ambiguous_original_accession")
         original = min(first_rows, key=lambda row: (concepts.index(row.concept), _revision_order(row)))
         history = sorted({
             row for row in rows
@@ -333,6 +356,8 @@ class CompanyFactsResolver:
                 return CompanyFactResolution("conflicting_latest_values")
             # Equivalent rows on the same filing day do not prove a revision.
             if last_rows[-1].filed > original.filed:
+                if len({row.accession for row in last_rows}) != 1:
+                    return CompanyFactResolution("ambiguous_latest_accession")
                 selected = last_rows[-1]
 
         kind = RevisionKind.ORIGINAL

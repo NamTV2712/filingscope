@@ -6,6 +6,8 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from src.ingestion.period_identity import PeriodIdentity
+
 
 class DecisionAction(StrEnum):
     ANSWER = "ANSWER"
@@ -82,10 +84,15 @@ class EvidenceFact(BaseModel):
     entity_id: str
     metric_id: str
     period: str | None = None
+    period_identity: PeriodIdentity | None = None
     value: str | None = None
+    raw_value: str | None = None
     numeric_value: str | None = None
     currency: str | None = None
     scale: str | None = None
+    original_scale: str | None = None
+    table_row: int | None = None
+    table_column: int | None = None
     value_kind: str | None = None
     document_id: str
     page_number: int | None = None

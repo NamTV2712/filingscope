@@ -147,13 +147,14 @@ class ResearchHandler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
-    from configs.financebench import P1_EMBEDDING_REVISION, P1_INDEX_ID, P1_RUN
+    from configs.financebench import P1_EMBEDDING_REVISION, P1_INDEX_ID, P1_PAGE_CACHE, P1_RUN
     from configs.sec_snapshots import COMPANY_TICKERS, SEC_CUTOFF, SEC_ISSUERS
     from src.retrieval.frozen_artifacts import load_frozen_corpus, load_frozen_vectors
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--p1-run", type=Path, default=P1_RUN)
+    parser.add_argument("--statement-pages", type=Path, help="Pinned pypdf page cache for table normalization")
     parser.add_argument("--sec-dir", type=Path, default=Path("data/financebench/ablation_runs/m13-sec"))
     parser.add_argument("--threads", type=int, default=6)
     args = parser.parse_args()
@@ -167,15 +168,20 @@ def main() -> None:
     from src.research.corpus_map import CorpusMap
     from src.retrieval.embedder import Embedder
     from src.retrieval.frozen_dense import FrozenDenseRetriever
+    from src.retrieval.pdf_page_cache import FrozenPdfPages
 
     torch.set_num_threads(args.threads)
     print("Loading the frozen FinanceBench index and SEC snapshots…", flush=True)
     chunks = load_frozen_corpus(args.p1_run)
     vectors = load_frozen_vectors(args.p1_run, chunks)
     sec = CompanyFactsReplay(args.sec_dir, SEC_ISSUERS, latest_filed=SEC_CUTOFF)
+    page_path = args.statement_pages or (P1_PAGE_CACHE if P1_PAGE_CACHE.is_file() else None)
+    pages = FrozenPdfPages.from_run(page_path, args.p1_run) if page_path is not None else None
     graph = SpecialistResearchGraph(
         router=ComplexityRouter(CorpusMap.from_chunks(chunks, index_generation_id=P1_INDEX_ID)),
-        retriever=FrozenDenseRetriever(chunks, vectors, Embedder(device="cpu", revision=P1_EMBEDDING_REVISION)),
+        retriever=FrozenDenseRetriever(
+            chunks, vectors, Embedder(device="cpu", revision=P1_EMBEDDING_REVISION), pdf_pages=pages,
+        ),
         sec_client=sec,
         ticker_by_company=COMPANY_TICKERS,
     )

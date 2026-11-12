@@ -7,17 +7,26 @@ from typing import Any
 
 import numpy as np
 
+from src.retrieval.pdf_page_cache import FrozenPdfPages
+
 
 class FrozenDenseRetriever:
     supports_concurrent_retrieval = True
     supports_document_scope = True
 
-    def __init__(self, chunks: list[dict[str, Any]], vectors: np.ndarray, embedder: Any):
+    def __init__(
+        self, chunks: list[dict[str, Any]], vectors: np.ndarray, embedder: Any, *,
+        pdf_pages: FrozenPdfPages | None = None,
+    ):
         self.chunks = chunks
         self.vectors = vectors
         self.embedder = embedder
         self.document_ids = np.array([item["document_id"] for item in chunks])
         self.model_lock = threading.Lock()
+        self.pdf_pages = pdf_pages
+
+    def get_source_page(self, document: str, page_number: int) -> str | None:
+        return self.pdf_pages.get(document, page_number) if self.pdf_pages is not None else None
 
     def retrieve(
         self, query: str, top_k: int = 10, *,

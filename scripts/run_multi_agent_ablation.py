@@ -28,6 +28,7 @@ from src.policy.candidate_gate import CandidateEvidenceGate
 from src.policy.evidence_policy import CandidateDisposition
 from src.research.corpus_map import CorpusMap
 from src.retrieval.frozen_dense import FrozenDenseRetriever
+from src.retrieval.pdf_page_cache import FrozenPdfPages
 from src.verification.atomic_claim_verifier import AtomicClaimVerifier
 from src.verification.claim_verifier import ClaimLevelVerifier
 from src.verification.response_policy import INSUFFICIENT_EVIDENCE_ANSWER, verify_and_release
@@ -62,6 +63,9 @@ class _RecordingRetriever:
     def reset(self) -> None:
         self.calls.clear()
         self.chunks.clear()
+
+    def get_source_page(self, document: str, page_number: int) -> str | None:
+        return self.index.get_source_page(document, page_number)
 
     def retrieve(self, query: str, top_k: int = 10, *, document_ids: tuple[str, ...] = ()) -> list[dict[str, Any]]:
         eligible = self.filters.mask(query)[1] if self.filters is not None else None
@@ -241,6 +245,7 @@ def _specialist_observation(
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--p1-run", type=Path, default=DEFAULT_RUN)
+    parser.add_argument("--statement-pages", type=Path, help="Use the pinned physical PDF pages for financial normalization")
     parser.add_argument("--sec-dir", type=Path, default=Path("data/financebench/ablation_runs/m13-sec"))
     parser.add_argument("--acquire-sec", action="store_true")
     parser.add_argument("--output", type=Path)
@@ -268,7 +273,8 @@ def main() -> None:
     chunks = _load_corpus(args.p1_run)
     vectors = _load_vectors(args.p1_run, chunks)
     embedder = Embedder(device="cpu", revision=P1_EMBEDDING_REVISION)
-    index = FrozenDenseRetriever(chunks, vectors, embedder)
+    pages = FrozenPdfPages.from_run(args.statement_pages, args.p1_run) if args.statement_pages else None
+    index = FrozenDenseRetriever(chunks, vectors, embedder, pdf_pages=pages)
     corpus = CorpusMap.from_chunks(chunks, index_generation_id=P1_INDEX_ID)
     basic_router, aware_router = ComplexityRouter(), ComplexityRouter(corpus)
     sec = CompanyFactsReplay(args.sec_dir, SEC_ISSUERS, latest_filed=SEC_CUTOFF) if set(args.variants) & {"B3", "B4", "B5"} else None
@@ -312,6 +318,7 @@ def main() -> None:
         "benchmark": "filingscope-multi-agent-ablation-v1", "p1_index_id": P1_INDEX_ID,
         "corpus_fingerprint": P1_CORPUS_FINGERPRINT, "embedding_revision": P1_EMBEDDING_REVISION,
         "case_counts": dict(Counter(case.split for case in cases)), "threads": args.threads,
+        "physical_page_normalization": pages is not None,
         "sec_replay": sec.manifest if sec else None, "provider_calls": 0, "timed_sec_http_calls": 0,
         "setup_seconds": round(setup_seconds, 3), "peak_memory_bytes": _peak_memory_bytes(),
         "variants": {

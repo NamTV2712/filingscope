@@ -17,6 +17,8 @@ from dataclasses import dataclass
 
 from bs4 import BeautifulSoup, Tag
 
+from src.ingestion.period_identity import period_mentions
+
 logger = logging.getLogger(__name__)
 
 YEAR_PATTERN = re.compile(r"(19|20)\d{2}")
@@ -42,16 +44,21 @@ class TableRow:
     values_by_year: dict[str, str]
 
 
-def _clean_cells(row: Tag) -> list[str]:
-    """Return non-empty text from all table cells in one row."""
+def _cell_texts(row: Tag) -> list[str]:
     cells = row.find_all(["td", "th"])
     texts = [cell.get_text(separator=" ", strip=True) for cell in cells]
-    texts = [re.sub(r"\s+", " ", text).strip() for text in texts]
-    return [text for text in texts if text]
+    return [re.sub(r"\s+", " ", text).strip() for text in texts]
+
+
+def _clean_cells(row: Tag) -> list[str]:
+    return [text for text in _cell_texts(row) if text]
 
 
 def _extract_year_from_cell(cell_text: str) -> str | None:
     """Extract a four-digit year from a cell that may contain surrounding text."""
+    periods = period_mentions(cell_text)
+    if len(periods) == 1 and periods[0].label.startswith(("Q", "CY")):
+        return periods[0].label
     match = YEAR_PATTERN.search(cell_text)
     return match.group(0) if match else None
 
@@ -140,6 +147,10 @@ def extract_table_rows(table: Tag) -> list[TableRow]:
         return []
 
     header_idx, years = header_result
+    if len(years) != len(set(years)):
+        # Repeated date labels without an explicit quarter or duration cannot
+        # be collapsed into a single dictionary keyed by year.
+        return []
     header_cells = _clean_cells(rows[header_idx])
     skip_percent_values = any(cell.lower() == "change" for cell in header_cells)
     logger.debug("Header row index=%d, years=%s", header_idx, years)
@@ -165,15 +176,41 @@ def extract_table_rows(table: Tag) -> list[TableRow]:
 
         values = _extract_data_values(cleaned[1:], skip_percent_values=skip_percent_values)
 
-        values_by_year = {}
-        for year, value in zip(years, values):
-            values_by_year[year] = value
+        values_by_year = _map_table_row(rows[header_idx], row, years, values)
 
         if values_by_year:
             full_label = f"{current_segment} - {label}" if current_segment else label
             result.append(TableRow(label=full_label, values_by_year=values_by_year))
 
     return result
+
+
+def _map_table_row(header: Tag, row: Tag, years: list[str], values: list[str]) -> dict[str, str]:
+    header_cells = _cell_texts(header)
+    row_cells = _cell_texts(row)
+    if len(row_cells) == len(header_cells) + 1 and all(_extract_year_from_cell(cell) for cell in header_cells):
+        header_cells = ["", *header_cells]
+    simple_grid = all(
+        cell.get("colspan", "1") == "1" and cell.get("rowspan", "1") == "1"
+        for item in (header, row) for cell in item.find_all(["td", "th"])
+    )
+    if simple_grid and len(header_cells) == len(row_cells):
+        year_positions = [(index, year) for index, cell in enumerate(header_cells)
+                          if (year := _extract_year_from_cell(cell)) is not None]
+        if [year for _, year in year_positions] == years and all(index > 0 for index, _ in year_positions):
+            mapped = {}
+            for index, year in year_positions:
+                cell = row_cells[index]
+                if cell in {"", "-", "–", "—"}:
+                    continue
+                entries = _extract_data_values([cell], skip_percent_values=False)
+                if len(entries) != 1:
+                    return {}
+                mapped[year] = entries[0]
+            return mapped
+    if len(values) != len(years):
+        return {}
+    return dict(zip(years, values, strict=True))
 
 
 def find_table_containing_text(soup: BeautifulSoup, anchor_text: str) -> Tag | None:

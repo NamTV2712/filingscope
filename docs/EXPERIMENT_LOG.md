@@ -498,6 +498,19 @@ The log separates software-contract checks from answer-quality evidence.
 - **Decision** Adopt the offline diagnostics and prioritize typed period
   and table handling in Q2. [Phase report](POST_M15_FAILURE_ANALYSIS.md)
 
+## Q2 — Financial normalization
+
+- **Experiment** Preserve SEC periods through verification and normalize
+  physical statement columns on already retrieved pages. Compare the
+  legacy annual parser on 57 new cells and 22 retrospective slot/page
+  pairs. Replay both specialist modes on all 24 M13 requests.
+- **Result** The Q2 parser recovered 57/57 new cells and 19/22 M13 slots
+  with all 9/9 selected SEC source labels intact. Grounded exact answers
+  increased from 3 to 7 in B4 and from 1 to 3 in B5, with zero
+  unsupported releases in both modes.
+- **Decision** Adopt typed SEC handoff and pypdf column normalization.
+  Keep ambiguous fiscal dates withheld until anchored. [Phase report](POST_M15_FINANCIAL_NORMALIZATION.md)
+
 ## Planned experiments
 
 Each planned experiment must add its exact hypothesis, baseline, changed

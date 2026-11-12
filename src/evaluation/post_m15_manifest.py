@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import platform
 import subprocess
@@ -12,8 +11,7 @@ from importlib.metadata import distributions
 from pathlib import Path
 
 from configs.multi_agent_ablation import CASES
-from src.evaluation.company_facts_replay import _file_sha256
-from src.retrieval.canonical_json import canonical_json_bytes
+from src.retrieval.canonical_json import canonical_sha256, sha256_file
 
 
 _REPLAY_FILES = (
@@ -27,14 +25,6 @@ _REPLAY_FILES = (
 )
 
 
-def _sha256_file(path: Path) -> str:
-    return f"sha256:{_file_sha256(path)}"
-
-
-def _canonical_sha256(value) -> str:
-    return f"sha256:{hashlib.sha256(canonical_json_bytes(value)).hexdigest()}"
-
-
 def build_manifest(
     *,
     p1_run: Path,
@@ -43,6 +33,7 @@ def build_manifest(
     pages: Path,
     artifacts: dict[str, Path],
     configuration: dict,
+    code_files: tuple[str, ...] = _REPLAY_FILES,
 ) -> dict:
     def read(path: Path) -> dict:
         return json.loads(path.read_text(encoding="utf-8"))
@@ -58,14 +49,14 @@ def build_manifest(
         "timestamp_utc": datetime.now(UTC).isoformat(),
         "git_sha": git("rev-parse", "HEAD"),
         "worktree_dirty": bool(git("status", "--porcelain")),
-        "tracked_diff_sha256": _canonical_sha256(git("diff", "--binary", "HEAD")),
+        "tracked_diff_sha256": canonical_sha256(git("diff", "--binary", "HEAD")),
         "dataset": {
             "financebench": sources["dataset"],
             "financebench_original_split": "OPEN_SOURCE",
             "m13_split": dict(Counter(case.split for case in CASES)),
             "m13_usage": "exposed retrospective diagnostic cohort",
-            "m13_labels_sha256": _sha256_file(Path("configs/multi_agent_ablation.py")),
-            "source_manifest_sha256": _sha256_file(source_manifest),
+            "m13_labels_sha256": sha256_file(Path("configs/multi_agent_ablation.py")),
+            "source_manifest_sha256": sha256_file(source_manifest),
             "document_hashes": {
                 info["doc_name"]: info["sha256"] for info in sources["files"]["source_pdfs"]
             },
@@ -74,14 +65,14 @@ def build_manifest(
         "embedding": embedding,
         "retrieval": {"engine": "local frozen dense cosine", "index": index},
         "source_snapshots": {
-            "sec_manifest_sha256": _sha256_file(sec_manifest),
+            "sec_manifest_sha256": sha256_file(sec_manifest),
             "sec": read(sec_manifest),
-            "pdf_page_cache_sha256": _sha256_file(pages),
-            "pdf_page_cache_manifest_sha256": _sha256_file(pages.with_suffix(".json")),
+            "pdf_page_cache_sha256": sha256_file(pages),
+            "pdf_page_cache_manifest_sha256": sha256_file(pages.with_suffix(".json")),
         },
         "configuration": configuration,
-        "configuration_sha256": _canonical_sha256(configuration),
-        "replay_code_sha256": {file: _sha256_file(Path(file)) for file in _REPLAY_FILES if Path(file).is_file()},
+        "configuration_sha256": canonical_sha256(configuration),
+        "replay_code_sha256": {file: sha256_file(Path(file)) for file in code_files if Path(file).is_file()},
         "python": platform.python_version(),
         "platform": platform.platform(),
         "git_version": git("--version"),
@@ -89,7 +80,7 @@ def build_manifest(
             (dist.metadata["Name"], dist.version) for dist in distributions()
         )),
         "artifacts": {
-            name: {"filename": path.name, "sha256": _sha256_file(path)}
+            name: {"filename": path.name, "sha256": sha256_file(path)}
             for name, path in artifacts.items()
         },
     }
