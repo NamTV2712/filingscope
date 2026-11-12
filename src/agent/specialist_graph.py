@@ -7,6 +7,7 @@ import re
 import time
 import uuid
 from collections import defaultdict
+from collections.abc import Callable
 from decimal import Decimal
 from typing import Annotated, Any, Literal, TypedDict
 
@@ -16,6 +17,7 @@ from langgraph.types import Send
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.agent.complexity_router import ComplexityRouter, ExecutionPath, RouteBudget, RouterExecution
+from src.agent.research_progress import ResearchProgress
 from src.agent.specialists import (
     EvidenceAnalyst,
     FilingResearchWorker,
@@ -191,9 +193,13 @@ class SpecialistResearchGraph:
         request_id: str | None = None,
         route: RouterExecution | None = None,
         ledger: EvidenceLedger | None = None,
+        on_progress: Callable[[ResearchProgress], None] | None = None,
+        force_research: bool = False,
     ) -> SpecialistExecution:
         request_id = request_id or f"request-{uuid.uuid4().hex}"
-        route = route or self.router.route(question)
+        if on_progress:
+            on_progress(ResearchProgress.UNDERSTANDING_QUESTION)
+        route = route or self.router.route(question, force_research=force_research)
         if route.question != question:
             raise ValueError("router execution belongs to a different question")
         if route.selected_path == ExecutionPath.UNSUPPORTED:
@@ -209,6 +215,8 @@ class SpecialistResearchGraph:
         if ledger is not None and ledger.request_id != request_id:
             raise ValueError("ledger request_id must match the specialist run")
         revisions = requested_revision_policies(question)
+        if on_progress:
+            on_progress(ResearchProgress.IDENTIFYING_REQUIREMENTS)
         runtime = SpecialistRuntime(
             request_id=request_id,
             ledger=ledger or EvidenceLedger(request_id=request_id),
@@ -224,6 +232,7 @@ class SpecialistResearchGraph:
             verifier=self.verifier,
             xbrl_revision_policy=next(iter(revisions), RevisionPolicy.AS_REPORTED),
             require_structured_facts=bool(revisions),
+            on_progress=on_progress,
         )
         concurrency = 1
         if route.selected_path == ExecutionPath.RESEARCH and self.retriever_concurrency_safe:
@@ -252,6 +261,7 @@ class SpecialistResearchGraph:
                 "max_concurrency": concurrency,
             },
         )
+        runtime.emit_progress(ResearchProgress.FINALIZING_ANSWER)
         steps = len(state.get("trace", ()))
         if steps > allowed_steps:
             raise RuntimeError("specialist graph exceeded its route step budget")
@@ -370,6 +380,8 @@ class SpecialistResearchGraph:
             )
         context.parallel_task_count = len(assignments)
         context.effective_max_concurrency = min(context.budget.max_concurrency, len(assignments))
+        if assignments:
+            context.emit_progress(ResearchProgress.SEARCHING_FILINGS)
         result = SpecialistTaskResult(
             worker_id="research_supervisor",
             status=SpecialistStatus.COMPLETE,
@@ -422,6 +434,7 @@ class SpecialistResearchGraph:
         self, state: _SpecialistGraphState, runtime: Runtime[SpecialistRuntime]
     ) -> dict[str, Any]:
         context = runtime.context
+        context.emit_progress(ResearchProgress.SEARCHING_FILINGS)
         task_result = FilingResearchWorker().run(
             tuple(state.get("plan").tasks if state.get("plan") else ()),
             context,
@@ -494,6 +507,8 @@ class SpecialistResearchGraph:
     ) -> dict[str, Any]:
         context = runtime.context
         filing_results, filing_evidence = self._merge_parallel_filing_results(state, context)
+        if context.sec_client is not None:
+            context.emit_progress(ResearchProgress.SEARCHING_STRUCTURED_FACTS)
         task_result = StructuredFinancialDataWorker(context.sec_client).run(
             tuple(state.get("plan").tasks if state.get("plan") else ()),
             context,
@@ -572,7 +587,11 @@ class SpecialistResearchGraph:
     def _table_node(
         self, state: _SpecialistGraphState, runtime: Runtime[SpecialistRuntime]
     ) -> dict[str, Any]:
-        task_result = TableEvidenceWorker().run(runtime.context)
+        context = runtime.context
+        context.emit_progress(ResearchProgress.INSPECTING_TABLES)
+        task_result = TableEvidenceWorker().run(context)
+        if task_result.retrieval_calls:
+            context.emit_progress(ResearchProgress.ADDITIONAL_RETRIEVAL)
         return {
             "trace": [*state.get("trace", ()), "table_worker"],
             "specialist_results": [*state.get("specialist_results", ()), task_result],
@@ -583,7 +602,10 @@ class SpecialistResearchGraph:
         self, state: _SpecialistGraphState, runtime: Runtime[SpecialistRuntime]
     ) -> dict[str, Any]:
         context = runtime.context
+        context.emit_progress(ResearchProgress.CHECKING_COVERAGE)
         task_result = EvidenceAnalyst().run(state["question"], context)
+        if context.coverage is not None and not context.coverage.sufficient:
+            context.emit_progress(ResearchProgress.MISSING_EVIDENCE)
         task_results = [task_result]
         if (
             state["route"].selected_path == ExecutionPath.FAST
@@ -644,6 +666,7 @@ class SpecialistResearchGraph:
         self, state: _SpecialistGraphState, runtime: Runtime[SpecialistRuntime]
     ) -> dict[str, Any]:
         context = runtime.context
+        context.emit_progress(ResearchProgress.CHECKING_CLAIMS)
         answer = state.get("answer", "")
         chunks = _ordered_report_chunks(context)
         verifier = context.verifier
@@ -660,6 +683,9 @@ class SpecialistResearchGraph:
         else:
             verification = self._record_verification(verifier.verify(state["question"], answer, chunks), context, "P4")
         context.verification = verification
+        if any(claim.calculation and claim.calculation.passed for claim in verification.claims):
+            context.emit_progress(ResearchProgress.CALCULATIONS_VERIFIED)
+        context.emit_progress(ResearchProgress.CLAIM_CHECKS_COMPLETE)
         generation = state.get("generation")
         if generation is not None:
             context.generation = generation.model_copy(update={"answer": answer})

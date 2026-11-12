@@ -5,11 +5,13 @@ import time
 from typing import Any
 
 from src.agent.complexity_router import ComplexityRouter, ExecutionPath
+from src.agent.research_progress import ResearchProgress
 from src.agent.specialist_graph import SpecialistResearchGraph
 from src.agent.specialists import SpecialistStatus
 from src.generation.answer_generator import AnswerGenerationResult
 from src.ingestion.company_facts import RevisionKind
 from src.ledger.models import EvidenceSourceType
+from src.local_research import public_result
 from src.verification.models import ClaimStatus, ResponseDisposition
 
 
@@ -199,7 +201,8 @@ def test_research_route_uses_sec_facts_and_emits_linked_growth_calculations() ->
         ticker_by_company={"apple": "AAPL", "microsoft": "MSFT"},
     )
 
-    result = graph.run(question, request_id="research-1")
+    progress = []
+    result = graph.run(question, request_id="research-1", on_progress=progress.append)
 
     assert result.selected_path == ExecutionPath.RESEARCH
     assert result.graph_trace == (
@@ -228,6 +231,21 @@ def test_research_route_uses_sec_facts_and_emits_linked_growth_calculations() ->
         item.source_type for item in result.ledger_snapshot.evidence_records
     } == {EvidenceSourceType.XBRL_FACT, EvidenceSourceType.DERIVED_FACT}
     assert all(item.input_evidence_ids for item in result.calculations)
+    assert progress[:2] == [ResearchProgress.UNDERSTANDING_QUESTION, ResearchProgress.IDENTIFYING_REQUIREMENTS]
+    assert ResearchProgress.SEARCHING_FILINGS in progress
+    assert ResearchProgress.ADDITIONAL_RETRIEVAL in progress
+    assert ResearchProgress.CALCULATIONS_VERIFIED in progress
+    assert progress[-1] == ResearchProgress.FINALIZING_ANSWER
+    view = public_result(result)
+    sources = {item["id"]: item for item in view["sources"]}
+    assert len(sources) == 4
+    assert {item["citation"] for item in sources.values()} == {1, 2, 3, 4}
+    assert all(item["accession"] and item["url"].startswith("https://www.sec.gov/") for item in sources.values())
+    assert all(item["status"] == "verified" for item in view["calculations"])
+    for item in view["calculations"]:
+        assert all(operand["source_id"] in sources for operand in item["inputs"])
+    assert all(item["statement"] for item in view["verification"]["claims"])
+    assert not ({"generation", "ledger_snapshot", "specialist_results"} & view.keys())
     for calculation in result.ledger_snapshot.calculations:
         derived_records = [
             item for item in result.ledger_snapshot.evidence_records

@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP, localcontext
@@ -14,6 +15,7 @@ from typing import Any, Protocol
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.agent.complexity_router import RouteBudget
+from src.agent.research_progress import ResearchProgress
 from src.decision.models import (
     DecisionBudget,
     DecisionResult,
@@ -181,6 +183,7 @@ class SpecialistRuntime:
     verifier: ClaimLevelVerifier = field(default_factory=ClaimLevelVerifier)
     xbrl_revision_policy: RevisionPolicy = RevisionPolicy.AS_REPORTED
     require_structured_facts: bool = False
+    on_progress: Callable[[ResearchProgress], None] | None = None
     source_chunks: dict[str, dict[str, Any]] = field(default_factory=dict)
     xbrl_chunk_ids: set[str] = field(default_factory=set)
     evidence_id_by_chunk_id: dict[str, str] = field(default_factory=dict)
@@ -207,6 +210,10 @@ class SpecialistRuntime:
 
     def __post_init__(self) -> None:
         self.budget_tracker = _RuntimeBudget(self.budget)
+
+    def emit_progress(self, stage: ResearchProgress) -> None:
+        if self.on_progress is not None:
+            self.on_progress(stage)
 
     def register_plan(self) -> None:
         if self.registered:

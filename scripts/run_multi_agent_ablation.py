@@ -9,8 +9,6 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-import numpy as np
-
 from configs.hard_negatives import P1_CORPUS_FINGERPRINT, P1_EMBEDDING_REVISION, P1_INDEX_ID
 from configs.multi_agent_ablation import CASES, COMPANY_TICKERS, SEC_CUTOFF, SEC_ISSUERS
 from scripts.run_hard_negative_retrieval import DEFAULT_RUN, SPLITS, _load_corpus, _load_vectors, _peak_memory_bytes, _QueryFilters
@@ -29,6 +27,7 @@ from src.ledger.models import EvidenceRecord, EvidenceSourceType
 from src.policy.candidate_gate import CandidateEvidenceGate
 from src.policy.evidence_policy import CandidateDisposition
 from src.research.corpus_map import CorpusMap
+from src.retrieval.frozen_dense import FrozenDenseRetriever
 from src.verification.atomic_claim_verifier import AtomicClaimVerifier
 from src.verification.claim_verifier import ClaimLevelVerifier
 from src.verification.response_policy import INSUFFICIENT_EVIDENCE_ANSWER, verify_and_release
@@ -49,36 +48,13 @@ VARIANTS = {
 }
 
 
-class _DenseIndex:
-    def __init__(self, chunks, vectors, embedder):
-        self.chunks = chunks
-        self.vectors = vectors
-        self.embedder = embedder
-        self.filters = _QueryFilters(chunks)
-        self.document_ids = np.array([item["document_id"] for item in chunks])
-        self.model_lock = threading.Lock()
-
-    def search(self, query: str, top_k: int, document_ids: tuple[str, ...], use_metadata: bool):
-        with self.model_lock:
-            query_vector = np.asarray(self.embedder.embed_query(query), dtype=np.float32)
-        scores = self.vectors @ (query_vector / np.linalg.norm(query_vector))
-        if use_metadata:
-            _, eligible = self.filters.mask(query)
-            scores = np.where(eligible, scores, -np.inf)
-        if document_ids:
-            scores = np.where(np.isin(self.document_ids, document_ids), scores, -np.inf)
-        order = np.argsort(-scores, kind="stable")[:top_k]
-        return [{**self.chunks[position], "score": float(scores[position]), "score_kind": "dense"}
-                for position in order if np.isfinite(scores[position])]
-
-
 class _RecordingRetriever:
     supports_concurrent_retrieval = True
     supports_document_scope = True
 
-    def __init__(self, index: _DenseIndex, *, use_metadata: bool = False):
+    def __init__(self, index: FrozenDenseRetriever, *, use_metadata: bool = False):
         self.index = index
-        self.use_metadata = use_metadata
+        self.filters = _QueryFilters(index.chunks) if use_metadata else None
         self.calls: list[tuple[str, tuple[str, ...], tuple[str, ...]]] = []
         self.chunks: dict[str, dict[str, Any]] = {}
         self.lock = threading.Lock()
@@ -88,7 +64,8 @@ class _RecordingRetriever:
         self.chunks.clear()
 
     def retrieve(self, query: str, top_k: int = 10, *, document_ids: tuple[str, ...] = ()) -> list[dict[str, Any]]:
-        chunks = self.index.search(query, top_k, document_ids, self.use_metadata)
+        eligible = self.filters.mask(query)[1] if self.filters is not None else None
+        chunks = self.index.retrieve(query, top_k, document_ids=document_ids, eligible=eligible)
         with self.lock:
             self.calls.append((" ".join(query.casefold().split()), document_ids, tuple(row["chunk_id"] for row in chunks)))
             self.chunks.update((row["chunk_id"], row) for row in chunks)
@@ -291,7 +268,7 @@ def main() -> None:
     chunks = _load_corpus(args.p1_run)
     vectors = _load_vectors(args.p1_run, chunks)
     embedder = Embedder(device="cpu", revision=P1_EMBEDDING_REVISION)
-    index = _DenseIndex(chunks, vectors, embedder)
+    index = FrozenDenseRetriever(chunks, vectors, embedder)
     corpus = CorpusMap.from_chunks(chunks, index_generation_id=P1_INDEX_ID)
     basic_router, aware_router = ComplexityRouter(), ComplexityRouter(corpus)
     sec = CompanyFactsReplay(args.sec_dir, SEC_ISSUERS, latest_filed=SEC_CUTOFF) if set(args.variants) & {"B3", "B4", "B5"} else None

@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>FilingScope · Research workspace</title>
+  <link rel="stylesheet" href="/research.css">
+  <script src="/research.js" defer></script>
+</head>
+<body>
+  <header class="masthead">
+    <div class="masthead-inner">
+      <a class="brand" href="/" aria-label="FilingScope home"><span class="brand-mark" aria-hidden="true">F</span>FilingScope</a>
+      <span class="workspace-label">Research workspace</span>
+      <span class="local"><span aria-hidden="true"></span>Local session</span>
+    </div>
+  </header>
+  <main class="shell">
+    <section class="intro" aria-labelledby="research-title">
+      <h1 id="research-title">Filing research</h1>
+      <p>Ask a financial question and inspect the evidence behind the result.</p>
+    </section>
+    <div class="layout">
+      <div class="work">
+        <form id="research-form" class="question card">
+          <label for="question">Research question</label>
+          <textarea id="question" rows="2" maxlength="1000" required placeholder="e.g. What was Apple’s FY2024 revenue as originally reported?"></textarea>
+          <div class="form-actions">
+            <div class="mode-control">
+              <label for="mode">Search mode</label>
+              <select id="mode" aria-describedby="mode-help">
+                <option value="auto">Automatic</option>
+                <option value="research">Full research</option>
+              </select>
+              <span id="mode-help" class="visually-hidden">Automatic selects a route. Full research also checks structured facts when available.</span>
+            </div>
+            <button id="run" class="primary" type="submit">Run research <span aria-hidden="true">↗</span></button>
+          </div>
+        </form>
+        <p id="status" class="live-status" role="status" aria-live="polite"></p>
+        <div id="error" class="error" role="alert" hidden></div>
+        <section id="welcome" class="card welcome">
+          <h2>Try a question</h2>
+          <div class="examples">
+            <button type="button" data-example="What was Apple's FY2024 revenue as originally reported?" data-mode="auto">Apple’s FY2024 revenue as originally reported <span aria-hidden="true">↗</span></button>
+            <button type="button" data-example="What was the percentage growth in Apple revenue from FY2023 to FY2024 as originally reported?" data-mode="research">Apple’s revenue growth from FY2023 to FY2024 <span aria-hidden="true">↗</span></button>
+            <button type="button" data-example="What was Apple's FY2030 revenue?" data-mode="research">Apple’s FY2030 revenue <span aria-hidden="true">↗</span></button>
+          </div>
+        </section>
+        <section id="results" class="card results" aria-labelledby="result-title" hidden>
+          <header class="result-header">
+            <h2 id="result-title" tabindex="-1">Research result</h2>
+            <div id="result-status"></div>
+          </header>
+          <div class="tabs" role="tablist" aria-label="Research views">
+            <button type="button" role="tab" id="tab-answer" aria-controls="answer" aria-selected="true">Answer</button>
+            <button type="button" role="tab" id="tab-sources" aria-controls="sources" aria-selected="false" tabindex="-1">Sources</button>
+            <button type="button" role="tab" id="tab-coverage" aria-controls="coverage" aria-selected="false" tabindex="-1">Evidence Coverage</button>
+            <button type="button" role="tab" id="tab-calculations" aria-controls="calculations" aria-selected="false" tabindex="-1">Calculations</button>
+            <button type="button" role="tab" id="tab-verification" aria-controls="verification" aria-selected="false" tabindex="-1">Verification</button>
+            <button type="button" role="tab" id="tab-trace" aria-controls="trace" aria-selected="false" tabindex="-1">Research Trace</button>
+          </div>
+          <div id="answer" class="panel" role="tabpanel" aria-labelledby="tab-answer" tabindex="0"></div>
+          <div id="sources" class="panel" role="tabpanel" aria-labelledby="tab-sources" tabindex="0" hidden></div>
+          <div id="coverage" class="panel" role="tabpanel" aria-labelledby="tab-coverage" tabindex="0" hidden></div>
+          <div id="calculations" class="panel" role="tabpanel" aria-labelledby="tab-calculations" tabindex="0" hidden></div>
+          <div id="verification" class="panel" role="tabpanel" aria-labelledby="tab-verification" tabindex="0" hidden></div>
+          <div id="trace" class="panel" role="tabpanel" aria-labelledby="tab-trace" tabindex="0" hidden></div>
+        </section>
+      </div>
+      <aside class="side" aria-label="Research context">
+        <section class="card activity" aria-labelledby="activity-title">
+          <h2 id="activity-title">Research progress</h2>
+          <p id="activity-empty" class="muted">Progress appears when you run a question.</p>
+          <ol id="activity-list" class="timeline"></ol>
+        </section>
+        <section class="scope" aria-labelledby="scope-title">
+          <h2 id="scope-title">Source scope</h2>
+          <p>Frozen FinanceBench filings and SEC Company Facts filed through December 31, 2024.</p>
+        </section>
+      </aside>
+    </div>
+  </main>
+</body>
+</html>

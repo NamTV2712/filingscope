@@ -73,12 +73,12 @@ class CompanyCatalog:
             clean_aliases = tuple(
                 sorted(
                     {alias.strip() for alias in expanded if normalize_entity(alias)},
-                    key=lambda alias: (-len(normalize_entity(alias)), alias.casefold()),
+                    key=lambda alias: (-len(normalize_entity(alias)), alias.casefold(), alias),
                 )
             )
             normalized[entity_id] = clean_aliases
             names[entity_id] = next(
-                iter(sorted(raw_alias_list, key=lambda alias: (-len(alias), alias.casefold()))),
+                iter(sorted(raw_alias_list, key=lambda alias: (-len(alias), alias.casefold(), alias))),
                 entity_id,
             )
             for alias in clean_aliases:

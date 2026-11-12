@@ -71,6 +71,8 @@ def test_company_catalog_merges_canonical_names_with_source_aliases() -> None:
 
     assert [match.entity_id for match in catalog.identify("Compare Apple revenue") ] == ["AAPL"]
     assert catalog.metadata_entity_id("Apple Inc.") == "AAPL"
+    with_case_variants = CompanyCatalog({"BA": ("boeing", "Boeing")})
+    assert with_case_variants.identify("Boeing revenue")[0].canonical_name == "Boeing"
 
 
 def test_complete_evidence_returns_answer_without_using_scores() -> None:
