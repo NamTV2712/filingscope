@@ -114,6 +114,8 @@ class _RuntimeBudget:
         self.llm_calls = 0
         self.candidate_chunks = 0
         self.context_tokens = 0
+        self.input_tokens: int | None = 0
+        self.output_tokens: int | None = 0
 
     @property
     def elapsed_seconds(self) -> float:

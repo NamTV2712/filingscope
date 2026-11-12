@@ -178,8 +178,21 @@ class ComplexityRouter:
     It does not call a retriever, model, provider, or agent.
     """
 
-    def __init__(self, corpus_map: CorpusMap | None = None):
+    def __init__(
+        self,
+        corpus_map: CorpusMap | None = None,
+        *,
+        fast_budget: RouteBudget = FAST_BUDGET,
+        research_budget: RouteBudget = RESEARCH_BUDGET,
+    ):
+        for budget, default in ((fast_budget, FAST_BUDGET), (research_budget, RESEARCH_BUDGET)):
+            if budget.max_graph_steps < default.max_graph_steps:
+                raise ValueError(f"the route requires {default.max_graph_steps} graph steps")
+            if min(budget.max_planned_tasks, budget.max_retrieval_calls) < 1:
+                raise ValueError("supported routes require a positive planning and retrieval limit")
         self.corpus_map = corpus_map
+        self.fast_budget = fast_budget
+        self.research_budget = research_budget
         if corpus_map is None:
             self.extractor = EvidenceRequirementExtractor()
         else:
@@ -367,10 +380,10 @@ class ComplexityRouter:
         return state["decision"].path.value
 
     def _fast_path_node(self, state: _RouterGraphState) -> dict[str, Any]:
-        return self._prepare_execution(state, ExecutionPath.FAST, FAST_BUDGET, "fast_path")
+        return self._prepare_execution(state, ExecutionPath.FAST, self.fast_budget, "fast_path")
 
     def _research_path_node(self, state: _RouterGraphState) -> dict[str, Any]:
-        return self._prepare_execution(state, ExecutionPath.RESEARCH, RESEARCH_BUDGET, "research_path")
+        return self._prepare_execution(state, ExecutionPath.RESEARCH, self.research_budget, "research_path")
 
     @staticmethod
     def _unsupported_path_node(state: _RouterGraphState) -> dict[str, Any]:

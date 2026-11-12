@@ -119,6 +119,7 @@ def test_specialist_releases_only_rechecked_claims_and_keeps_draft_audit() -> No
     assert result.status == "PARTIAL"
     assert result.usage.correction_passes == 1
     assert result.usage.llm_calls == 1
+    assert (result.usage.input_tokens, result.usage.output_tokens) == (50, 30)
     assert result.usage.graph_steps == 4
     assert "$110 billion" in result.answer and "$999 billion" not in result.answer
     assert result.generation is not None and result.generation.answer == result.answer

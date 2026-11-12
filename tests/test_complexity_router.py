@@ -62,6 +62,15 @@ def test_all_route_classes_have_finite_trace_and_usage_is_zero():
         assert run.route_trace[0] == "classify_request"
 
 
+def test_route_uses_the_configured_planning_limit():
+    profile = RESEARCH_BUDGET.model_copy(update={"max_planned_tasks": 1, "max_retrieval_calls": 1})
+    router = ComplexityRouter(research_budget=profile)
+    result = router.route("Compare Apple and Microsoft revenue in FY2024.")
+    assert result.budget == profile
+    assert result.planned_task_count == result.planned_retrieval_calls == 1
+    assert router.route("Forecast Apple's revenue next year.").budget == UNSUPPORTED_BUDGET
+
+
 def test_router_can_use_verified_corpus_company_aliases_for_fast_lookup():
     corpus_map = CorpusMap.from_chunks(
         [

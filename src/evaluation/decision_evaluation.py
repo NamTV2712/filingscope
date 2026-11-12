@@ -245,6 +245,7 @@ def evaluate_decisions(
             "actual_reason_code": result.reason_code,
             "action_correct": is_action_correct,
             "reason_correct": is_reason_correct,
+            "coverage_sufficient": result.coverage.sufficient,
             "gap_requirement_ids": list(result.gap_requirement_ids),
             "gap_codes": list(result.gap_codes),
         })

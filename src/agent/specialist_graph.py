@@ -78,6 +78,8 @@ class SpecialistUsage(BaseModel):
     deduplicated_query_tasks: int = Field(default=0, ge=0)
     duplicate_candidate_chunks: int = Field(default=0, ge=0)
     context_tokens: int = Field(ge=0)
+    input_tokens: int | None = Field(default=0, ge=0)
+    output_tokens: int | None = Field(default=0, ge=0)
     evidence_tokens: int = Field(default=0, ge=0)
     wall_time_ms: float = Field(ge=0, allow_inf_nan=False)
 
@@ -280,6 +282,8 @@ class SpecialistResearchGraph:
             deduplicated_query_tasks=runtime.deduplicated_query_count,
             duplicate_candidate_chunks=runtime.duplicate_candidate_chunks,
             context_tokens=runtime.budget_tracker.context_tokens,
+            input_tokens=runtime.budget_tracker.input_tokens,
+            output_tokens=runtime.budget_tracker.output_tokens,
             evidence_tokens=sum(chunk.get("token_count") or count_tokens(chunk.get("text", "")) for chunk in report_chunks),
             wall_time_ms=max(0.0, (time.perf_counter() - runtime.budget_tracker.started) * 1000),
         )
@@ -811,10 +815,14 @@ class SpecialistResearchGraph:
         if not runtime.budget_tracker.can_start(llm=True):
             return _fallback_result()
         runtime.budget_tracker.charge(llm=True)
+        runtime.budget_tracker.input_tokens = None
+        runtime.budget_tracker.output_tokens = None
         try:
             generated = runtime.generator.generate(question, chunks)
         except Exception:
             return _fallback_result()
+        runtime.budget_tracker.input_tokens = generated.prompt_tokens
+        runtime.budget_tracker.output_tokens = generated.completion_tokens
         if not generated.answer.strip():
             return _fallback_result()
         if is_fallback_answer(generated.answer):
