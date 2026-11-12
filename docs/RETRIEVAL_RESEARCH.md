@@ -35,8 +35,8 @@ fingerprint are in [M2 diagnostics results](RETRIEVAL_DIAGNOSTICS_RESULTS.md).
 | R3 | Independent pool sizes | Dense, BM25, lexical, fusion, rerank candidate counts and final-k sweep | Complete; no hybrid setting beats dense |
 | R4 | Hard negatives | Same company/wrong year; same metric/wrong company; wrong metric; similar wording/wrong disclosure; restated vs as-reported | Complete on the [24-case M12 cohort](HARD_NEGATIVE_RETRIEVAL.md) |
 | R5 | Metadata routing | Company, CIK, period, form, and section filters independently and jointly | Complete for available fields; CIK absent and section not discriminative |
-| R6 | Structure-aware retrieval | Section-aware, table-aware, parent-child and small-to-big expansion | M10 measured section and table chunking. Parent-child and small-to-big remain open. [M10 results](DOCUMENT_INTELLIGENCE.md) |
-| R7 | Late interaction | ColBERT/Qdrant multivectors after R1–R6 | Deferred to M14 |
+| R6 | Structure-aware retrieval | Section-aware, table-aware, parent-child and small-to-big expansion | Complete. [M10 parser results](DOCUMENT_INTELLIGENCE.md) and [M14 parent context](ADVANCED_RETRIEVAL.md) |
+| R7 | Late interaction | ColBERT/Qdrant multivectors after R1–R6 | Complete on the [fixed M12 candidate pools](ADVANCED_RETRIEVAL.md) |
 
 ## Experiment controls
 

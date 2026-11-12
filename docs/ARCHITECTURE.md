@@ -282,6 +282,9 @@ persist. M7 adds a bounded sequential specialist graph and a narrow SEC Company
 Facts path. M8 adds bounded parallel filing searches. M9 advances XBRL
 reconciliation. M10 measures parser and chunking variants on known dense
 retrieval failures, followed by verification, hard negatives and agent
-ablations.
-M15 may add a local evidence-first interface. Cloud deployment is out of scope
-unless explicitly requested.
+ablations. M14 compares parent context under a fixed token cap and reranks
+fixed dense candidates with late interaction, a cross-encoder and local
+provenance graphs. The production retrieval default stays dense.
+[Advanced retrieval experiments](ADVANCED_RETRIEVAL.md)
+
+M15 adds a local evidence-first interface. Deployment is out of scope.

@@ -3,7 +3,7 @@
 Audit refreshed: 2026-11-12<br>
 Branch: `main`<br>
 Audited repository: `D:\Project\filingscope`<br>
-Audited source commit: `91f3ee5a7cdfb6a4091b4360354bc764cc4b9eb3`<br>
+Audited source commit: `c3d93459a63c290589cae95715844e743bf7692c`<br>
 Initial audit baseline: `956cef412d765395b5a7f0b773f821a58686a35a`
 
 This refresh reflects P0–P5, M1 runtime compatibility, M2 retrieval
@@ -12,7 +12,8 @@ complexity routing, M6's in-memory Evidence Ledger, M7's specialist graph
 and narrow Company Facts path, M8's bounded filing fan-out, M9's
 structured fact resolution, M10's PDF parser comparison, M11's atomic
 verification and bounded release policy, M12's provenance-sensitive
-retrieval benchmark, and M13's graph ablation and candidate-policy integration.
+retrieval benchmark, M13's graph ablation and candidate-policy integration,
+and M14's context expansion and reranking comparisons.
 P0–P4 behavior and the
 completed P5 provider benchmark remain preserved. Source benchmark data,
 model caches, and generated run artifacts remain local and git-ignored.
@@ -336,7 +337,16 @@ replay and one with smart routing. The routing variant used fewer calls and
 missed two of the recovered answers. The full suite passed with 338 tests and
 3 skips. [M13 ablation](ABLATION_STUDY.md)
 
+## M14 validation update
+
+Full-page expansion reduced evidence passage recall at a fixed token budget.
+Selective expansion matched dense. Explicit annual header alignment recovered
+11/14 amounts on known pages. On the fixed candidate pools, provenance-graph
+PageRank led Recall@10 at 0.8333, and dual-level graph ranking led nDCG@5 at
+0.5647. Dense remains the default. The full suite passed with 343 tests and
+3 skips. [M14 report](ADVANCED_RETRIEVAL.md)
+
 ## Next milestone
 
-M14 completes the parent-child and context expansion comparisons and tests
-advanced retrieval on fixed evidence. [Research agenda](RESEARCH_AGENDA.md)
+M15 connects the specialist workflow to a local evidence-first research
+interface. [Research agenda](RESEARCH_AGENDA.md)

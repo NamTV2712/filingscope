@@ -264,7 +264,7 @@ metric, leakage, and reproduction details.
 | M11 | Source-linked atomic verification and bounded correction | Complete. [Results](docs/ADVANCED_VERIFICATION.md) |
 | M12 | Financial hard-negative retrieval | Complete. [24-case provenance benchmark](docs/HARD_NEGATIVE_RETRIEVAL.md) |
 | M13 | Controlled solo and specialist ablation | Complete. [24-case results](docs/ABLATION_STUDY.md) |
-| M14 | Advanced retrieval experiments | Planned |
+| M14 | Parent context, ColBERT, and filing-graph retrieval experiments | Complete. [Fixed-pool results](docs/ADVANCED_RETRIEVAL.md) |
 | M15 | Local evidence-first research UX | Planned; no deployment |
 
 No answer quality or end-to-end agent performance claims are made by the

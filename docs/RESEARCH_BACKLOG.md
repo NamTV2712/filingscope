@@ -18,7 +18,7 @@ tested work only; design notes are not completion evidence.
 | M11 | Atomic claims and bounded correction | Complete in the specialist graph | [M11 replay](ADVANCED_VERIFICATION.md) covers claim statuses, evidence links and one-pass correction |
 | M12 | Provenance-sensitive hard negatives | Complete | [24-case benchmark](HARD_NEGATIVE_RETRIEVAL.md) includes five provenance confusions and full-corpus rankings |
 | M13 | Multi-agent and router ablation | Complete | [A0–A4 and B0–B5](ABLATION_STUDY.md) compared on quality, provenance, calls and latency |
-| M14 | ColBERT/multivectors/GraphRAG/HippoRAG/LightRAG | Only after R1–R6 | Retain only measured improvements against dense baseline |
+| M14 | ColBERT, multivectors and graph retrieval adaptations | Complete. Dense stays the default | [R6 and fixed-pool comparisons](ADVANCED_RETRIEVAL.md) |
 | M15 | Local evidence-first research UX | After API/ledger contracts | inspectable answer/sources/coverage/calculation/verification/trace flow |
 
 Cloud deployment is not on this backlog. No work may expand the agent graph

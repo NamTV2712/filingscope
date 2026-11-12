@@ -68,7 +68,7 @@ consistency, sufficiency, verification, abstention, and release.
 | M11 | Atomic claim graph, semantic support checks, contradictions, bounded correction | Complete. [Claim and release replay](ADVANCED_VERIFICATION.md) |
 | M12 | Company/year/context hard-negative retrieval benchmark | Complete. [Fixed corpus and results](HARD_NEGATIVE_RETRIEVAL.md) |
 | M13 | Multi-agent and smart-router ablation against retrieval/evidence baselines | Complete. [Controlled results](ABLATION_STUDY.md) |
-| M14 | ColBERT/multivectors/GraphRAG/HippoRAG/LightRAG only after earlier evidence | Planned |
+| M14 | ColBERT, multivectors, and graph retrieval adaptations | Complete. [Context and reranking results](ADVANCED_RETRIEVAL.md) |
 | M15 | Local evidence-first research interface and safe progress trace | Planned; do not deploy |
 
 ## Research rules

@@ -445,6 +445,22 @@ The log separates software-contract checks from answer-quality evidence.
   both graph modes and use the observed table and fiscal failures in later
   experiments. [M13 provenance and resources](ABLATION_STUDY.md)
 
+## M14 — Advanced Retrieval
+
+- **Hypothesis** Parent context can restore missing table headers. Late
+  interaction and provenance graph cues can improve ranking within a fixed
+  dense candidate pool.
+- **Experiment** Replay the 24 M12 queries and P1 source pages. Compare
+  three context sizes under a fixed cap, audit 14 annual slots, and rerank
+  50 dense candidates per question with neural and graph variants.
+- **Result** Full parent expansion lowered held-out recall from 0.7500 to
+  0.6250. Annual column pairing recovered 11/14 audited values versus 0/14.
+  PageRank led overall Recall@10 at 0.8333. The dual-level graph led
+  nDCG@5 at 0.5647. ColBERT improved Recall@10 to 0.8056 and local Qdrant
+  returned the same rankings with higher added latency.
+- **Decision** Keep dense as the default. Retain the improved rankers and
+  source-column audit as opt-in research. [M14 scope and resources](ADVANCED_RETRIEVAL.md)
+
 ## Planned experiments
 
 Each planned experiment must add its exact hypothesis, baseline, changed

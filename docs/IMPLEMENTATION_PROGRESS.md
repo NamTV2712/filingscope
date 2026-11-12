@@ -42,25 +42,25 @@ Deployment: none; explicitly out of scope
   Docs `55d23ae4a5a31066969fdd61d7385e5908647aa0`.
   The full suite passed with 335 tests and 3 skips. [M12 validation](HARD_NEGATIVE_RETRIEVAL.md)
 - M13 adds candidate screening and compares solo, forced research and smart
-  routing. Source `91f3ee5a7cdfb6a4091b4360354bc764cc4b9eb3`. The full suite
+  routing. Source `91f3ee5a7cdfb6a4091b4360354bc764cc4b9eb3`. Docs
+  `2fb48a4ff140273b7c28de6036034cba7bc1eeca`. The full suite
   passed with 338 tests and 3 skips. [M13 validation](ABLATION_STUDY.md)
+- M14 compares parent-page and selective expansion, annual statement
+  alignment, and five reranking methods with dense retrieval. Source
+  `c3d93459a63c290589cae95715844e743bf7692c`. The full suite passed with 343
+  tests and 3 skips. [M14 validation](ADVANCED_RETRIEVAL.md)
 
 ## Current milestone
 
-M14 advanced retrieval experiments are next. The M13 full report is complete
-at `data/financebench/ablation_runs/m13-results.json`. The nine SEC snapshots
-are preserved in `data/financebench/ablation_runs/m13-sec/`.
+M15 is next. M14 experiments, full regression tests and compilation are complete.
 
 ## Exact next steps
 
-1. Read specification sections I and Z. Complete R6's parent-child and
-   small-to-big context comparisons using the M10/M12 evidence and M13
-   filing-table failures.
-2. Research and evaluate ColBERT, Qdrant multivectors, GraphRAG, HippoRAG
-   and LightRAG. Compare evidence recovery and resource costs with the
-   permanent dense baseline and keep demonstrated improvements.
-3. Document, test, commit and push M14 before starting M15.
+1. Connect a local research interface to the specialist graph and project
+   approved execution events, evidence and verification into public results.
+2. Exercise verified and abstaining questions through the local interface.
+3. Run regressions, update the research reports and verify the pushed Git tip.
 
 ## Remaining milestones
 
-M14 advanced retrieval experiments and M15 local research UX. Do not deploy.
+M15 local research UX and the final specification audit. Do not deploy.
