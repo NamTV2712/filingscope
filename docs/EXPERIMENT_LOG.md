@@ -417,6 +417,20 @@ The log separates software-contract checks from answer-quality evidence.
 - **Decision** Adopt in the specialist graph and retain P4 for baseline
   comparisons. [M11 reproduction and limitations](ADVANCED_VERIFICATION.md)
 
+## M12 — Financial Hard Negatives
+
+- **Hypothesis** Relevant-looking filing passages create provenance errors
+  that a random-negative test misses. Explicit query metadata may reduce
+  company and period confusion.
+- **Experiment** Compare dense, BM25 and dense with query-derived metadata
+  on 24 questions, 35 audited negatives and 28,849 frozen P1 chunks.
+- **Result** Dense pairwise accuracy was 42/42 on random controls and 35/42
+  on curated comparisons. The mask increased Recall@10 from 0.5625 to 0.7083
+  overall and left held-out Recall@10 at 0.75. It excluded a valid quarterly
+  balance-sheet chunk. Dense p95 was 50.911 ms and masked p95 was 58.387 ms.
+- **Decision** Retain unfiltered dense as the baseline. Preserve the mask as
+  a research variant. [M12 resources, splits and categories](HARD_NEGATIVE_RETRIEVAL.md)
+
 ## Planned experiments
 
 Each planned experiment must add its exact hypothesis, baseline, changed

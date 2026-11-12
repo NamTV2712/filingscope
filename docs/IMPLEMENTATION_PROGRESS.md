@@ -34,25 +34,28 @@ Deployment: none; explicitly out of scope
   [M10 validation and reproduction](DOCUMENT_INTELLIGENCE.md)
 - M11 adds atomic claim support and a one-pass correction policy to the
   specialist graph. Source `16e106bf7761aa0115c0ec01cabeb06312f117a1`.
+  Docs `74aaed8ddcb6e138fc6042395cadc419b898f17d`.
   The fixed replay matched 16/16 expected release decisions. The full suite
   passed with 332 tests and 3 skips. [M11 validation](ADVANCED_VERIFICATION.md)
+- M12 adds a 24-case hard-negative retrieval benchmark with five categories.
+  Source `b9d53ed7424d5837386a69c0355543c28a12df33`. Dense stays the baseline.
+  The full suite passed with 335 tests and 3 skips. [M12 validation](HARD_NEGATIVE_RETRIEVAL.md)
 
 ## Current milestone
 
-M12 hard-negative financial retrieval benchmark is next. The M11 replay is
-complete at `data/financebench/verification_runs/m11-replay.json`.
+M13 multi-agent ablation is next. The M12 ranking report is complete at
+`data/financebench/hard_negative_runs/m12-results.json`.
 
 ## Exact next steps
 
-1. Read the hard-negative requirements in the specification. Verify the
-   FinRank and Fin-RATE sources and inspect M2's failure artifacts and
-   available local filing passages for real provenance-sensitive labels.
-2. Freeze cases and splits. Compare existing dense and lexical retrieval
-   and measure discrimination by company, period, metric and filing context.
-3. Document the cohort, metrics and limits, run regressions, then commit
-   and push validated M12 to `origin/main` before starting M13.
+1. Read specification sections V and W and inspect `docs/ABLATION_STUDY.md`,
+   the P5 evaluation artifacts and the current specialist graph contracts.
+2. Freeze a comparable cohort and specify the active components for B0–B5.
+   Run the ablation through the actual retrieval and specialist paths.
+3. Record quality, provenance, resource use and routing errors. Validate,
+   commit and push M13 before starting M14.
 
 ## Remaining milestones
 
-M12 hard-negative financial retrieval benchmark, M13 multi-agent ablation,
-M14 advanced retrieval experiments and M15 local research UX. Do not deploy.
+M13 multi-agent ablation, M14 advanced retrieval experiments and M15 local
+research UX. Do not deploy.

@@ -218,6 +218,14 @@ can trigger one deterministic correction and recheck inside the existing
 claim-verifier stage. Both passes are inspectable in the request ledger.
 [M11 evaluation and limitations](ADVANCED_VERIFICATION.md)
 
+## M12 financial hard negatives
+
+The offline benchmark evaluates full-corpus ranking and curated pairwise
+discrimination independently. Passage judgments preserve source URLs,
+physical pages and chunk IDs. Filing year, disclosure type and revision
+basis can make identical numbers unsuitable for a particular request.
+[M12 cohort and ranking results](HARD_NEGATIVE_RETRIEVAL.md)
+
 ## Target: separate logical planes
 
 ```text

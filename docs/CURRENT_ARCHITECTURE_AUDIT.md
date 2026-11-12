@@ -3,7 +3,7 @@
 Audit refreshed: 2026-11-12<br>
 Branch: `main`<br>
 Audited repository: `D:\Project\filingscope`<br>
-Audited source commit: `16e106bf7761aa0115c0ec01cabeb06312f117a1`<br>
+Audited source commit: `b9d53ed7424d5837386a69c0355543c28a12df33`<br>
 Initial audit baseline: `956cef412d765395b5a7f0b773f821a58686a35a`
 
 This refresh reflects P0–P5, M1 runtime compatibility, M2 retrieval
@@ -11,7 +11,8 @@ diagnostics, M3 candidate policy, M4 corpus-aware planning, M5 finite
 complexity routing, M6's in-memory Evidence Ledger, M7's specialist graph
 and narrow Company Facts path, M8's bounded filing fan-out, M9's
 structured fact resolution, M10's PDF parser comparison, and M11's atomic
-verification and bounded release policy. P0–P4 behavior and the
+verification and bounded release policy, and M12's provenance-sensitive
+retrieval benchmark. P0–P4 behavior and the
 completed P5 provider benchmark remain preserved. Source benchmark data,
 model caches, and generated run artifacts remain local and git-ignored.
 
@@ -317,7 +318,15 @@ once and retains both assessments in the ledger. The controlled replay matched
 16/16 claim-status sequences and 16/16 release decisions. The full suite passed
 with 332 tests and 3 skips. [M11 report](ADVANCED_VERIFICATION.md)
 
+## M12 validation update
+
+M12 runs 24 hard-negative cases over the 28,849 frozen P1 chunks. Dense
+beat BM25 in global Recall@10, while BM25 won more curated revision pairs.
+Query-derived company, period and form filters improved overall recall but
+excluded a valid quarterly filing and did not improve held-out recall. The
+full suite passed with 335 tests and 3 skips. [M12 report](HARD_NEGATIVE_RETRIEVAL.md)
+
 ## Next milestone
 
-M12 builds and scores a frozen, provenance-sensitive financial hard-negative
-benchmark. [Research agenda](RESEARCH_AGENDA.md)
+M13 compares the routed and specialist research configurations against the
+preserved retrieval and single-agent baselines. [Research agenda](RESEARCH_AGENDA.md)

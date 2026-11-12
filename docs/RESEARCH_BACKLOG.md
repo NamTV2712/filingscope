@@ -16,7 +16,7 @@ tested work only; design notes are not completion evidence.
 | M9 | SEC XBRL and fact normalization | Complete | [M9 fixture replay](FINANCIAL_FACT_ARCHITECTURE.md) covers CIK, concept, date interval, currency, provenance, amendments and changed comparatives |
 | M10 | Docling and structure-aware parsing experiment | Complete. pypdf remains the default | [Five-PDF comparison](DOCUMENT_INTELLIGENCE.md) with fidelity, retrieval, time, RAM and disk measurements |
 | M11 | Atomic claims and bounded correction | Complete in the specialist graph | [M11 replay](ADVANCED_VERIFICATION.md) covers claim statuses, evidence links and one-pass correction |
-| M12 | Provenance-sensitive hard negatives | Seed from M2 diagnostic misses | Frozen company/year/context-confusable test cohort |
+| M12 | Provenance-sensitive hard negatives | Complete | [24-case benchmark](HARD_NEGATIVE_RETRIEVAL.md) includes five provenance confusions and full-corpus rankings |
 | M13 | Multi-agent and router ablation | After M5–M9 | B0–B5 compared on quality, provenance, cost, calls and latency |
 | M14 | ColBERT/multivectors/GraphRAG/HippoRAG/LightRAG | Only after R1–R6 | Retain only measured improvements against dense baseline |
 | M15 | Local evidence-first research UX | After API/ledger contracts | inspectable answer/sources/coverage/calculation/verification/trace flow |

@@ -33,7 +33,7 @@ fingerprint are in [M2 diagnostics results](RETRIEVAL_DIAGNOSTICS_RESULTS.md).
 | R1 | Candidate recall before fusion and reranking | Dense, BM25, lexical, and union gold-page recall at each pool size | Complete; dense dominates individual sources |
 | R2 | Fusion ablation | Equal/weighted RRF, dense-preserving, route-aware, rerank | Complete; dense remains ahead on held-out |
 | R3 | Independent pool sizes | Dense, BM25, lexical, fusion, rerank candidate counts and final-k sweep | Complete; no hybrid setting beats dense |
-| R4 | Hard negatives | Same company/wrong year; same metric/wrong company; wrong metric; similar wording/wrong disclosure; restated vs as-reported | Deferred to M12 |
+| R4 | Hard negatives | Same company/wrong year; same metric/wrong company; wrong metric; similar wording/wrong disclosure; restated vs as-reported | Complete on the [24-case M12 cohort](HARD_NEGATIVE_RETRIEVAL.md) |
 | R5 | Metadata routing | Company, CIK, period, form, and section filters independently and jointly | Complete for available fields; CIK absent and section not discriminative |
 | R6 | Structure-aware retrieval | Section-aware, table-aware, parent-child and small-to-big expansion | M10 measured section and table chunking. Parent-child and small-to-big remain open. [M10 results](DOCUMENT_INTELLIGENCE.md) |
 | R7 | Late interaction | ColBERT/Qdrant multivectors after R1–R6 | Deferred to M14 |
