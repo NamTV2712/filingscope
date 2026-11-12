@@ -20,10 +20,12 @@ from src.decision.models import (
 )
 from src.decision.period_value_parser import (
     PeriodValuePair,
+    extract_filing_assertions,
     extract_period_value_pairs,
     period_matches,
 )
 from src.decision.requirement_extractor import requires_nonstandard_reporting_basis
+from src.ingestion.company_facts import matches_requested_revision, requested_revision_policies
 from src.ingestion.period_identity import intervals_agree
 from src.retrieval.structured_lookup import structured_lookup
 
@@ -186,6 +188,7 @@ def _facts_from_chunk(
     question: str,
     metric: MetricRequirement,
     entity_id: str,
+    issuer_aliases: tuple[str, ...] = (),
 ) -> tuple[EvidenceFact, ...]:
     chunk_id = chunk.get("chunk_id")
     text = chunk.get("text")
@@ -219,6 +222,8 @@ def _facts_from_chunk(
                     metric_aliases=metric.aliases,
                 )
             )
+        elif chunk.get("filing_page_checked") is True:
+            observations.extend(extract_filing_assertions(text, metric_aliases=metric.aliases, issuer_aliases=issuer_aliases))
         else:
             observations.extend(
                 extract_period_value_pairs(text, metric_aliases=metric.aliases)
@@ -226,7 +231,7 @@ def _facts_from_chunk(
 
     facts: list[EvidenceFact] = []
     if metric.quantitative:
-        period_metadata = _period_from_metadata(chunk)
+        period_metadata = None if chunk.get("filing_page_checked") is True else _period_from_metadata(chunk)
         for pair in observations:
             if not _kind_matches(pair, metric):
                 continue
@@ -311,6 +316,11 @@ class EvidenceCoverageAnalyzer:
         number_seen: dict[str, bool] = defaultdict(bool)
         source_conflict_ids: dict[str, set[str]] = defaultdict(set)
         nonstandard_basis = requires_nonstandard_reporting_basis(requirements.question)
+        revisions = requested_revision_policies(requirements.question)
+        issuer_aliases = {
+            entity.entity_id: tuple(dict.fromkeys((entity.matched_alias, entity.canonical_name)))
+            for entity in requirements.entities
+        }
 
         for requirement in requirements.evidence:
             metric = metric_by_id[requirement.metric_id]
@@ -324,6 +334,8 @@ class EvidenceCoverageAnalyzer:
             candidate_facts: list[EvidenceFact] = []
             entity_chunks = 0
             usable_chunks = 0
+            revision_mismatch = False
+            unit_mismatch = False
             for chunk in deduplicated:
                 entity_ids = _entity_ids(chunk, self.catalog)
                 if requirement.entity_id not in entity_ids:
@@ -331,8 +343,11 @@ class EvidenceCoverageAnalyzer:
                 entity_chunks += 1
                 if not _has_provenance(chunk):
                     continue
+                if not matches_requested_revision(chunk.get("revision_kind"), revisions):
+                    revision_mismatch = True
+                    continue
                 usable_chunks += 1
-                if _source_metadata_conflict(chunk):
+                if len(entity_ids) > 1 or _source_metadata_conflict(chunk):
                     source_conflict_ids[requirement.requirement_id].add(str(chunk["chunk_id"]))
                     continue
                 normalized = _normalized_facts(chunk, metric, requirement.entity_id)
@@ -346,6 +361,8 @@ class EvidenceCoverageAnalyzer:
                         number_seen[requirement.requirement_id] = True
                         if requirements.requested_currency is None or fact.currency == requirements.requested_currency:
                             candidate_facts.append(fact)
+                        elif fact.currency is not None:
+                            unit_mismatch = True
                     continue
                 text = chunk.get("text")
                 if not isinstance(text, str):
@@ -375,13 +392,14 @@ class EvidenceCoverageAnalyzer:
                     question=requirements.question,
                     metric=metric,
                     entity_id=requirement.entity_id,
+                    issuer_aliases=issuer_aliases.get(requirement.entity_id, ()),
                 ):
-                    if period_matches(requirement.period, fact.period) and (
-                        not requirement.quantitative
-                        or requirements.requested_currency is None
-                        or fact.currency == requirements.requested_currency
-                    ):
+                    if not period_matches(requirement.period, fact.period):
+                        continue
+                    if not requirement.quantitative or requirements.requested_currency in (None, fact.currency):
                         candidate_facts.append(fact)
+                    elif fact.currency is not None:
+                        unit_mismatch = True
 
             candidate_facts = list({
                 (
@@ -425,7 +443,7 @@ class EvidenceCoverageAnalyzer:
                 reason = "entity_mismatch"
             elif usable_chunks == 0:
                 status = CoverageStatus.MISSING
-                reason = "source_provenance_missing"
+                reason = "source_revision_mismatch" if revision_mismatch else "source_provenance_missing"
             elif not metric_seen[requirement.requirement_id]:
                 status = CoverageStatus.MISSING
                 reason = "metric_mismatch"
@@ -435,6 +453,9 @@ class EvidenceCoverageAnalyzer:
             elif metric.quantitative and not number_seen[requirement.requirement_id]:
                 status = CoverageStatus.MISSING
                 reason = "numerical_value_missing"
+            elif unit_mismatch:
+                status = CoverageStatus.MISSING
+                reason = "unit_mismatch"
             else:
                 status = CoverageStatus.MISSING
                 reason = "numerical_value_or_period_alignment_missing"

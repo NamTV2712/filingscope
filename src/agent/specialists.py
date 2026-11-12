@@ -192,7 +192,7 @@ class SpecialistRuntime:
     on_progress: Callable[[ResearchProgress], None] | None = None
     source_chunks: dict[str, dict[str, Any]] = field(default_factory=dict)
     xbrl_chunk_ids: set[str] = field(default_factory=set)
-    inspected_statement_pages: dict[tuple[str, int], bool] = field(default_factory=dict)
+    inspected_statement_pages: dict[tuple[str, int], bool | None] = field(default_factory=dict)
     ambiguous_statement_rows: int = 0
     evidence_id_by_chunk_id: dict[str, str] = field(default_factory=dict)
     chunk_tasks: dict[str, set[str]] = field(default_factory=dict)
@@ -813,6 +813,8 @@ class StructuredFinancialDataWorker:
             "metric_id": task.metric_id,
             "period": fact.fiscal_period,
             "currency": fact.currency,
+            "source_revision": revision,
+            "revision_kind": provenance.revision_kind,
         }
         runtime.evidence_id_by_chunk_id[chunk_id] = record.evidence_id
         runtime.preferred_evidence_by_chunk_id[chunk_id] = record.evidence_id
@@ -924,17 +926,20 @@ def _normalize_filing_statements(runtime: SpecialistRuntime) -> tuple[int, int]:
             continue
         key = document, page
         if key in inspected:
+            if inspected[key] is not None:
+                chunk["filing_page_checked"] = True
             if inspected[key] and "normalized_facts" not in chunk:
                 chunk["normalized_facts"] = ()
             continue
         text = source_page(*key)
         if text is None:
-            inspected[key] = False
+            inspected[key] = None
             continue
         entity = catalog.metadata_entity_id(chunk.get("ticker"), chunk.get("company"), document)
         if entity is None:
-            inspected[key] = False
+            inspected[key] = None
             continue
+        chunk["filing_page_checked"] = True
         fiscal_year = int(years[0])
         quarter = re.search(r"(?:19|20)\d{2}Q([1-4])(?:_|$)", document, re.I)
         statement = parse_statement_columns(
@@ -957,7 +962,7 @@ def _normalize_filing_statements(runtime: SpecialistRuntime) -> tuple[int, int]:
             )
             for cell in statement.values if not cell.restated
         )
-    return sum(inspected.values()), runtime.ambiguous_statement_rows
+    return sum(value is True for value in inspected.values()), runtime.ambiguous_statement_rows
 
 
 class FinancialReasoner:
@@ -1117,16 +1122,19 @@ class FinancialReasoner:
 
 def _chunk_mapping(value: Any) -> dict[str, Any]:
     if isinstance(value, dict):
-        return {key: item for key, item in value.items() if key != "normalized_facts"}
-    if hasattr(value, "model_dump"):
-        return value.model_dump()
-    if hasattr(value, "__dataclass_fields__"):
+        data = value
+    elif hasattr(value, "model_dump"):
+        data = value.model_dump()
+    elif hasattr(value, "__dataclass_fields__"):
         from dataclasses import asdict
 
-        return asdict(value)
-    if hasattr(value, "__dict__"):
-        return dict(vars(value))
-    raise TypeError("retrieval chunks must be mappings or structured objects")
+        data = asdict(value)
+    elif hasattr(value, "__dict__"):
+        data = vars(value)
+    else:
+        raise TypeError("retrieval chunks must be mappings or structured objects")
+    return {key: item for key, item in data.items()
+            if key not in {"normalized_facts", "filing_page_checked", "revision_kind"}}
 
 
 def _score(chunk: dict[str, Any]) -> float:

@@ -74,6 +74,16 @@ def requested_revision_policies(question: str) -> frozenset[RevisionPolicy]:
     return frozenset(policies)
 
 
+def matches_requested_revision(kind: str | None, requested: frozenset[RevisionPolicy]) -> bool:
+    if not requested:
+        return True
+    if requested == {RevisionPolicy.AS_REPORTED}:
+        return kind == RevisionKind.ORIGINAL
+    if requested == {RevisionPolicy.LATEST}:
+        return kind in {RevisionKind.AMENDMENT, RevisionKind.COMPARATIVE_REVISION}
+    return False
+
+
 class FactRevision(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
 

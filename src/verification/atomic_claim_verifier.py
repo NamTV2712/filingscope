@@ -10,6 +10,7 @@ from src.decision.company_catalog import CompanyCatalog
 from src.decision.models import EvidenceFact, MetricRequirement, QuestionRequirements
 from src.decision.period_value_parser import extract_period_value_mentions, period_matches
 from src.decision.policy import EvidenceDecisionLayer
+from src.ingestion.company_facts import matches_requested_revision, requested_revision_policies
 from src.verification.claim_verifier import ClaimLevelVerifier, _BRACKET_RE, _FALLBACK_RE, _GROWTH_RE, _split_clauses
 from src.verification.models import (
     CitationStatus, ClaimAssessment, ClaimDraft, ClaimStatus, ResponseDisposition, VerificationResult,
@@ -154,6 +155,14 @@ class AtomicClaimVerifier(ClaimLevelVerifier):
                 claim_id=draft.claim_id, statement=draft.statement, status=ClaimStatus.UNVERIFIABLE,
                 citation_status=CitationStatus.VALID, citations=draft.citations, evidence_ids=evidence_ids,
                 reason_codes=("numeric_claim_scope_unresolved",),
+            )
+        revisions = requested_revision_policies(question) | requested_revision_policies(statement)
+        if draft.values and any(not matches_requested_revision(chunk.get("revision_kind"), revisions)
+                                for chunk in cited_chunks):
+            return ClaimAssessment(
+                claim_id=draft.claim_id, statement=draft.statement, status=ClaimStatus.UNSUPPORTED,
+                citation_status=CitationStatus.VALID, citations=draft.citations, evidence_ids=evidence_ids,
+                reason_codes=("cited_source_revision_does_not_match_claim",),
             )
         assessment = super()._assess_claim(
             draft=draft, question=question, question_requirements=question_requirements,

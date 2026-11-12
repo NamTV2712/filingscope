@@ -8,7 +8,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from src.decision.evidence_coverage import _has_provenance
-from src.decision.models import CoverageStatus, EvidenceFinding, EvidenceRequirement, QuestionRequirements
+from src.decision.models import CoverageStatus, EvidenceFinding, EvidenceRequirement, EvidenceSupport, QuestionRequirements
 from src.decision.period_value_parser import period_matches
 from src.decision.policy import EvidenceDecisionLayer
 from src.policy.decision_backend import DecisionBackend, DeterministicDecisionBackend
@@ -72,7 +72,9 @@ class CandidateEvidenceGate:
                 chunk.get("ticker"), chunk.get("company"), chunk.get("doc_name"), chunk.get("document_id"),
             )
             per_candidate = [
-                self.backend.decide(self._features(chunk, chunk_id, entity, requirement, findings.get(requirement.requirement_id)))
+                self.backend.decide(self._features(
+                    chunk, chunk_id, entity, requirement, findings.get(requirement.requirement_id), requirements.requested_currency,
+                ))
                 for requirement in requirements.evidence
             ]
             decisions.extend(per_candidate)
@@ -83,16 +85,28 @@ class CandidateEvidenceGate:
     @staticmethod
     def _features(
         chunk: Mapping[str, Any], chunk_id: str, entity: str | None, requirement: EvidenceRequirement,
-        finding: EvidenceFinding | None,
+        finding: EvidenceFinding | None, requested_currency: str | None,
     ) -> EvidenceCandidateFeatures:
         status = finding.status if finding else CoverageStatus.MISSING
         found = status == CoverageStatus.FOUND
+        reason = finding.missing_reason if finding else None
+        support = finding.support if finding else EvidenceSupport.MISSING
         metric = chunk.get("metric_id")
         period = chunk.get("fiscal_period") or chunk.get("period")
         # The document reporting year describes its publication, while an
         # individual value may belong to a comparative period.
         metric_match = _alignment(metric if isinstance(metric, str) else None, requirement.metric_id)
         period_match = _alignment(period if isinstance(period, str) else None, requirement.period, period=True)
+        if reason == "metric_mismatch":
+            metric_match = Alignment.MISMATCH
+        if reason == "period_mismatch":
+            period_match = Alignment.MISMATCH
+        currency = chunk.get("currency")
+        unit_match = _alignment(currency if isinstance(currency, str) else None, requested_currency)
+        if reason == "unit_mismatch":
+            unit_match = Alignment.MISMATCH
+        elif found and requested_currency is not None and unit_match == Alignment.UNKNOWN:
+            unit_match = Alignment.EXACT
         if found:
             if metric_match == Alignment.UNKNOWN:
                 metric_match = Alignment.EXACT
@@ -100,19 +114,24 @@ class CandidateEvidenceGate:
                 period_match = Alignment.EXACT
         similarity = _similarity(chunk)
         structured = chunk.get("source_type") == "XBRL_FACT"
+        revision = chunk.get("source_revision")
         form = str(chunk.get("form_type") or chunk.get("doc_type") or "").upper().replace("-", "")
         return EvidenceCandidateFeatures(
             candidate_id=chunk_id, requirement_id=requirement.requirement_id,
             entity_match=(EntityMatch.UNKNOWN if entity is None else
                           EntityMatch.EXACT if entity == requirement.entity_id else EntityMatch.MISMATCH),
-            metric_match=metric_match, period_match=period_match,
+            metric_match=metric_match, period_match=period_match, unit_match=unit_match,
             support_level=SupportLevel.FULL if found else SupportLevel.PARTIAL,
+            support_label=support,
             source_quality=SourceQuality.PRIMARY if structured or form in {"10K", "10Q", "8K", "20F", "40F"} else SourceQuality.UNKNOWN,
             numeric_consistency=(NumericConsistency.NOT_APPLICABLE if not requirement.quantitative else
                                  NumericConsistency.CONSISTENT if found else NumericConsistency.UNKNOWN),
             requires_numeric_consistency=requirement.quantitative,
             contradiction_flag=False if found else None,
             provenance_validity=_provenance(chunk),
-            source_revision_validity=SourceRevisionValidity.UNKNOWN,
+            source_revision_validity=(SourceRevisionValidity.MISMATCH if reason == "source_revision_mismatch" else
+                                      SourceRevisionValidity.VALID if structured and chunk.get("revision_kind") else
+                                      SourceRevisionValidity.UNKNOWN),
+            source_revision=revision if isinstance(revision, str) else None,
             semantic_relevance=similarity, retrieval_confidence=similarity,
         )

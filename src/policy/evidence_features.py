@@ -7,7 +7,9 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-FEATURE_SCHEMA_VERSION = "1.0.0"
+from src.decision.models import EvidenceSupport
+
+FEATURE_SCHEMA_VERSION = "1.1.0"
 
 
 class EntityMatch(StrEnum):
@@ -64,6 +66,7 @@ class NumericConsistency(StrEnum):
 class SourceRevisionValidity(StrEnum):
     VALID = "VALID"
     SUPERSEDED = "SUPERSEDED"
+    MISMATCH = "MISMATCH"
     UNKNOWN = "UNKNOWN"
 
 
@@ -96,14 +99,16 @@ class EvidenceCandidateFeatures(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid", str_strip_whitespace=True)
 
-    schema_version: Literal["1.0.0"] = FEATURE_SCHEMA_VERSION
+    schema_version: Literal["1.0.0", "1.1.0"] = FEATURE_SCHEMA_VERSION
     candidate_id: str = Field(min_length=1)
     requirement_id: str = Field(min_length=1)
     entity_match: EntityMatch
     metric_match: Alignment
     period_match: Alignment
+    unit_match: Alignment = Alignment.UNKNOWN
     filing_type_match: FilingTypeAlignment = FilingTypeAlignment.NOT_APPLICABLE
     support_level: SupportLevel
+    support_label: EvidenceSupport | None = None
     source_quality: SourceQuality
     table_context_integrity: TableContextIntegrity = TableContextIntegrity.NOT_APPLICABLE
     requires_table_context: bool = False
@@ -112,6 +117,7 @@ class EvidenceCandidateFeatures(BaseModel):
     contradiction_flag: bool | None
     provenance_validity: ProvenanceValidity
     source_revision_validity: SourceRevisionValidity
+    source_revision: str | None = None
     semantic_relevance: ScoreObservation
     retrieval_confidence: ScoreObservation
 

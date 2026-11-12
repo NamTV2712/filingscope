@@ -282,3 +282,46 @@ def extract_period_value_mentions(text: str) -> tuple[PeriodValueMention, ...]:
             )
         )
     return tuple(mentions)
+
+
+def extract_filing_assertions(
+    text: str, *, metric_aliases: tuple[str, ...], issuer_aliases: tuple[str, ...],
+) -> tuple[PeriodValuePair, ...]:
+    """Read a single amount asserted for the metric in an explicitly named period."""
+    issuer = "|".join(re.escape(alias) for alias in issuer_aliases)
+    metric = "|".join(re.escape(alias) for alias in metric_aliases)
+    subject = rf"(?:(?:{issuer})(?:['’]s?)? |our |the company['’]s )?" if issuer else r"(?:our |the company['’]s )?"
+    name = rf"(?:consolidated )?(?:{metric})"
+    relation = r"(?:was|were|is|totaled|amounted to)"
+    scope = r"(?:for|in|during) <period>"
+    assertion = re.compile(
+        rf"(?:<period> {subject}{name} {relation} <value>|"
+        rf"(?:in|for|during) <period>,? {subject}{name} {relation} <value>|"
+        rf"{subject}{name} (?:{scope} {relation} <value>|{relation} <value> {scope}))[.!]?",
+        re.I,
+    )
+    pairs = []
+    for line in re.split(r"(?<=[.;!?])\s+|\n+", text):
+        sentence = " ".join(line.split())
+        if not _matches_alias(sentence, metric_aliases):
+            continue
+        values, periods = _value_matches_and_periods(sentence)
+        if len(periods) != 1 or len(values) != 1:
+            continue
+        period, value = periods[0], values[0]
+        if not re.match(r"(?:Q[1-4]|FY|CY|fiscal year|calendar year)", sentence[period.start:period.end], re.I):
+            continue
+        raw = _STRICT_NUMBER_RE.fullmatch(value.group(0).strip())
+        if raw is None or not (raw['currency'] not in (None, '$') or raw['percent']):
+            continue
+        # Do not inherit a unit, a period, or a subject from a neighboring clause.
+        for start, end, marker in sorted(((period.start, period.end, '<period>'),
+                                          (value.start(), value.end(), '<value>')), reverse=True):
+            sentence = sentence[:start] + f" {marker} " + sentence[end:]
+        frame = re.sub(r"\s+([,.!?])", r"\1", " ".join(sentence.split()))
+        if assertion.fullmatch(frame):
+            pair = _parse_value(value.group(0))
+            if pair is not None:
+                pairs.append(PeriodValuePair(period.label, pair.value, pair.numeric_value,
+                                             pair.currency, pair.scale, pair.value_kind))
+    return tuple(pairs)

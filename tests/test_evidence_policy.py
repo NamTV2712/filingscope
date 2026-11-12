@@ -46,8 +46,8 @@ def test_policy_accepts_complete_aligned_primary_candidate() -> None:
 
     assert decision.disposition == CandidateDisposition.ACCEPT
     assert decision.reason_codes == (PolicyReason.CANDIDATE_ACCEPTED,)
-    assert decision.feature_schema_version == "1.0.0"
-    assert decision.policy_version == "1.0.0"
+    assert decision.feature_schema_version == "1.1.0"
+    assert decision.policy_version == "1.1.0"
 
 
 @pytest.mark.parametrize(

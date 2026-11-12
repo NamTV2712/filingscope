@@ -523,6 +523,19 @@ The log separates software-contract checks from answer-quality evidence.
 - **Decision** Adopt the source-aware FAST route and keep the current
   complex route budgets. [Phase report](POST_M15_SOURCE_ROUTING.md)
 
+## Q4 — Evidence sufficiency and release
+
+- **Experiment** Freeze real filing candidates and provisional labels before
+  tightening observation binding and registrant scope. Replay both policies
+  against the same candidates and repeat the M13 dense baseline.
+- **Result** Validation false abstention moved from 4/4 to 0/4. There were
+  0/4 unsupported releases, and all six withhold controls passed. M13 moved
+  from 14/21 to 21/21 grounded exact with 0/21 unsupported releases and
+  3/3 correct abstentions. Tools moved from 29 to 28 at USD 0 provider cost.
+- **Decision** Promote deterministic evidence binding and preserve the
+  two-level policy. The provisional validation sample supports a paired
+  regression gate. [Phase report](POST_M15_EVIDENCE_POLICY.md)
+
 ## Planned experiments
 
 Each planned experiment must add its exact hypothesis, baseline, changed

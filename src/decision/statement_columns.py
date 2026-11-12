@@ -139,6 +139,7 @@ _DURATION = re.compile(r"\b(three|six|nine|twelve)\s+months\s+ended\b", re.I)
 _ANNUAL_HEADER = re.compile(r"\b(?:years?\s+ended|(?:52|53)\s+weeks\s+ended|fiscal\s+years?(?!\s+ended))\b", re.I)
 _CHANGE = re.compile(r"\b(?:percent\s+|%\s*)?(?:year.over.year\s+)?change\s*$", re.I)
 _REVISION = re.compile(r"\b(?:restated|revised)\b", re.I)
+_GUARANTOR_SCOPE = re.compile(r"\b(?:deed of cross guarantee|guarantor (?:group|subsidiaries))\b", re.I)
 _FOOTNOTE = r"(?:\([a-z]\)|\[[\da-z]+\])"
 _CURRENCY_CODE = "|".join(sorted(MONETARY_CURRENCIES))
 _DOLLAR_CURRENCIES = frozenset({"USD", "CAD", "AUD", "HKD", "NZD", "SGD", "MXN", "TWD"})
@@ -206,8 +207,11 @@ def _statement_heading(lines):
 
 def statement_period_kind(text: str) -> PeriodKind | None:
     """Classify a physical page for lookup, without inspecting any cell."""
-    heading = _statement_heading(_statement_lines(text))
-    return heading[1] if heading is not None else None
+    lines = list(islice(_statement_lines(text), 12))
+    heading = _statement_heading(lines)
+    if heading is None or any(_GUARANTOR_SCOPE.search(line) for line in lines[:heading[0] + 1]):
+        return None
+    return heading[1]
 
 
 def _parse_dates(header: list[str], years: list[int]) -> list[date | None]:
@@ -384,6 +388,8 @@ def parse_statement_columns(
     if heading is None:
         return StatementParse(False)
     title, kind = heading
+    if any(_GUARANTOR_SCOPE.search(line) for line in lines[:title + 1]):
+        return StatementParse(True, ambiguous_rows=(AmbiguousStatementRow(None, title, "nonregistrant_scope"),))
     header_index = None
     body_start = None
     for index in range(title + 1, min(len(lines), title + 12)):

@@ -91,9 +91,20 @@ def test_conflicting_cited_endpoints_cannot_verify_growth_direction():
     assert result.claims[0].status == ClaimStatus.UNVERIFIABLE
 
 
+def test_original_value_cannot_verify_a_restated_claim():
+    evidence = {**_financial_chunk(chunk_id="original"), "revision_kind": "ORIGINAL"}
+    result = AtomicClaimVerifier().verify(
+        "What was Apple's restated FY2024 revenue?",
+        "Apple FY2024 revenue was USD 110 billion [Source 1].", [evidence],
+    )
+    assert result.disposition == ResponseDisposition.REJECTED
+    assert result.claims[0].reason_codes == ("cited_source_revision_does_not_match_claim",)
+
+
 def test_release_checks_requested_arithmetic_for_each_company():
     apple = _financial_chunk(chunk_id="apple")
-    microsoft = {**apple, "chunk_id": "microsoft", "ticker": "MSFT", "company": "Microsoft", "doc_name": "MSFT.pdf"}
+    microsoft = {**apple, "chunk_id": "microsoft", "ticker": "MSFT", "company": "Microsoft",
+                 "doc_name": "MSFT.pdf", "document_id": "MSFT.pdf", "source_url": "https://example.com/msft.pdf"}
     question = "Compare Apple and Microsoft revenue growth between FY2023 and FY2024."
     answer = (
         "Apple revenue grew 10% from FY2023 to FY2024 [Source 1]. "

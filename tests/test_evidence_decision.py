@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from src.decision.company_catalog import CompanyCatalog
-from src.decision.models import CoverageStatus, DecisionAction, DecisionBudget
+from src.decision.models import CoverageStatus, DecisionAction, DecisionBudget, EvidenceSupport, SetSufficiency
 from src.decision.policy import EvidenceDecisionLayer
 from src.decision.requirement_extractor import EvidenceRequirementExtractor
 
@@ -44,6 +44,39 @@ def _complete_comparison() -> list[dict]:
             year_values=(("2024", "$245 billion"), ("2022", "$198 billion")),
         ),
     ]
+
+
+def test_partial_filing_text_cannot_create_a_conflict_or_fill_a_slot() -> None:
+    layer = EvidenceDecisionLayer()
+    question = "What was Apple's FY2024 revenue?"
+    base = _table_chunk(chunk_id="total", ticker="AAPL", company="Apple Inc.")
+    distractor = {**base, "chunk_id": "component", "filing_page_checked": True,
+                  "text": "Services revenue increased USD 7 billion in FY2024."}
+    unsupported = layer.assess(question, [distractor])
+    assert unsupported.set_sufficiency == SetSufficiency.INCOMPLETE
+    assert unsupported.findings[0].support == EvidenceSupport.PARTIAL_SUPPORT
+    assert layer.assess(question, [base, distractor]).set_sufficiency == SetSufficiency.COMPLETE
+
+
+def test_explicit_filing_assertions_preserve_genuine_contradictions() -> None:
+    layer = EvidenceDecisionLayer()
+    question = "What was Apple's FY2024 revenue?"
+    base = {**_table_chunk(chunk_id="one", ticker="AAPL", company="Apple Inc."), "filing_page_checked": True,
+            "text": "Apple's consolidated revenue for FY2024 was USD 391 billion."}
+    conflict = {**base, "chunk_id": "two", "text": "In FY2024, Apple revenue was USD 400 billion."}
+    assert layer.assess(question, [base]).set_sufficiency == SetSufficiency.COMPLETE
+    decision = layer.decide(question, [base, conflict], budget=DecisionBudget(remaining_retrieval_attempts=0))
+    assert decision.action == DecisionAction.ABSTAIN
+    assert decision.coverage.set_sufficiency == SetSufficiency.CONTRADICTORY
+    assert decision.coverage.findings[0].support == EvidenceSupport.CONTRADICTORY
+
+
+def test_conflicting_source_issuer_identifiers_do_not_support_a_value() -> None:
+    chunk = _table_chunk(chunk_id="mislabeled", ticker="AAPL", company="Microsoft")
+    coverage = EvidenceDecisionLayer().assess("What was Apple's FY2024 revenue?", [chunk])
+    assert coverage.set_sufficiency == SetSufficiency.CONTRADICTORY
+    assert coverage.findings[0].missing_reason == "source_metadata_conflict"
+    assert not coverage.findings[0].facts
 
 
 def test_requirement_extraction_builds_entity_metric_period_slots() -> None:

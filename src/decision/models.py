@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 from src.ingestion.period_identity import PeriodIdentity
 
@@ -20,6 +20,21 @@ class CoverageStatus(StrEnum):
     MISSING = "missing"
     CONFLICTED = "conflicted"
     UNSUPPORTED = "unsupported"
+
+
+class EvidenceSupport(StrEnum):
+    FULL_SUPPORT = "FULL_SUPPORT"
+    PARTIAL_SUPPORT = "PARTIAL_SUPPORT"
+    IRRELEVANT = "IRRELEVANT"
+    MISSING = "MISSING"
+    CONTRADICTORY = "CONTRADICTORY"
+
+
+class SetSufficiency(StrEnum):
+    COMPLETE = "COMPLETE"
+    INCOMPLETE = "INCOMPLETE"
+    CONTRADICTORY = "CONTRADICTORY"
+    UNSUPPORTED = "UNSUPPORTED"
 
 
 class EvidenceEntity(BaseModel):
@@ -115,6 +130,20 @@ class EvidenceFinding(BaseModel):
     facts: tuple[EvidenceFact, ...] = ()
     missing_reason: str | None = None
 
+    @computed_field
+    @property
+    def support(self) -> EvidenceSupport:
+        if self.status == CoverageStatus.FOUND:
+            return EvidenceSupport.FULL_SUPPORT
+        if self.status == CoverageStatus.CONFLICTED:
+            return EvidenceSupport.CONTRADICTORY
+        if self.missing_reason in {"entity_mismatch", "metric_mismatch", "period_mismatch", "unit_mismatch",
+                                   "source_revision_mismatch"}:
+            return EvidenceSupport.IRRELEVANT
+        if self.facts or self.missing_reason == "numerical_value_or_period_alignment_missing":
+            return EvidenceSupport.PARTIAL_SUPPORT
+        return EvidenceSupport.MISSING
+
 
 class EvidenceCoverage(BaseModel):
     model_config = ConfigDict(frozen=True)
@@ -125,6 +154,15 @@ class EvidenceCoverage(BaseModel):
     conflicted_requirement_ids: tuple[str, ...] = ()
     operation_gaps: tuple[str, ...] = ()
     sufficient: bool = False
+
+    @computed_field
+    @property
+    def set_sufficiency(self) -> SetSufficiency:
+        if not self.requirements.supported:
+            return SetSufficiency.UNSUPPORTED
+        if self.conflicted_requirement_ids:
+            return SetSufficiency.CONTRADICTORY
+        return SetSufficiency.COMPLETE if self.sufficient else SetSufficiency.INCOMPLETE
 
 
 class DecisionBudget(BaseModel):

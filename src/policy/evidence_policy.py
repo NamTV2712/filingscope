@@ -19,7 +19,7 @@ from src.policy.evidence_features import (
     TableContextIntegrity,
 )
 
-POLICY_VERSION = "1.0.0"
+POLICY_VERSION = "1.1.0"
 
 
 class CandidateDisposition(StrEnum):
@@ -33,9 +33,11 @@ class PolicyReason(StrEnum):
     ENTITY_MISMATCH = "ENTITY_MISMATCH"
     METRIC_MISMATCH = "METRIC_MISMATCH"
     PERIOD_MISMATCH = "PERIOD_MISMATCH"
+    UNIT_MISMATCH = "UNIT_MISMATCH"
     FILING_TYPE_MISMATCH = "FILING_TYPE_MISMATCH"
     INVALID_PROVENANCE = "INVALID_PROVENANCE"
     SUPERSEDED_SOURCE_REVISION = "SUPERSEDED_SOURCE_REVISION"
+    SOURCE_REVISION_MISMATCH = "SOURCE_REVISION_MISMATCH"
     CONTRADICTED_SUPPORT = "CONTRADICTED_SUPPORT"
     NO_SUPPORT = "NO_SUPPORT"
     CONTRADICTION_DETECTED = "CONTRADICTION_DETECTED"
@@ -81,6 +83,7 @@ class EvidencePolicyDecision(BaseModel):
     disposition: CandidateDisposition
     reason_codes: tuple[PolicyReason, ...]
     acceptance_probability: float | None = Field(default=None, ge=0.0, le=1.0)
+    features: EvidenceCandidateFeatures | None = None
 
 
 class EvidencePolicy:
@@ -97,12 +100,16 @@ class EvidencePolicy:
             hard_reasons.append(PolicyReason.METRIC_MISMATCH)
         if features.period_match == Alignment.MISMATCH:
             hard_reasons.append(PolicyReason.PERIOD_MISMATCH)
+        if features.unit_match == Alignment.MISMATCH:
+            hard_reasons.append(PolicyReason.UNIT_MISMATCH)
         if features.filing_type_match == FilingTypeAlignment.MISMATCH:
             hard_reasons.append(PolicyReason.FILING_TYPE_MISMATCH)
         if features.provenance_validity == ProvenanceValidity.INVALID:
             hard_reasons.append(PolicyReason.INVALID_PROVENANCE)
         if features.source_revision_validity == SourceRevisionValidity.SUPERSEDED:
             hard_reasons.append(PolicyReason.SUPERSEDED_SOURCE_REVISION)
+        elif features.source_revision_validity == SourceRevisionValidity.MISMATCH:
+            hard_reasons.append(PolicyReason.SOURCE_REVISION_MISMATCH)
         if features.support_level == SupportLevel.CONTRADICTED:
             hard_reasons.append(PolicyReason.CONTRADICTED_SUPPORT)
         if features.support_level == SupportLevel.NONE:
@@ -181,6 +188,7 @@ class EvidencePolicy:
             policy_version=self.config.policy_version,
             disposition=disposition,
             reason_codes=tuple(reason_codes),
+            features=features,
         )
 
 
