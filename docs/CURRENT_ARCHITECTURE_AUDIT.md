@@ -3,14 +3,15 @@
 Audit refreshed: 2026-11-12<br>
 Branch: `main`<br>
 Audited repository: `D:\Project\filingscope`<br>
-Audited source commit: `1d08a0079aaee5991c5a13e1db6fd6b4365d03ed`<br>
+Audited source commit: `16e106bf7761aa0115c0ec01cabeb06312f117a1`<br>
 Initial audit baseline: `956cef412d765395b5a7f0b773f821a58686a35a`
 
 This refresh reflects P0–P5, M1 runtime compatibility, M2 retrieval
 diagnostics, M3 candidate policy, M4 corpus-aware planning, M5 finite
 complexity routing, M6's in-memory Evidence Ledger, M7's specialist graph
 and narrow Company Facts path, M8's bounded filing fan-out, M9's
-structured fact resolution and M10's PDF parser comparison. P0–P4 behavior and the
+structured fact resolution, M10's PDF parser comparison, and M11's atomic
+verification and bounded release policy. P0–P4 behavior and the
 completed P5 provider benchmark remain preserved. Source benchmark data,
 model caches, and generated run artifacts remain local and git-ignored.
 
@@ -308,7 +309,15 @@ validation split scored 0.20 across all variants. The standard PDF path
 uses pypdf. The full regression suite passed with 306 tests and 3 skips.
 [M10 report](DOCUMENT_INTELLIGENCE.md)
 
+## M11 validation update
+
+The specialist graph now links atomic claim assessments to source evidence,
+requested requirements and the reasoner's calculation records. It can revise
+once and retains both assessments in the ledger. The controlled replay matched
+16/16 claim-status sequences and 16/16 release decisions. The full suite passed
+with 332 tests and 3 skips. [M11 report](ADVANCED_VERIFICATION.md)
+
 ## Next milestone
 
-M11 extends claim support and bounded correction through the specialist
-graph and Evidence Ledger. [Research agenda](RESEARCH_AGENDA.md)
+M12 builds and scores a frozen, provenance-sensitive financial hard-negative
+benchmark. [Research agenda](RESEARCH_AGENDA.md)

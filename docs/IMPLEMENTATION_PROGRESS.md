@@ -30,27 +30,29 @@ Deployment: none; explicitly out of scope
 - M10 benchmarks pypdf, Docling page text and structure-aware chunks on
   five PDFs. Source `1d08a0079aaee5991c5a13e1db6fd6b4365d03ed`. pypdf
   stays the default. The full suite passed with 306 tests and 3 skips.
+  Docs `4424427c3e4d82bdcb4b7bf072c2eb67d4745063`.
   [M10 validation and reproduction](DOCUMENT_INTELLIGENCE.md)
+- M11 adds atomic claim support and a one-pass correction policy to the
+  specialist graph. Source `16e106bf7761aa0115c0ec01cabeb06312f117a1`.
+  The fixed replay matched 16/16 expected release decisions. The full suite
+  passed with 332 tests and 3 skips. [M11 validation](ADVANCED_VERIFICATION.md)
 
 ## Current milestone
 
-M11 advanced verification is next. M10 results and parser checkpoints are
-complete under `data/financebench/parser_runs/`. The milestone does not
-require repeating those runs.
+M12 hard-negative financial retrieval benchmark is next. The M11 replay is
+complete at `data/financebench/verification_runs/m11-replay.json`.
 
 ## Exact next steps
 
-1. Read the specification sections N and O and audit `src/verification/`,
-   the claim records under `src/ledger/` and the report-writer and
-   claim-verifier nodes in `src/agent/specialist_graph.py`.
-2. Benchmark atomic claim support and contradictions against the existing
-   verifier. Implement source-linked verification and one bounded correction
-   through the specialist graph, then validate release decisions.
-3. Record the benchmark and regression suite. Commit and push validated
-   M11 to `origin/main` before starting M12.
+1. Read the hard-negative requirements in the specification. Verify the
+   FinRank and Fin-RATE sources and inspect M2's failure artifacts and
+   available local filing passages for real provenance-sensitive labels.
+2. Freeze cases and splits. Compare existing dense and lexical retrieval
+   and measure discrimination by company, period, metric and filing context.
+3. Document the cohort, metrics and limits, run regressions, then commit
+   and push validated M12 to `origin/main` before starting M13.
 
 ## Remaining milestones
 
-M11 advanced verification, M12 hard-negative
-financial retrieval benchmark, M13 multi-agent ablation, M14 advanced
-retrieval experiments; M15 local research UX. Do not deploy.
+M12 hard-negative financial retrieval benchmark, M13 multi-agent ablation,
+M14 advanced retrieval experiments and M15 local research UX. Do not deploy.

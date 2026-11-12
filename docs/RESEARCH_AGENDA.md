@@ -65,7 +65,7 @@ consistency, sufficiency, verification, abstention, and release.
 | M8 | Bounded parallel fan-out/fan-in for independent work | Complete. Three concurrent filing searches with opt-in adapters. See [M8 results](PARALLEL_RESEARCH.md) |
 | M9 | SEC XBRL concepts, periods, units, accessions, amendments, and restatements | Complete. See [fact policy and validation](FINANCIAL_FACT_ARCHITECTURE.md) |
 | M10 | pypdf vs Docling and structure-aware document experiment | Complete. [Parser and retrieval results](DOCUMENT_INTELLIGENCE.md) |
-| M11 | Atomic claim graph, semantic support checks, contradictions, bounded correction | Planned |
+| M11 | Atomic claim graph, semantic support checks, contradictions, bounded correction | Complete. [Claim and release replay](ADVANCED_VERIFICATION.md) |
 | M12 | Company/year/context hard-negative retrieval benchmark | Planned |
 | M13 | Multi-agent and smart-router ablation against retrieval/evidence baselines | Planned |
 | M14 | ColBERT/multivectors/GraphRAG/HippoRAG/LightRAG only after earlier evidence | Planned |

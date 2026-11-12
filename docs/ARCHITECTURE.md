@@ -209,6 +209,15 @@ compares layout text from pypdf, Docling page text, and Docling chunks
 with section headings and table column labels. The standard ingestion
 path uses pypdf. [M10 comparison](DOCUMENT_INTELLIGENCE.md)
 
+## M11 advanced verification
+
+The specialist claim verifier evaluates atomic assertions and links the
+cited and supporting evidence separately. The final policy checks claim
+support, requested coverage and arithmetic. An actionable verifier result
+can trigger one deterministic correction and recheck inside the existing
+claim-verifier stage. Both passes are inspectable in the request ledger.
+[M11 evaluation and limitations](ADVANCED_VERIFICATION.md)
+
 ## Target: separate logical planes
 
 ```text

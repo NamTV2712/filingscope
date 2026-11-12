@@ -404,6 +404,19 @@ The log separates software-contract checks from answer-quality evidence.
   and 3.80 GB peak working set, compared with 8.205 s and 97.2 MB for pypdf.
   [M10 reproduction, resource use and split metrics](DOCUMENT_INTELLIGENCE.md)
 
+## M11 — Advanced Verification
+
+- **Hypothesis** Atomic, source-local verification and one actionable
+  correction improve the release decisions for compound or misleading drafts.
+- **Experiment** Replay P4 and M11 over 16 fixed, hand-labeled drafts with
+  identical evidence. Time 20 passes per case on CPU. Run the specialist
+  path with a fake generator to check actual release and ledger lineage.
+- **Result** Exact draft claim sequences and expected dispositions rose
+  from 8/16 to 16/16. Four drafts were corrected in one pass each. p95
+  rose from 2.211 ms to 6.376 ms, with zero model calls in the replay.
+- **Decision** Adopt in the specialist graph and retain P4 for baseline
+  comparisons. [M11 reproduction and limitations](ADVANCED_VERIFICATION.md)
+
 ## Planned experiments
 
 Each planned experiment must add its exact hypothesis, baseline, changed
