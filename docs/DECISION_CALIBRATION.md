@@ -19,12 +19,11 @@ from final answer accuracy:
 - `ClaimSupported?`
 - `ShouldAbstain?`
 
-M3 implements `CandidateAccept?` with a 60-case fixed synthetic corpus. P2
-continues to cover requirement-slot sufficiency on its existing 15 synthetic
-scenarios. The remaining decision tasks are not represented by the M3 score.
-Report accuracy, precision, recall, false-accept rate, false-reject rate,
-confusion matrices, and reason-code agreement; group errors by wrong company,
-period, metric, source authority, table/provenance loss, and contradictions.
+The completion replay executes all six decisions against labeled fixtures.
+It reports accuracy, precision, recall, false-accept and false-reject rates,
+and confusion counts by gate. M3's candidate-specific replay retains its
+disposition, reason-code and failure-group metrics.
+[Completion evaluation](SPECIFICATION_AUDIT.md#decision-benchmark)
 
 ## M3 candidate benchmark
 

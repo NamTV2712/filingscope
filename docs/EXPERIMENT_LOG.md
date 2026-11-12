@@ -475,6 +475,17 @@ The log separates software-contract checks from answer-quality evidence.
 - **Decision** Adopt the local workspace using the existing runtime
   dependencies. [Reproduction and limitations](LOCAL_RESEARCH.md)
 
+## Completion evaluation
+
+- **Experiment** Replay all six control-plane decisions on their authored
+  labels. Apply four release thresholds to fixed M13 results and score
+  independent grounded exactness among released responses.
+- **Result** All six fixture gates matched expected labels. A1's risk
+  remained 100% as the release threshold reduced coverage from 17/24 to
+  3/24. B4 released 3/24 with zero grounded-exact errors and B5 released 1/24.
+- **Decision** Retain the decision replay as a regression check and the
+  risk-coverage points as a small-cohort comparison. [Audit and reproduction](SPECIFICATION_AUDIT.md)
+
 ## Planned experiments
 
 Each planned experiment must add its exact hypothesis, baseline, changed

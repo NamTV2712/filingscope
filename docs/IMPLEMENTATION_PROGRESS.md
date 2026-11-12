@@ -7,8 +7,22 @@ Deployment: none; explicitly out of scope
 
 ## Completed milestones
 
-- M1–M5: complete and pushed; preserve their individual reports and benchmark
-  baselines in `docs/`.
+- M1 connects the P5 pipeline and pins the working Transformers version.
+  Vertical slice `9b87e6b5b2d93350058e98d8922aea76fb802a5a`; compatibility
+  and audit `3d11f7aa5a3d740e2a7fde709c5b5b4895488bbe`.
+- M2 adds retrieval stage diagnostics. Source
+  `c0c887df6128e3720d68fac09b2f91adb5f74948`; docs
+  `6953d6483b7813628a0df0eb54997f0983681038`.
+- M3 adds versioned candidate screening. Source
+  `3ac21fed877627bbe93a61a0978b3b12d1a0856b`; docs
+  `f5c1acce6d7acbe34f2dd21b079720008e9b3bf2`.
+- M4 adds the Corpus Map and planner. Source
+  `1192e63c91759c512535eadfe62b2168908b4313`; fingerprint
+  `0be938d31cf3a76b5b0baa31023bd4354ce571a3`; docs
+  `a7f9eed69061325886e33ceab2e4c42cfc9d5822`.
+- M5 adds finite route planning. Source
+  `0fffebc0d5d0a6b88532e3c3b0969a9f3246509f`; docs
+  `525f3d350cf01e1dd6b44129e6105fb9e8c5e7b5`.
 - M6: shared in-memory Evidence Ledger. Source `706af9a86e8090dd7dca86400f007ce395185a55`;
   docs `b26849488a38d77bd638258fd45b97364f3a8285`.
 - M7: finite sequential specialist graph and narrow official SEC Company Facts
@@ -51,24 +65,23 @@ Deployment: none; explicitly out of scope
   `d1aceadf38b9a18b40c9938a8d61116569af4e0f`. The full suite passed with
   343 tests and 3 skips. [M14 validation](ADVANCED_RETRIEVAL.md)
 - M15 adds a loopback-only evidence-first workspace. Source
-  `4121d0b8c2f34a7ddb409de4939d5df5b3c101da`. The full suite passed with
+  `4121d0b8c2f34a7ddb409de4939d5df5b3c101da`. Docs
+  `552b297268a33140ef41a6daf5156bbbfb772b9d`. The full suite passed with
   346 tests and 3 skips. [M15 validation](LOCAL_RESEARCH.md)
 
 ## Current milestone
 
-The M1–M15 sequence is implemented and validated. The specification audit
-found two reporting gaps. Section U requires one independent report
-covering all six decision points. Section W requires risk at multiple
-coverage operating points.
+M1–M15 are implemented, validated and pushed. Completion source
+`3c55a2bc1393d327fba26a0b7e666cd791907e44` adds the six-decision replay,
+ordinal risk-coverage points from M13, configurable route budgets and
+provider token accounting. The final regression suite passed with 349
+tests and 3 skips. [Specification audit](SPECIFICATION_AUDIT.md)
 
 ## Exact next steps
 
-1. Replay the labeled router, candidate, evidence-decision, and verification
-   fixtures through the actual control plane and report Section U binary metrics.
-2. Build the Section W risk-coverage comparison from the frozen M13 rows
-   and distinguish operating points from a calibrated confidence sweep.
-3. Finish the specification audit, run regressions and verify the final push.
+To reproduce the audit, run the commands in the specification audit.
 
 ## Remaining milestones
 
-Final specification audit and the two reporting gaps above. Do not deploy.
+All implementation milestones are complete. Deployment is outside the
+specification.

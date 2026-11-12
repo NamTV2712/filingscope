@@ -3,7 +3,7 @@
 Audit refreshed: 2026-11-12<br>
 Branch: `main`<br>
 Audited repository: `D:\Project\filingscope`<br>
-Audited source commit: `4121d0b8c2f34a7ddb409de4939d5df5b3c101da`<br>
+Audited source commit: `3c55a2bc1393d327fba26a0b7e666cd791907e44`<br>
 Initial audit baseline: `956cef412d765395b5a7f0b773f821a58686a35a`
 
 This refresh reflects P0–P5, M1 runtime compatibility, M2 retrieval
@@ -152,10 +152,9 @@ model caches, and generated run artifacts remain local and git-ignored.
 5. **Generation/verification.** M11 adds request-scoped atomic claims,
    semantic and numerical checks, and one bounded correction. The ledger
    currently lives in memory, and P5 uses its original verifier.
-6. **Decision calibration.** M3 has a 60-case hand-authored synthetic
-   candidate benchmark. It is a policy contract check rather than external
-   accuracy evidence. No probabilistic backend, measured Brier/ECE, or
-   risk-coverage curve is implemented.
+6. **Decision calibration.** The completion replay covers all six decisions
+   on authored fixtures. A separate M13 threshold sweep measures ordinal
+   risk and coverage. Brier and ECE apply if an experiment emits probabilities.
 7. **Application surface.** The M15 browser and API run on loopback using
    frozen artifacts. Questions, ledger snapshots and results are ephemeral.
 
@@ -349,3 +348,6 @@ Five real API requests exercised SEC facts, filing retrieval, a verified
 calculation, a missing period and an unsupported request. Desktop and
 phone Chromium checks passed. The full suite passed with 346 tests and
 3 skips. [Local workspace](LOCAL_RESEARCH.md)
+
+The [specification audit](SPECIFICATION_AUDIT.md) records the milestone
+evidence and final decision and risk-coverage measurements.
