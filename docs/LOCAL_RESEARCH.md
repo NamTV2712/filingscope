@@ -28,6 +28,11 @@ route for supported questions, which can inspect structured facts and
 tables. The server accepts one research request at a time and returns a
 retryable conflict while that slot is in use.
 
+With the pinned PDF page cache, scoped filing searches prioritize statement
+pages that contain the requested metric and fiscal period. Use
+`--retrieval-policy dense` to replay the Dense control.
+[Retrieval evaluation](POST_M15_RETRIEVAL_UTILITY.md)
+
 ## Evidence boundaries
 
 - Progress is an allowlisted lifecycle enum. The response stream carries

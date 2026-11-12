@@ -536,6 +536,19 @@ The log separates software-contract checks from answer-quality evidence.
   two-level policy. The provisional validation sample supports a paired
   regression gate. [Phase report](POST_M15_EVIDENCE_POLICY.md)
 
+## Q5 — End-to-end retrieval utility
+
+- **Experiment** Compare independent candidate pools, metadata signals,
+  fusion, context expansion, and fixed-pool rerankers over M12 and a
+  33-question filing cohort. Score candidate recall, ranking, and release.
+- **Result** Scoped statement ranking improved natural-route validation
+  from 14/17 to 17/17 grounded exact, with 3/3 correct abstentions and
+  zero unsupported releases. M13 and Q3 direct-fact results were retained.
+  Several methods improved M12 recall and yielded fewer grounded answers.
+- **Decision** Adopt bounded statement ranking for scoped filing searches.
+  Retain the Dense baseline and keep heavier rerankers in evaluation.
+  [Phase report](POST_M15_RETRIEVAL_UTILITY.md)
+
 ## Planned experiments
 
 Each planned experiment must add its exact hypothesis, baseline, changed

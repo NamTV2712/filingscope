@@ -155,6 +155,8 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--p1-run", type=Path, default=P1_RUN)
     parser.add_argument("--statement-pages", type=Path, help="Pinned pypdf page cache for table normalization")
+    parser.add_argument("--retrieval-policy", choices=("statement", "dense"), default="statement",
+                        help="Rank scoped filing evidence by requested statement slots or use Dense alone")
     parser.add_argument("--sec-dir", type=Path, default=Path("data/financebench/ablation_runs/m13-sec"))
     parser.add_argument("--threads", type=int, default=6)
     args = parser.parse_args()
@@ -167,6 +169,7 @@ def main() -> None:
     from src.evaluation.company_facts_replay import CompanyFactsReplay
     from src.research.corpus_map import CorpusMap
     from src.retrieval.embedder import Embedder
+    from src.retrieval.financial_statement_ranker import FinancialStatementRanker
     from src.retrieval.frozen_dense import FrozenDenseRetriever
     from src.retrieval.pdf_page_cache import FrozenPdfPages
 
@@ -177,10 +180,13 @@ def main() -> None:
     sec = CompanyFactsReplay(args.sec_dir, SEC_ISSUERS, latest_filed=SEC_CUTOFF)
     page_path = args.statement_pages or (P1_PAGE_CACHE if P1_PAGE_CACHE.is_file() else None)
     pages = FrozenPdfPages.from_run(page_path, args.p1_run) if page_path is not None else None
+    router = ComplexityRouter(CorpusMap.from_chunks(chunks, index_generation_id=P1_INDEX_ID))
+    statement_ranker = FinancialStatementRanker(pages, router.extractor) if pages and args.retrieval_policy == "statement" else None
     graph = SpecialistResearchGraph(
-        router=ComplexityRouter(CorpusMap.from_chunks(chunks, index_generation_id=P1_INDEX_ID)),
+        router=router,
         retriever=FrozenDenseRetriever(
-            chunks, vectors, Embedder(device="cpu", revision=P1_EMBEDDING_REVISION), pdf_pages=pages,
+            chunks, vectors, Embedder(device="cpu", revision=P1_EMBEDDING_REVISION),
+            pdf_pages=pages, statement_ranker=statement_ranker,
         ),
         sec_client=sec,
         ticker_by_company=COMPANY_TICKERS,

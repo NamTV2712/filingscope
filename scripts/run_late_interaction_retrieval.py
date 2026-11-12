@@ -92,7 +92,7 @@ def _evaluate(chunks, resolved, pools, scores_by_case, latencies):
             "per_case": rows}
 
 
-def _colbert(chunks, pools, model_path, vector_cache, threads):
+def _colbert(chunks, pools, model_path, vector_cache, threads, *, cases=CASES, measure_tokens=False):
     from fastembed import LateInteractionTextEmbedding
     from qdrant_client import QdrantClient, models
 
@@ -104,6 +104,7 @@ def _colbert(chunks, pools, model_path, vector_cache, threads):
         COLBERT_MODEL, threads=threads, providers=["CPUExecutionProvider"],
         specific_model_path=str(model_path.resolve()), local_files_only=True,
     )
+    model_setup_seconds = time.perf_counter() - setup_started
     unique = sorted({item for pool in pools.values() for item in pool})
     keys = [chunks[item]["chunk_id"] for item in unique]
     identity = json.dumps({"index": P1_INDEX_ID, "model": COLBERT_FILES["model.onnx"],
@@ -146,10 +147,12 @@ def _colbert(chunks, pools, model_path, vector_cache, threads):
 
     numpy_scores, qdrant_scores, numpy_time, qdrant_time = {}, {}, {}, {}
     max_error = 0.0
-    for case in CASES:
+    query_positions = 0
+    for case in cases:
         started = time.perf_counter()
         query = next(iter(embedder.query_embed(case.question)))
         query_ms = (time.perf_counter() - started) * 1000
+        query_positions += query.shape[0]
         pool = pools[case.case_id]
         started = time.perf_counter()
         direct = {item: float(np.max(query @ vectors[item].T, axis=1).sum()) for item in pool}
@@ -176,28 +179,38 @@ def _colbert(chunks, pools, model_path, vector_cache, threads):
         "onnxruntime": importlib.metadata.version("onnxruntime"), "model_disk_bytes": sum((model_path / file).stat().st_size for file in model_files),
         "passage_count": len(vectors), "vector_count": sum(value.shape[0] for value in vectors.values()),
         "vector_bytes": sum(value.nbytes for value in vectors.values()), "dimension": dimension,
+        "model_setup_seconds": round(model_setup_seconds, 3),
         "passage_embedding_seconds": round(embedding_seconds, 3), "qdrant_setup_seconds": round(qdrant_setup_seconds, 3),
         "elapsed_seconds": round(time.perf_counter() - setup_started, 3), "max_score_error": max_error,
+        **({"query_token_positions": query_positions, "query_encoder_calls": len(cases)} if measure_tokens else {}),
     }
 
 
-def _cross_encoder(chunks, pools, directory, threads):
+def _cross_encoder(chunks, pools, directory, threads, *, cases=CASES, measure_tokens=False):
     import torch
     from sentence_transformers import CrossEncoder
 
     config = json.loads((directory / "run_manifest.json").read_text(encoding="utf-8"))["reranker_model"]
     torch.set_num_threads(threads)
     started = time.perf_counter()
-    model = CrossEncoder(config["id"], revision=config["revision"], device="cpu")
+    model = CrossEncoder(config["id"], revision=config["revision"], device="cpu", local_files_only=True)
     setup = time.perf_counter() - started
     scores, times = {}, {}
-    for case in CASES:
+    token_count = pair_count = 0
+    for case in cases:
         pool = pools[case.case_id]
+        pairs = [(case.question, chunks[item]["text"]) for item in pool]
         started = time.perf_counter()
-        values = model.predict([(case.question, chunks[item]["text"]) for item in pool], batch_size=12, show_progress_bar=False)
+        values = model.predict(pairs, batch_size=12, show_progress_bar=False)
         times[case.case_id] = (time.perf_counter() - started) * 1000
         scores[case.case_id] = dict(zip(pool, map(float, values), strict=True))
-    return {"cross_encoder": (scores, times)}, {**config, "model_setup_seconds": round(setup, 3)}
+        if measure_tokens:
+            encoded = model.tokenizer(pairs, truncation=True, max_length=model.max_length)
+            token_count += sum(map(len, encoded["input_ids"]))
+            pair_count += len(pairs)
+    return {"cross_encoder": (scores, times)}, {**config, "model_setup_seconds": round(setup, 3),
+            **({"pair_input_tokens": token_count, "query_ranker_calls": len(cases), "scored_pairs": pair_count}
+               if measure_tokens else {})}
 
 
 def _graphs(chunks, pools):

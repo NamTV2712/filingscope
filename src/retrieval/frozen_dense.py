@@ -8,6 +8,7 @@ from typing import Any
 import numpy as np
 
 from src.ingestion.period_identity import PeriodKind
+from src.retrieval.financial_statement_ranker import STATEMENT_CANDIDATE_POOL, FinancialStatementRanker
 from src.retrieval.pdf_page_cache import FrozenPdfPages
 
 
@@ -17,7 +18,7 @@ class FrozenDenseRetriever:
 
     def __init__(
         self, chunks: list[dict[str, Any]], vectors: np.ndarray, embedder: Any, *,
-        pdf_pages: FrozenPdfPages | None = None,
+        pdf_pages: FrozenPdfPages | None = None, statement_ranker: FinancialStatementRanker | None = None,
     ):
         self.chunks = chunks
         self.vectors = vectors
@@ -25,6 +26,7 @@ class FrozenDenseRetriever:
         self.document_ids = np.array([item["document_id"] for item in chunks])
         self.model_lock = threading.Lock()
         self.pdf_pages = pdf_pages
+        self.statement_ranker = statement_ranker
         statement_keys = {
             (doc, page) for doc, pages in pdf_pages.statements.items() for page, _ in pages
         } if pdf_pages else set()
@@ -57,6 +59,8 @@ class FrozenDenseRetriever:
         self, query: str, top_k: int = 10, *,
         document_ids: tuple[str, ...] = (), eligible: np.ndarray | None = None,
     ) -> list[dict[str, Any]]:
+        if top_k <= 0:
+            return []
         with self.model_lock:
             query_vector = np.asarray(self.embedder.embed_query(query), dtype=np.float32)
         norm = np.linalg.norm(query_vector)
@@ -67,8 +71,20 @@ class FrozenDenseRetriever:
             scores = np.where(eligible, scores, -np.inf)
         if document_ids:
             scores = np.where(np.isin(self.document_ids, document_ids), scores, -np.inf)
-        order = np.argsort(-scores, kind="stable")[:top_k]
+        ranker = self.statement_ranker if document_ids else None
+        wanted = ranker.requirements(query) if ranker is not None else frozenset()
+        pool_size = max(top_k, STATEMENT_CANDIDATE_POOL) if wanted else top_k
+        order = [int(position) for position in np.argsort(-scores, kind="stable")[:pool_size]
+                 if np.isfinite(scores[position])]
+        if ranker is not None and wanted:
+            ranked = sorted(order, key=lambda position: -ranker.priority(self.chunks[position], wanted))
+            if ranked[:top_k] != order[:top_k]:
+                return [
+                    {**self.chunks[position], "score": float(len(ranked) - rank), "score_kind": "rank",
+                     "dense_score": float(scores[position]), "retrieval_method": "statement_slot_rank"}
+                    for rank, position in enumerate(ranked[:top_k])
+                ]
         return [
             {**self.chunks[position], "score": float(scores[position]), "score_kind": "dense"}
-            for position in order if np.isfinite(scores[position])
+            for position in order[:top_k]
         ]
