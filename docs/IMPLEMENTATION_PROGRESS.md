@@ -69,7 +69,7 @@ Deployment: none; explicitly out of scope
   `552b297268a33140ef41a6daf5156bbbfb772b9d`. The full suite passed with
   346 tests and 3 skips. [M15 validation](LOCAL_RESEARCH.md)
 
-## Current milestone
+## M1–M15 closeout
 
 M1–M15 are implemented, validated and pushed. Completion source
 `3c55a2bc1393d327fba26a0b7e666cd791907e44` adds the six-decision replay,
@@ -77,11 +77,19 @@ ordinal risk-coverage points from M13, configurable route budgets and
 provider token accounting. The final regression suite passed with 349
 tests and 3 skips. [Specification audit](SPECIFICATION_AUDIT.md)
 
-## Exact next steps
+## Post-M15 checkpoint
 
-To reproduce the audit, run the commands in the specification audit.
+Resume from the first phase whose acceptance gate is open. Before new work,
+check `git status --short`, `git log -5 --oneline`, the corresponding phase
+report and the manifest under the ignored evaluation directory.
 
-## Remaining milestones
-
-All implementation milestones are complete. Deployment is outside the
-specification.
+| Phase ID | Status | Last validated commit | Completed tasks | Unfinished tasks | Test status | Benchmark status | Acceptance gate | Blocking issues | Exact next action |
+|---|---|---|---|---|---|---|---|---|---|
+| Q1 | VALIDATED | Q1 attribution commit | Freeze baseline, trace M13, execute or document A–G, reproduce stable outcomes | Verify remote | 354 passed, 3 skipped | Both specialist modes replayed twice on all 24 M13 cases | 38/38 failures attributed | None | Verify the published Q1 commit. [Phase report](POST_M15_FAILURE_ANALYSIS.md) |
+| Q2 | NOT_STARTED | — | — | Financial period, table and SEC normalization | — | — | Open | Depends on Q1 | Begin with the quarterly SEC-to-coverage loss and labeled financial table pages |
+| Q3 | NOT_STARTED | — | — | Source-aware FAST routing | — | — | Open | Depends on Q2 | Replay paired B4/B5 losses with the validated Q2 contracts |
+| Q4 | NOT_STARTED | — | — | Evidence policy and selective answering | — | — | Open | Depends on Q3 | Freeze safety and risk–coverage evaluation before policy selection |
+| Q5 | NOT_STARTED | — | — | End-to-end retrieval utility | — | — | Open | Depends on Q4 | Compare controlled retrieval variants on the same cohort |
+| Q6 | NOT_STARTED | — | — | Grounded generation and verification | — | — | Open | Depends on Q5 | Audit deterministic and provider-backed writer paths |
+| Q7 | NOT_STARTED | — | — | Specialist graph evaluation | — | — | Open | Depends on Q6 | Compare direct, adaptive, routed and forced workflows |
+| Q8 | NOT_STARTED | — | — | CI, security, observability and final reproducibility | — | — | Open | Depends on Q7 | Validate offline CI and publish the reproducibility report |

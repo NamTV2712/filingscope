@@ -1,7 +1,8 @@
 # Research backlog
 
-Priority follows the prescribed M1–M15 order. “Done” describes implemented,
-tested work only; design notes are not completion evidence.
+Priority follows the prescribed M1–M15 and Q1–Q8 order. The Post-M15
+dependencies and exact next action are recorded in the
+[implementation checkpoint](IMPLEMENTATION_PROGRESS.md#post-m15-checkpoint).
 
 | Priority | Work | Status / dependency | Completion evidence |
 |---|---|---|---|

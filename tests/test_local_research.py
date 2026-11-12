@@ -30,6 +30,8 @@ def test_loopback_stream_and_request_validation() -> None:
             for body, origin, expected in [
                 ('{"question": "What was Apple revenue in FY2024?"}', "https://unrelated.example", 403),
                 ('{"question": "  "}', server.url, 400),
+                ('{"question": "What was Apple revenue in FY2024?", "oracle": "G"}', server.url, 400),
+                ('{"question": "What was Apple revenue in FY2024?", "mode": "oracle"}', server.url, 400),
                 ('{"question": "What stock should I buy?", "mode": "research"}', server.url, 200),
             ]:
                 connection = HTTPConnection("127.0.0.1", server.server_port, timeout=5)

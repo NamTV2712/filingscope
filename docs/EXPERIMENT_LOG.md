@@ -486,6 +486,18 @@ The log separates software-contract checks from answer-quality evidence.
 - **Decision** Retain the decision replay as a regression check and the
   risk-coverage points as a small-cohort comparison. [Audit and reproduction](SPECIFICATION_AUDIT.md)
 
+## Q1 — Post-M15 failure attribution
+
+- **Experiment** Replay B4 and B5 on all 24 exposed M13 cases. Use
+  candidate and ledger traces, same-scope ranking probes and isolated
+  A–G interventions to find the earliest evidence loss.
+- **Result** 38/38 failed runs attributed. Table header and period
+  alignment was first in 27, retrieval or ranking in four, and omitted
+  FAST source capability in three. Source-verified quarterly facts
+  exposed a separate SEC handoff failure in B4.
+- **Decision** Adopt the offline diagnostics and prioritize typed period
+  and table handling in Q2. [Phase report](POST_M15_FAILURE_ANALYSIS.md)
+
 ## Planned experiments
 
 Each planned experiment must add its exact hypothesis, baseline, changed
