@@ -38,7 +38,7 @@ from src.ingestion.company_facts import (
     RevisionKind,
     RevisionPolicy,
 )
-from src.ingestion.period_identity import PeriodScope
+from src.ingestion.period_identity import PeriodKind, PeriodScope
 from src.ledger.evidence_ledger import EvidenceLedger
 from src.ledger.models import (
     CalculationValidationStatus,
@@ -188,9 +188,12 @@ class SpecialistRuntime:
     verifier: ClaimLevelVerifier = field(default_factory=ClaimLevelVerifier)
     xbrl_revision_policy: RevisionPolicy = RevisionPolicy.AS_REPORTED
     require_structured_facts: bool = False
+    deterministic_lookup: bool = False
     on_progress: Callable[[ResearchProgress], None] | None = None
     source_chunks: dict[str, dict[str, Any]] = field(default_factory=dict)
     xbrl_chunk_ids: set[str] = field(default_factory=set)
+    inspected_statement_pages: dict[tuple[str, int], bool] = field(default_factory=dict)
+    ambiguous_statement_rows: int = 0
     evidence_id_by_chunk_id: dict[str, str] = field(default_factory=dict)
     chunk_tasks: dict[str, set[str]] = field(default_factory=dict)
     preferred_evidence_by_chunk_id: dict[str, str] = field(default_factory=dict)
@@ -375,6 +378,59 @@ class TableEvidenceWorker:
 
     worker_id = "table_evidence_worker"
 
+    def run_direct(self, task: ResearchTask, runtime: SpecialistRuntime) -> SpecialistTaskResult | None:
+        """Read a bounded set of cached financial-statement locations."""
+        locate = getattr(runtime.retriever, "retrieve_statement_candidates", None)
+        documents = set(getattr(runtime.retriever, "statement_document_ids", ()))
+        targets = tuple(doc for doc in task.target_document_ids if doc in documents)
+        top_k = min(6, max(0, runtime.budget_tracker.remaining_candidates() - 1))
+        if (
+            not callable(locate) or not targets or not top_k or not runtime.budget_tracker.can_start()
+            or task.source_availability.value == "MISSING" and task.form_types
+        ):
+            return None
+        started = time.perf_counter()
+        runtime.register_plan()
+        runtime.budget_tracker.charge()
+        kind = (
+            PeriodKind.INSTANT if task.metric_id in {"total_assets", "total_liabilities", "cash_and_equivalents"}
+            else PeriodKind.DURATION
+        )
+        observations = [SpecialistObservation(key="table_lookup", value="physical_statement_page")]
+        evidence_ids: set[str] = set()
+        candidates_before = runtime.budget_tracker.candidate_chunks
+        try:
+            matches = locate(targets, kind, top_k=top_k)
+        except Exception as error:
+            matches = []
+            observations.append(SpecialistObservation(key="table_lookup_error", value=type(error).__name__))
+        for rank, value in enumerate(matches[:top_k]):
+            chunk = _chunk_mapping(value)
+            chunk_id = chunk.get("chunk_id")
+            if (
+                not isinstance(chunk_id, str) or not chunk_id or chunk.get("document_id") not in targets
+                or not _chunk_matches_task(chunk, task, runtime.ticker_by_company)
+            ):
+                continue
+            if chunk_id not in runtime.source_chunks:
+                runtime.source_chunks[chunk_id] = chunk
+                runtime.budget_tracker.candidate_chunks += 1
+            runtime.chunk_tasks.setdefault(chunk_id, set()).add(task.task_id)
+            record = self._register_table_chunk(
+                chunk_id=chunk_id, chunk=chunk, task=task, rank=rank, runtime=runtime,
+            )
+            runtime.evidence_id_by_chunk_id[chunk_id] = record.evidence_id
+            runtime.preferred_evidence_by_chunk_id[chunk_id] = record.evidence_id
+            evidence_ids.add(record.evidence_id)
+        receipt = SpecialistTaskResult(
+            worker_id=self.worker_id, status=SpecialistStatus.COMPLETE if evidence_ids else SpecialistStatus.UNKNOWN,
+            task_ids=(task.task_id,), evidence_ids=tuple(sorted(evidence_ids)), observations=tuple(observations),
+            missing_requirement_ids=() if evidence_ids else task.requirement_ids, tool_calls=1,
+            candidate_chunks=runtime.budget_tracker.candidate_chunks - candidates_before, elapsed_ms=_elapsed_ms(started),
+        )
+        runtime.save_result(receipt)
+        return receipt
+
     def run(self, runtime: SpecialistRuntime) -> SpecialistTaskResult:
         started = time.perf_counter()
         evidence_ids: set[str] = set()
@@ -532,7 +588,9 @@ class StructuredFinancialDataWorker:
     def __init__(self, sec_client: SECEdgarClient | None = None):
         self.sec_client = sec_client
 
-    def run(self, tasks: tuple[ResearchTask, ...], runtime: SpecialistRuntime) -> SpecialistTaskResult:
+    def run(
+        self, tasks: tuple[ResearchTask, ...], runtime: SpecialistRuntime, *, reserve_tools: int = 0,
+    ) -> SpecialistTaskResult:
         started = time.perf_counter()
         evidence_ids: set[str] = set()
         task_ids: set[str] = set()
@@ -572,8 +630,11 @@ class StructuredFinancialDataWorker:
         for index, (ticker, ticker_tasks) in enumerate(ticker_groups):
             estimate = _estimated_sec_requests(self.sec_client, ticker)
             # Leave one finite tool call for the report writer when configured.
-            reserve_for_writer = int(runtime.generator is not None and runtime.budget.max_llm_calls > 0)
-            if not runtime.budget_tracker.can_start(tools=estimate + reserve_for_writer):
+            reserve_for_writer = int(
+                runtime.generator is not None and not runtime.deterministic_lookup and runtime.budget.max_llm_calls > 0
+            )
+            reserve = reserve_tools + reserve_for_writer
+            if not runtime.budget_tracker.can_start(tools=estimate + reserve):
                 missing.update(req for task in ticker_tasks for req in task.requirement_ids)
                 observations.append(SpecialistObservation(key="budget", value="sec_request_budget_reached"))
                 continue
@@ -602,7 +663,7 @@ class StructuredFinancialDataWorker:
                 for future_ticker, _ in ticker_groups[index + 1:]
             )
             if callable(report_dates) and runtime.budget_tracker.can_start(
-                tools=1 + future_requests + reserve_for_writer,
+                tools=1 + future_requests + reserve,
             ):
                 runtime.budget_tracker.charge()
                 try:
@@ -848,8 +909,7 @@ def _normalize_filing_statements(runtime: SpecialistRuntime) -> tuple[int, int]:
             if period is not None and period.scope == PeriodScope.ANNUAL and period.end is not None:
                 observed_year_ends.setdefault((fact.entity_id, period.year), set()).add(period.end)
     confirmed_year_ends = {key: next(iter(ends)) for key, ends in observed_year_ends.items() if len(ends) == 1}
-    inspected: dict[tuple[str, int], bool] = {}
-    normalized_pages = ambiguous_rows = 0
+    inspected = runtime.inspected_statement_pages
     for chunk_id, chunk in sorted(runtime.source_chunks.items()):
         document = chunk.get("doc_name")
         page = chunk.get("page_number")
@@ -864,7 +924,7 @@ def _normalize_filing_statements(runtime: SpecialistRuntime) -> tuple[int, int]:
             continue
         key = document, page
         if key in inspected:
-            if inspected[key]:
+            if inspected[key] and "normalized_facts" not in chunk:
                 chunk["normalized_facts"] = ()
             continue
         text = source_page(*key)
@@ -884,8 +944,7 @@ def _normalize_filing_statements(runtime: SpecialistRuntime) -> tuple[int, int]:
         inspected[key] = statement.recognized
         if not statement.recognized:
             continue
-        normalized_pages += 1
-        ambiguous_rows += len(statement.ambiguous_rows)
+        runtime.ambiguous_statement_rows += len(statement.ambiguous_rows)
         chunk["normalized_facts"] = tuple(
             EvidenceFact(
                 evidence_id=chunk_id, entity_id=entity, metric_id=cell.metric_id, period=cell.period,
@@ -898,7 +957,7 @@ def _normalize_filing_statements(runtime: SpecialistRuntime) -> tuple[int, int]:
             )
             for cell in statement.values if not cell.restated
         )
-    return normalized_pages, ambiguous_rows
+    return sum(inspected.values()), runtime.ambiguous_statement_rows
 
 
 class FinancialReasoner:

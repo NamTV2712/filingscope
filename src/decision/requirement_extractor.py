@@ -79,6 +79,11 @@ _RELATIVE_PERIOD_RE = re.compile(
 )
 _CUMULATIVE_RE = re.compile(r"\b(?:YTD|year[- ]to[- ]date|six months ended|nine months ended)\b", re.I)
 _DISCRETE_RE = re.compile(r"\b(?:discrete[- ]quarter|three months ended)\b", re.I)
+_NONSTANDARD_BASIS = re.compile(
+    r"\b(?:non[- ]gaap|non[- ]ifrs|pro forma|constant[- ]currency|"
+    r"adjusted\s+(?:revenue|net income|operating income|margin|eps|earnings|profit))\b",
+    re.I,
+)
 _GROWTH_RE = re.compile(
     r"\b(?:growth|grow(?:s|th|ing)?|increas(?:e|ed|ing)|decreas(?:e|ed|ing)|"
     r"trend|year.over.year|yoy|cagr)\b",
@@ -99,6 +104,10 @@ _OPERATION_RE = {
 
 def _periods(question: str) -> tuple[str, ...]:
     return tuple(dict.fromkeys(item.label for item in period_mentions(question)))
+
+
+def requires_nonstandard_reporting_basis(question: str) -> bool:
+    return bool(_NONSTANDARD_BASIS.search(question))
 
 
 def _metrics(question: str) -> tuple[MetricRequirement, ...]:

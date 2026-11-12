@@ -139,6 +139,7 @@ def public_result(result: SpecialistExecution) -> dict[str, Any]:
     return {
         "status": result.status,
         "route": result.selected_path,
+        "source_capability": result.route.source_capability,
         "answer": result.answer if supported_answer else INSUFFICIENT_EVIDENCE_ANSWER,
         "sources": [_source(record, numbers.get(record.evidence_id)) for record in primary],
         "coverage": rows,

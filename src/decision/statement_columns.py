@@ -6,6 +6,7 @@ import re
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
+from itertools import islice
 
 from src.ingestion.company_facts import MONETARY_CURRENCIES
 from src.ingestion.period_identity import PeriodIdentity, PeriodKind, period_mentions
@@ -190,6 +191,25 @@ def _statement_kind(line: str) -> PeriodKind | None:
     return PeriodKind.INSTANT if "balance sheet" in title or "financial position" in title else PeriodKind.DURATION
 
 
+def _statement_lines(text: str):
+    for line in text.splitlines():
+        if normalized := " ".join(line.replace("\ufffd", " ").split()):
+            yield normalized
+
+
+def _statement_heading(lines):
+    return next(
+        ((index, kind) for index, line in enumerate(islice(lines, 12)) if (kind := _statement_kind(line)) is not None),
+        None,
+    )
+
+
+def statement_period_kind(text: str) -> PeriodKind | None:
+    """Classify a physical page for lookup, without inspecting any cell."""
+    heading = _statement_heading(_statement_lines(text))
+    return heading[1] if heading is not None else None
+
+
 def _parse_dates(header: list[str], years: list[int]) -> list[date | None]:
     joined = " ".join(header)
     matches = list(_DATE.finditer(joined))
@@ -359,10 +379,8 @@ def parse_statement_columns(
     form = form.upper().replace("-", "").removesuffix("/A")
     if form not in {"10K", "10Q", "20F", "40F"} or (form == "10Q") != (quarter is not None):
         return StatementParse(False)
-    lines = [" ".join(line.replace("\ufffd", " ").split()) for line in text.splitlines()]
-    lines = [line for line in lines if line]
-    heading = next(((index, kind) for index, line in enumerate(lines[:12])
-                    if (kind := _statement_kind(line)) is not None), None)
+    lines = list(_statement_lines(text))
+    heading = _statement_heading(lines)
     if heading is None:
         return StatementParse(False)
     title, kind = heading

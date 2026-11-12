@@ -23,6 +23,7 @@ from src.decision.period_value_parser import (
     extract_period_value_pairs,
     period_matches,
 )
+from src.decision.requirement_extractor import requires_nonstandard_reporting_basis
 from src.ingestion.period_identity import intervals_agree
 from src.retrieval.structured_lookup import structured_lookup
 
@@ -309,9 +310,17 @@ class EvidenceCoverageAnalyzer:
         period_seen: dict[str, bool] = defaultdict(bool)
         number_seen: dict[str, bool] = defaultdict(bool)
         source_conflict_ids: dict[str, set[str]] = defaultdict(set)
+        nonstandard_basis = requires_nonstandard_reporting_basis(requirements.question)
 
         for requirement in requirements.evidence:
             metric = metric_by_id[requirement.metric_id]
+            if requirement.quantitative and nonstandard_basis:
+                findings.append(EvidenceFinding(
+                    requirement_id=requirement.requirement_id, entity_id=requirement.entity_id,
+                    metric_id=requirement.metric_id, period=requirement.period, status=CoverageStatus.MISSING,
+                    missing_reason="nonstandard_reporting_basis_not_verified",
+                ))
+                continue
             candidate_facts: list[EvidenceFact] = []
             entity_chunks = 0
             usable_chunks = 0

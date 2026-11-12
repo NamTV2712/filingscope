@@ -7,6 +7,7 @@ from typing import Any
 
 import numpy as np
 
+from src.ingestion.period_identity import PeriodKind
 from src.retrieval.pdf_page_cache import FrozenPdfPages
 
 
@@ -24,9 +25,33 @@ class FrozenDenseRetriever:
         self.document_ids = np.array([item["document_id"] for item in chunks])
         self.model_lock = threading.Lock()
         self.pdf_pages = pdf_pages
+        statement_keys = {
+            (doc, page) for doc, pages in pdf_pages.statements.items() for page, _ in pages
+        } if pdf_pages else set()
+        self._statement_chunks = {}
+        for chunk in chunks:
+            key = chunk["document_id"], chunk.get("page_number")
+            if key in statement_keys:
+                self._statement_chunks.setdefault(key, chunk)
+        self.statement_document_ids = frozenset(doc for doc, _ in self._statement_chunks)
 
     def get_source_page(self, document: str, page_number: int) -> str | None:
         return self.pdf_pages.get(document, page_number) if self.pdf_pages is not None else None
+
+    def retrieve_statement_candidates(
+        self, document_ids: tuple[str, ...], kind: PeriodKind, *, top_k: int,
+    ) -> list[dict[str, Any]]:
+        if self.pdf_pages is None or top_k <= 0:
+            return []
+        matches = []
+        for document in document_ids:
+            for page, page_kind in self.pdf_pages.statements.get(document, ()):
+                chunk = self._statement_chunks.get((document, page))
+                if page_kind == kind and chunk is not None:
+                    matches.append({**chunk, "retrieval_method": "physical_statement_page"})
+                    if len(matches) == top_k:
+                        return matches
+        return matches
 
     def retrieve(
         self, query: str, top_k: int = 10, *,

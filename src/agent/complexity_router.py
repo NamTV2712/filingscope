@@ -4,14 +4,15 @@ from __future__ import annotations
 
 import re
 import time
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.decision.requirement_extractor import EvidenceRequirementExtractor
-from src.ingestion.company_facts import requested_revision_policies
+from src.decision.requirement_extractor import EvidenceRequirementExtractor, requires_nonstandard_reporting_basis
+from src.ingestion.company_facts import METRIC_CONCEPTS, requested_revision_policies
 from src.research.corpus_map import CorpusMap
 from src.research.planner import (
     CorpusAwarePlanner,
@@ -53,6 +54,16 @@ _FUTURE_PERIOD_RE = re.compile(
     r"\b(?:next|upcoming|future)\s+(?:fiscal\s+)?(?:year|quarter|month)\b",
     re.I,
 )
+_STATEMENT_SOURCE_RE = re.compile(
+    r"\b(?:consolidated\s+(?:statement|balance sheet)|income statements?|balance sheets?|"
+    r"cash flow statements?|statement of (?:income|operations|earnings|cash flows|financial position))\b",
+    re.I,
+)
+_SPECIAL_BASIS_RE = re.compile(
+    r"\b(?:segment|continuing operations|discontinued operations|excluding|in the notes|restatement)\b",
+    re.I,
+)
+_XBRL_PERIOD_RE = re.compile(r"(?:Q[1-4] (?:YTD )?)?FY(?:19|20)\d{2}")
 
 
 class ComplexityClass(StrEnum):
@@ -69,6 +80,20 @@ class ExecutionPath(StrEnum):
     FAST = "FAST"
     RESEARCH = "RESEARCH"
     UNSUPPORTED = "UNSUPPORTED"
+
+
+class SourceCapability(StrEnum):
+    DIRECT_XBRL = "DIRECT_XBRL"
+    DIRECT_TABLE = "DIRECT_TABLE"
+    TEXT_RAG = "TEXT_RAG"
+    COMPOSITE = "COMPOSITE"
+    UNSUPPORTED = "UNSUPPORTED"
+
+
+@dataclass(frozen=True)
+class SourceInventory:
+    xbrl_entities: frozenset[str] = frozenset()
+    statement_documents: frozenset[str] = frozenset()
 
 
 class RouteBudget(BaseModel):
@@ -144,6 +169,7 @@ class RouterExecution(BaseModel):
     question: str
     decision: ComplexityDecision
     selected_path: ExecutionPath
+    source_capability: SourceCapability = SourceCapability.TEXT_RAG
     budget: RouteBudget
     research_plan: ResearchPlan | None = None
     route_trace: tuple[str, ...] = ()
@@ -162,12 +188,14 @@ class RouterExecution(BaseModel):
 class _RouterGraphState(TypedDict, total=False):
     question: str
     force_research: bool
+    source_inventory: SourceInventory | None
     decision: ComplexityDecision
     selected_path: str
     budget: RouteBudget
     research_plan: ResearchPlan | None
     planned_retrieval_calls: int
     planned_task_count: int
+    source_capability: SourceCapability
     route_trace: list[str]
 
 
@@ -311,9 +339,14 @@ class ComplexityRouter:
             ),
         )
 
-    def route(self, question: str, *, force_research: bool = False) -> RouterExecution:
+    def route(
+        self, question: str, *, force_research: bool = False, source_inventory: SourceInventory | None = None,
+    ) -> RouterExecution:
         started = time.perf_counter()
-        state = self.graph.invoke({"question": question, "route_trace": [], "force_research": force_research})
+        state = self.graph.invoke({
+            "question": question, "route_trace": [], "force_research": force_research,
+            "source_inventory": source_inventory,
+        })
         elapsed_ms = max(0.0, (time.perf_counter() - started) * 1000)
         decision = state["decision"]
         budget = state["budget"]
@@ -330,6 +363,7 @@ class ComplexityRouter:
             question=question,
             decision=decision,
             selected_path=ExecutionPath(state["selected_path"]),
+            source_capability=state.get("source_capability", SourceCapability.TEXT_RAG),
             budget=budget,
             research_plan=state.get("research_plan"),
             route_trace=tuple(state.get("route_trace", ())),
@@ -389,6 +423,7 @@ class ComplexityRouter:
     def _unsupported_path_node(state: _RouterGraphState) -> dict[str, Any]:
         return {
             "selected_path": ExecutionPath.UNSUPPORTED.value,
+            "source_capability": SourceCapability.UNSUPPORTED,
             "budget": UNSUPPORTED_BUDGET,
             "research_plan": None,
             "planned_task_count": 0,
@@ -418,12 +453,44 @@ class ComplexityRouter:
             raise RuntimeError("planned retrieval calls exceed the selected route budget")
         return {
             "selected_path": path.value,
+            "source_capability": self._source_capability(state, path, plan),
             "budget": budget,
             "research_plan": plan,
             "planned_task_count": len(plan.tasks),
             "planned_retrieval_calls": plan.retrieval_call_count,
             "route_trace": [*state.get("route_trace", ()), node_name],
         }
+
+    def _source_capability(self, state: _RouterGraphState, path: ExecutionPath, plan: ResearchPlan) -> SourceCapability:
+        if path == ExecutionPath.RESEARCH:
+            return SourceCapability.COMPOSITE
+        inventory = state.get("source_inventory")
+        if inventory is None:
+            return SourceCapability.TEXT_RAG
+        question = state["question"]
+        requirements = self.extractor.extract(question)
+        if len(requirements.evidence) > 1:
+            return SourceCapability.COMPOSITE
+        if (
+            len(requirements.evidence) != 1 or not requirements.evidence[0].quantitative
+            or requirements.evidence[0].period is None
+            or any(item.operation != "lookup" for item in requirements.operations)
+            or _SPECIAL_BASIS_RE.search(question) or requires_nonstandard_reporting_basis(question)
+        ):
+            return SourceCapability.TEXT_RAG
+        slot = requirements.evidence[0]
+        task = next((task for task in plan.tasks if slot.requirement_id in task.requirement_ids), None)
+        has_table = bool(task and inventory.statement_documents.intersection(task.target_document_ids))
+        if _STATEMENT_SOURCE_RE.search(question):
+            return SourceCapability.DIRECT_TABLE if has_table else SourceCapability.TEXT_RAG
+        supported_forms = {"10k", "10q", "20f", "40f"}
+        if (
+            task is not None and slot.entity_id in inventory.xbrl_entities
+            and slot.metric_id in METRIC_CONCEPTS and _XBRL_PERIOD_RE.fullmatch(slot.period or "")
+            and (not task.form_types or supported_forms.intersection(task.form_types))
+        ):
+            return SourceCapability.DIRECT_XBRL
+        return SourceCapability.DIRECT_TABLE if has_table else SourceCapability.TEXT_RAG
 
 
 __all__ = [
@@ -436,5 +503,7 @@ __all__ = [
     "ROUTER_VERSION",
     "RouteBudget",
     "RouterExecution",
+    "SourceCapability",
+    "SourceInventory",
     "UNSUPPORTED_BUDGET",
 ]

@@ -511,6 +511,18 @@ The log separates software-contract checks from answer-quality evidence.
 - **Decision** Adopt typed SEC handoff and pypdf column normalization.
   Keep ambiguous fiscal dates withheld until anchored. [Phase report](POST_M15_FINANCIAL_NORMALIZATION.md)
 
+## Q3 — Source-aware FAST
+
+- **Experiment** Compare old FAST, forced RESEARCH and source-aware
+  FAST on 15 direct cohort requests and 24 exposed M13 questions.
+- **Result** B6 reached 9/9 grounded validation answers versus 8/9
+  forced and 2/9 old FAST after two source adjudications. B6 used
+  9/20 of the forced tools on those requests and released zero
+  unsupported answers. M13 grounded exactness increased from 3/21 to
+  14/21 relative to old FAST.
+- **Decision** Adopt the source-aware FAST route and keep the current
+  complex route budgets. [Phase report](POST_M15_SOURCE_ROUTING.md)
+
 ## Planned experiments
 
 Each planned experiment must add its exact hypothesis, baseline, changed

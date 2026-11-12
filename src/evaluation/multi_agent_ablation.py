@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import random
 import re
 from collections import Counter
 from collections.abc import Sequence
@@ -134,6 +135,56 @@ def evaluate_observation(case: AblationCase, run: AblationObservation, *, latenc
         "verified_claims": run.verified_claims, "correction_passes": run.correction_passes,
         "planned_tasks": run.planned_tasks, "completed_tasks": run.completed_tasks,
         "handoff_links": run.handoff_links, "resolved_handoff_links": run.resolved_handoff_links,
+    }
+
+
+def paired_grounded_exact(
+    candidate: Sequence[dict[str, Any]],
+    baseline: Sequence[dict[str, Any]],
+    issuers_by_case: dict[str, set[str]],
+    *,
+    seed: int,
+    samples: int = 10_000,
+) -> dict[str, Any]:
+    """Compute case-paired exactness and resample connected issuer groups."""
+    groups: list[set[str]] = []
+    for issuers in issuers_by_case.values():
+        overlapping = [group for group in groups if group.intersection(issuers)]
+        groups = [group for group in groups if group not in overlapping]
+        groups.append(issuers.union(*overlapping))
+    group_by_issuer = {issuer: index for index, group in enumerate(groups) for issuer in group}
+    totals, changes = [0] * len(groups), [0] * len(groups)
+    changed_cases = []
+    for observed, before in zip(candidate, baseline, strict=True):
+        case_id = observed["case_id"]
+        if case_id != before["case_id"] or observed["answerable"] != before["answerable"]:
+            raise ValueError(f"Paired case identity or answerability differs: {case_id}")
+        if not observed["answerable"]:
+            continue
+        group, = {group_by_issuer[issuer] for issuer in issuers_by_case[case_id]}
+        change = int(observed["grounded_exact"]) - int(before["grounded_exact"])
+        totals[group] += 1
+        changes[group] += change
+        if change:
+            changed_cases.append({"case_id": case_id, "difference": change})
+    groups_in_cohort = [index for index, total in enumerate(totals) if total]
+    pairs = sum(totals)
+    interval = None
+    if groups_in_cohort and samples > 0:
+        import numpy as np
+
+        rng = random.Random(seed)
+        replicates = []
+        for _ in range(samples):
+            drawn = rng.choices(groups_in_cohort, k=len(groups_in_cohort))
+            replicates.append(sum(changes[index] for index in drawn) / sum(totals[index] for index in drawn))
+        interval = np.percentile(replicates, [2.5, 97.5]).tolist()
+    return {
+        "grounded_exact_delta": sum(changes) / pairs if pairs else None,
+        "grounded_exact_delta_ci95": interval,
+        "answerable_pairs": pairs,
+        "issuer_groups": len(groups_in_cohort),
+        "changed_cases": changed_cases,
     }
 
 

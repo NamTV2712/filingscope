@@ -25,7 +25,7 @@ from src.evaluation.m13_failure_replay import (
     RequirementsOracleRouter, corrected_requirements, downstream_signals, expected_slots,
     lost_slots, prepare_page_oracles, quarterly_xbrl_overrides, resolution_signals, slot_supported, source_key, trace_row,
 )
-from src.evaluation.multi_agent_ablation import evaluate_observation, summarize_ablation
+from src.evaluation.multi_agent_ablation import evaluate_observation, paired_grounded_exact, summarize_ablation
 from src.evaluation.oracle_interventions import DiagnosticGraph, Oracle, OracleResult, draft_exists
 from src.evaluation.post_m15_manifest import build_manifest
 from src.research.corpus_map import CorpusMap
@@ -165,42 +165,10 @@ def _oracle_results(case, variant, baseline, paired, router, index, sec, slots, 
 
 
 def _paired_comparison(scores):
-    """Bootstrap issuer groups, merging the issuers in cross-company cases."""
-    import numpy as np
-
-    groups = []
-    for case in CASES:
-        if not case.claims:
-            continue
-        issuers = {slot.entity for slot in expected_slots(case)}
-        overlapping = [group for group in groups if group.intersection(issuers)]
-        groups = [group for group in groups if group not in overlapping]
-        groups.append(issuers.union(*overlapping))
-    group_by_issuer = {issuer: index for index, group in enumerate(groups) for issuer in group}
-    totals, changes = [0] * len(groups), [0] * len(groups)
-    differences = []
-    for case, b4, b5 in zip(CASES, scores["B4"], scores["B5"], strict=True):
-        if not case.claims:
-            continue
-        group = group_by_issuer[expected_slots(case)[0].entity]
-        change = int(b4["grounded_exact"]) - int(b5["grounded_exact"])
-        totals[group] += 1
-        changes[group] += change
-        if change:
-            differences.append({"case_id": case.case_id, "difference": change})
-    rng = random.Random(RANDOM_SEED)
-    replicates = []
-    for _ in range(_BOOTSTRAP_SAMPLES):
-        drawn = rng.choices(range(len(groups)), k=len(groups))
-        replicates.append(sum(changes[index] for index in drawn) / sum(totals[index] for index in drawn))
-    return {
-        "direction": "B4 minus B5",
-        "grounded_exact_delta": sum(changes) / sum(totals),
-        "grounded_exact_delta_ci95": np.percentile(replicates, [2.5, 97.5]).tolist(),
-        "answerable_pairs": sum(totals),
-        "issuer_groups": len(groups),
-        "changed_cases": differences,
-    }
+    groups = {case.case_id: {slot.entity for slot in expected_slots(case)} for case in CASES if case.claims}
+    return {"direction": "B4 minus B5", **paired_grounded_exact(
+        scores["B4"], scores["B5"], groups, seed=RANDOM_SEED, samples=_BOOTSTRAP_SAMPLES,
+    )}
 
 
 def replay(args):

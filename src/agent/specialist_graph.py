@@ -16,7 +16,9 @@ from langgraph.runtime import Runtime
 from langgraph.types import Send
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.agent.complexity_router import ComplexityRouter, ExecutionPath, RouteBudget, RouterExecution
+from src.agent.complexity_router import (
+    ComplexityRouter, ExecutionPath, RouteBudget, RouterExecution, SourceCapability, SourceInventory,
+)
 from src.agent.research_progress import ResearchProgress
 from src.agent.specialists import (
     EvidenceAnalyst,
@@ -29,6 +31,7 @@ from src.agent.specialists import (
     SpecialistTaskResult,
     StructuredFinancialDataWorker,
     TableEvidenceWorker,
+    _normalize_filing_statements,
 )
 from src.decision.models import DecisionResult, EvidenceCoverage
 from src.decision.company_catalog import DEFAULT_COMPANY_ALIASES
@@ -61,6 +64,7 @@ from src.verification.response_policy import INSUFFICIENT_EVIDENCE_ANSWER, verif
 SpecialistExecutionStatus = Literal[
     "VERIFIED", "PARTIAL", "REJECTED", "ABSTAIN", "UNSUPPORTED"
 ]
+_DIRECT_LOOKUP = frozenset({SourceCapability.DIRECT_XBRL, SourceCapability.DIRECT_TABLE})
 
 
 class SpecialistUsage(BaseModel):
@@ -178,6 +182,16 @@ class SpecialistResearchGraph:
         self.verifier = verifier or AtomicClaimVerifier(catalog=self.router.extractor.catalog)
         self.candidate_gate = CandidateEvidenceGate() if use_evidence_policy else None
         self.ticker_by_company = _ticker_lookup(self.router, ticker_by_company or {})
+        inventory = getattr(sec_client, "issuers", None)
+        catalog = self.router.extractor.catalog
+        self.source_inventory = SourceInventory(
+            xbrl_entities=frozenset(
+                entity for company, ticker in self.ticker_by_company.items()
+                if (inventory is None or ticker in inventory)
+                and (entity := catalog.metadata_entity_id(ticker, company)) is not None
+            ) if sec_client is not None else frozenset(),
+            statement_documents=frozenset(getattr(retriever, "statement_document_ids", ())),
+        )
         self.retriever_concurrency_safe = (
             retriever is not None
             and (
@@ -201,7 +215,9 @@ class SpecialistResearchGraph:
         request_id = request_id or f"request-{uuid.uuid4().hex}"
         if on_progress:
             on_progress(ResearchProgress.UNDERSTANDING_QUESTION)
-        route = route or self.router.route(question, force_research=force_research)
+        route = route or self.router.route(
+            question, force_research=force_research, source_inventory=self.source_inventory,
+        )
         if route.question != question:
             raise ValueError("router execution belongs to a different question")
         if route.selected_path == ExecutionPath.UNSUPPORTED:
@@ -214,6 +230,10 @@ class SpecialistResearchGraph:
                 raise ValueError("research plan exceeds the selected planned-task budget")
             if route.research_plan.retrieval_call_count > route.budget.max_retrieval_calls:
                 raise ValueError("research plan exceeds the selected retrieval-call budget")
+            if route.source_capability in _DIRECT_LOOKUP and (
+                route.selected_path != ExecutionPath.FAST or len(route.research_plan.tasks) != 1
+            ):
+                raise ValueError("a direct source lookup requires one FAST task")
         if ledger is not None and ledger.request_id != request_id:
             raise ValueError("ledger request_id must match the specialist run")
         revisions = requested_revision_policies(question)
@@ -234,6 +254,7 @@ class SpecialistResearchGraph:
             verifier=self.verifier,
             xbrl_revision_policy=next(iter(revisions), RevisionPolicy.AS_REPORTED),
             require_structured_facts=bool(revisions),
+            deterministic_lookup=route.source_capability in _DIRECT_LOOKUP,
             on_progress=on_progress,
         )
         concurrency = 1
@@ -318,6 +339,7 @@ class SpecialistResearchGraph:
         graph = StateGraph(_SpecialistGraphState, context_schema=SpecialistRuntime)
         graph.add_node("supervisor", self._supervisor_node)
         graph.add_node("filing_worker", self._filing_node)
+        graph.add_node("direct_sources", self._direct_sources_node)
         graph.add_node("parallel_filing_worker", self._parallel_filing_node)
         graph.add_node("structured_data_worker", self._structured_node)
         graph.add_node("table_worker", self._table_node)
@@ -331,12 +353,14 @@ class SpecialistResearchGraph:
             self._entry,
             {
                 ExecutionPath.FAST.value: "filing_worker",
+                "direct_sources": "direct_sources",
                 ExecutionPath.RESEARCH.value: "supervisor",
                 ExecutionPath.UNSUPPORTED.value: "unsupported_path",
             },
         )
         graph.add_conditional_edges("supervisor", self._fan_out_filing_tasks)
         graph.add_edge("parallel_filing_worker", "structured_data_worker")
+        graph.add_edge("direct_sources", "evidence_analyst")
         graph.add_conditional_edges(
             "filing_worker",
             lambda state: state["route"].selected_path.value,
@@ -360,7 +384,42 @@ class SpecialistResearchGraph:
 
     @staticmethod
     def _entry(state: _SpecialistGraphState) -> str:
-        return state["route"].selected_path.value
+        route = state["route"]
+        if route.selected_path == ExecutionPath.FAST and route.source_capability in _DIRECT_LOOKUP:
+            return "direct_sources"
+        return route.selected_path.value
+
+    def _direct_sources_node(
+        self, state: _SpecialistGraphState, runtime: Runtime[SpecialistRuntime],
+    ) -> dict[str, Any]:
+        context = runtime.context
+        context.register_plan()
+        tasks = tuple(state["plan"].tasks)
+        receipts = []
+        sufficient = False
+        if state["route"].source_capability == SourceCapability.DIRECT_XBRL:
+            context.emit_progress(ResearchProgress.SEARCHING_STRUCTURED_FACTS)
+            receipt = StructuredFinancialDataWorker(context.sec_client).run(
+                tasks, context, reserve_tools=int(context.retriever is not None),
+            )
+            receipts.append(receipt)
+            sufficient = bool(receipt.evidence_ids and not receipt.missing_requirement_ids)
+        if not sufficient:
+            context.emit_progress(ResearchProgress.INSPECTING_TABLES)
+            receipt = TableEvidenceWorker().run_direct(tasks[0], context)
+            if receipt is not None:
+                receipts.append(receipt)
+                _normalize_filing_statements(context)
+                candidates = [chunk for chunk in context.source_chunks.values() if chunk.get("normalized_facts")]
+                sufficient = context.decision_layer.analyzer.analyze(context.requirements, candidates).sufficient
+        if not sufficient:
+            context.emit_progress(ResearchProgress.SEARCHING_FILINGS)
+            receipts.append(FilingResearchWorker().run(tasks, context))
+        return {
+            "trace": [*state.get("trace", ()), "direct_sources"],
+            "specialist_results": [*state.get("specialist_results", ()), *receipts],
+            "evidence_ids": sorted({evidence_id for receipt in receipts for evidence_id in receipt.evidence_ids}),
+        }
 
     @staticmethod
     def _after_analyst(state: _SpecialistGraphState) -> str:
@@ -796,7 +855,7 @@ class SpecialistResearchGraph:
                     completion_tokens=0,
                     latency_ms=max(0.0, (time.perf_counter() - started) * 1000),
                 )
-        if runtime.generator is None or runtime.require_structured_facts:
+        if runtime.generator is None or runtime.require_structured_facts or runtime.deterministic_lookup:
             answer = _render_lookup(runtime)
             if answer:
                 return AnswerGenerationResult(
@@ -1027,7 +1086,7 @@ def _render_lookup(runtime: SpecialistRuntime) -> str:
             entity = next(
                 (item.canonical_name for item in coverage.requirements.entities if item.entity_id == fact.entity_id),
                 fact.entity_id,
-            )
+            ).rstrip(".")
             metric = next(
                 (item.display_name for item in coverage.requirements.metrics if item.metric_id == fact.metric_id),
                 fact.metric_id.replace("_", " "),

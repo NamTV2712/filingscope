@@ -46,6 +46,7 @@ VARIANTS = {
     "B3": "B2 with SEC Company Facts replay",
     "B4": "B3 with M11 release",
     "B5": "B4 with FAST/RESEARCH selection",
+    "B6": "B5 with source-aware FAST selection",
 }
 
 
@@ -57,15 +58,27 @@ class _RecordingRetriever:
         self.index = index
         self.filters = _QueryFilters(index.chunks) if use_metadata else None
         self.calls: list[tuple[str, tuple[str, ...], tuple[str, ...]]] = []
+        self.statement_calls = 0
         self.chunks: dict[str, dict[str, Any]] = {}
         self.lock = threading.Lock()
 
     def reset(self) -> None:
         self.calls.clear()
         self.chunks.clear()
+        self.statement_calls = 0
 
     def get_source_page(self, document: str, page_number: int) -> str | None:
         return self.index.get_source_page(document, page_number)
+
+    @property
+    def statement_document_ids(self) -> frozenset[str]:
+        return self.index.statement_document_ids
+
+    def retrieve_statement_candidates(self, document_ids, kind, *, top_k):
+        self.statement_calls += 1
+        chunks = self.index.retrieve_statement_candidates(document_ids, kind, top_k=top_k)
+        self.chunks.update((row["chunk_id"], row) for row in chunks)
+        return chunks
 
     def retrieve(self, query: str, top_k: int = 10, *, document_ids: tuple[str, ...] = ()) -> list[dict[str, Any]]:
         eligible = self.filters.mask(query)[1] if self.filters is not None else None
@@ -76,10 +89,11 @@ class _RecordingRetriever:
         return chunks
 
     def usage(self) -> dict[str, int]:
+        retrieved = {item for _, _, ids in self.calls for item in ids}
         return {
             "retrieval_calls": len(self.calls),
             "duplicate_retrievals": len(self.calls) - len({(query, scope) for query, scope, _ in self.calls}),
-            "duplicate_candidates": sum(len(ids) for _, _, ids in self.calls) - len(self.chunks),
+            "duplicate_candidates": sum(len(ids) for _, _, ids in self.calls) - len(retrieved),
         }
 
 
@@ -246,11 +260,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--p1-run", type=Path, default=DEFAULT_RUN)
     parser.add_argument("--statement-pages", type=Path, help="Use the pinned physical PDF pages for financial normalization")
+    parser.add_argument("--cohort", choices=("m13", "direct_facts"), default="m13")
     parser.add_argument("--sec-dir", type=Path, default=Path("data/financebench/ablation_runs/m13-sec"))
     parser.add_argument("--acquire-sec", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--split", choices=SPLITS)
-    parser.add_argument("--variants", nargs="+", choices=tuple(VARIANTS), default=list(VARIANTS))
+    parser.add_argument("--variants", nargs="+", choices=tuple(VARIANTS), default=[name for name in VARIANTS if name != "B6"])
     parser.add_argument("--threads", type=int, default=6)
     args = parser.parse_args()
     if not 1 <= args.threads <= 16:
@@ -277,9 +292,15 @@ def main() -> None:
     index = FrozenDenseRetriever(chunks, vectors, embedder, pdf_pages=pages)
     corpus = CorpusMap.from_chunks(chunks, index_generation_id=P1_INDEX_ID)
     basic_router, aware_router = ComplexityRouter(), ComplexityRouter(corpus)
-    sec = CompanyFactsReplay(args.sec_dir, SEC_ISSUERS, latest_filed=SEC_CUTOFF) if set(args.variants) & {"B3", "B4", "B5"} else None
+    sec_variants = {"B3", "B4", "B5", "B6"}
+    sec = CompanyFactsReplay(args.sec_dir, SEC_ISSUERS, latest_filed=SEC_CUTOFF) if set(args.variants) & sec_variants else None
     setup_seconds = time.perf_counter() - started
-    cases = [case for case in CASES if args.split is None or case.split == args.split]
+    cohort = CASES
+    if args.cohort == "direct_facts":
+        from configs.source_routing import CASES as DIRECT_FACT_CASES
+
+        cohort = DIRECT_FACT_CASES
+    cases = [case for case in cohort if args.split is None or case.split == args.split]
     rows_by_variant = {}
     for variant in dict.fromkeys(args.variants):
         print(f"running {variant} on {len(cases)} cases", flush=True)
@@ -289,8 +310,8 @@ def main() -> None:
         layer = _PolicyLayer(extractor) if variant in {"A4", "B0"} else EvidenceDecisionLayer(extractor=extractor)
         specialist_policy = _PolicyLayer(extractor)
         graph = None
-        use_sec = sec if variant in {"B3", "B4", "B5"} else None
-        if variant in {"B1", "B2", "B3", "B4", "B5"}:
+        use_sec = sec if variant in sec_variants else None
+        if variant in {"B1", "B2", *sec_variants}:
             graph = SpecialistResearchGraph(
                 router=router, retriever=retriever, sec_client=use_sec, ticker_by_company=COMPANY_TICKERS,
                 verifier=ClaimLevelVerifier(catalog=extractor.catalog) if variant in {"B1", "B2", "B3"} else None,
@@ -304,13 +325,25 @@ def main() -> None:
                 observed = _solo(variant, case.question, retriever, layer, route)
                 latency_ms = (time.perf_counter() - started) * 1000
             else:
-                route = router.route(case.question, force_research=variant != "B5")
+                route = router.route(
+                    case.question, force_research=variant not in {"B5", "B6"},
+                    source_inventory=graph.source_inventory if variant == "B6" else None,
+                )
                 before = use_sec.request_count if use_sec else 0
                 result = graph.run(case.question, route=route, request_id=f"{variant}-{case.case_id}")
                 latency_ms = (time.perf_counter() - started) * 1000
                 observed = _specialist_observation(result, retriever, use_sec.request_count - before if use_sec else 0, specialist_policy)
             row = evaluate_observation(case, observed, latency_ms=latency_ms)
+            row["citation_sources"] = observed.citation_sources
             row["retrieval_trace"] = sorted(retriever.calls)
+            if graph is not None:
+                row["source_capability"] = route.source_capability
+                row["statement_lookups"] = retriever.statement_calls
+                row["source_workers"] = [
+                    {"worker": item.worker_id, "status": item.status, "elapsed_ms": item.elapsed_ms,
+                     "tool_calls": item.tool_calls, "retrieval_calls": item.retrieval_calls}
+                    for item in result.specialist_results
+                ]
             rows.append(row)
         rows_by_variant[variant] = rows
 
@@ -318,6 +351,7 @@ def main() -> None:
         "benchmark": "filingscope-multi-agent-ablation-v1", "p1_index_id": P1_INDEX_ID,
         "corpus_fingerprint": P1_CORPUS_FINGERPRINT, "embedding_revision": P1_EMBEDDING_REVISION,
         "case_counts": dict(Counter(case.split for case in cases)), "threads": args.threads,
+        "cohort": args.cohort,
         "physical_page_normalization": pages is not None,
         "sec_replay": sec.manifest if sec else None, "provider_calls": 0, "timed_sec_http_calls": 0,
         "setup_seconds": round(setup_seconds, 3), "peak_memory_bytes": _peak_memory_bytes(),

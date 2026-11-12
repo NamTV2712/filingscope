@@ -4,7 +4,7 @@ import threading
 import time
 from typing import Any
 
-from src.agent.complexity_router import ComplexityRouter, ExecutionPath
+from src.agent.complexity_router import ComplexityRouter, ExecutionPath, SourceCapability
 from src.agent.research_progress import ResearchProgress
 from src.agent.specialist_graph import SpecialistResearchGraph
 from src.agent.specialists import SpecialistStatus
@@ -12,6 +12,7 @@ from src.generation.answer_generator import AnswerGenerationResult
 from src.ingestion.company_facts import RevisionKind
 from src.ledger.models import EvidenceSourceType
 from src.local_research import public_result
+from src.research.corpus_map import CorpusMap
 from src.verification.models import ClaimStatus, ResponseDisposition
 
 
@@ -279,6 +280,88 @@ def test_quarterly_sec_facts_survive_coverage_writer_and_verification() -> None:
         assert fact.period_identity.label == period
         assert fact.normalized_value == value
         assert fact.xbrl_provenance.accession == common["accn"]
+
+
+def test_fast_structured_lookup_uses_one_tool_and_the_same_verifier() -> None:
+    sec = FakeSECCompanyFacts()
+    retriever = FakeRetriever([])
+
+    class UnexpectedGenerator:
+        def generate(self, *args):
+            raise AssertionError("Direct lookup called a generator")
+
+    graph = SpecialistResearchGraph(retriever=retriever, sec_client=sec, generator=UnexpectedGenerator())
+    result = graph.run("What was Apple's FY2024 revenue?")
+    assert result.selected_path == ExecutionPath.FAST
+    assert result.route.source_capability == SourceCapability.DIRECT_XBRL
+    assert result.status == "VERIFIED"
+    assert result.graph_trace == ("direct_sources", "evidence_analyst", "report_writer", "claim_verifier")
+    assert result.usage.tool_calls == sec.request_count == 1
+    assert result.usage.llm_calls == result.usage.retrieval_calls == 0
+    assert retriever.calls == []
+    assert result.verification.claims[0].supporting_evidence_ids == result.citation_evidence_ids
+
+
+class StatementRetriever(FakeRetriever):
+    def __init__(self, chunk, *, has_table):
+        super().__init__([chunk])
+        self.statement_document_ids = frozenset({chunk["document_id"]})
+        self.statement_calls = 0
+        self.has_table = has_table
+
+    def retrieve_statement_candidates(self, document_ids, kind, *, top_k):
+        assert set(document_ids) == self.statement_document_ids
+        self.statement_calls += 1
+        return self.chunks[:top_k] if self.has_table else []
+
+    def get_source_page(self, document, page):
+        if self.has_table:
+            return """Consolidated Statements of Income
+            Years ended December 31
+            (USD in millions) 2025 2024
+            Net sales $120,000 $110,000
+            """
+        return None
+
+
+def test_fast_missing_sec_fact_tries_one_table_then_bounded_text_if_needed() -> None:
+    chunk = _annual_chunk()
+    chunk.update(reporting_periods=["2025"], text="Revenue was USD 120 billion in FY2025.")
+    for has_table in (True, False):
+        sec = FakeSECCompanyFacts()
+        retriever = StatementRetriever(chunk, has_table=has_table)
+        graph = SpecialistResearchGraph(
+            router=ComplexityRouter(CorpusMap.from_chunks([chunk])),
+            retriever=retriever, sec_client=sec,
+        )
+        result = graph.run("What was Apple's FY2025 revenue?")
+        assert result.status == "VERIFIED"
+        assert result.route.source_capability == SourceCapability.DIRECT_XBRL
+        assert retriever.statement_calls == sec.request_count == 1
+        assert len(retriever.calls) == result.usage.retrieval_calls == int(not has_table)
+        assert result.usage.tool_calls == 2 + int(not has_table)
+        assert "supervisor" not in result.graph_trace
+
+
+def test_explicit_statement_uses_table_and_narrative_uses_text() -> None:
+    chunk = _annual_chunk()
+    chunk.update(reporting_periods=["2025"])
+    retriever = StatementRetriever(chunk, has_table=True)
+    sec = FakeSECCompanyFacts()
+    graph = SpecialistResearchGraph(
+        router=ComplexityRouter(CorpusMap.from_chunks([chunk])),
+        retriever=retriever, sec_client=sec,
+    )
+    result = graph.run("What was Apple's FY2025 revenue in its consolidated statement of income?")
+    assert result.route.source_capability == SourceCapability.DIRECT_TABLE
+    assert result.status == "VERIFIED" and result.usage.tool_calls == 1
+    narrative = graph.run("What risk factors did Apple report for FY2025?")
+    assert narrative.route.source_capability == SourceCapability.TEXT_RAG
+    adjusted = graph.run("What was Apple's FY2025 non-GAAP revenue?")
+    assert adjusted.route.source_capability == SourceCapability.TEXT_RAG
+    assert adjusted.status == "ABSTAIN"
+    assert adjusted.coverage.findings[0].missing_reason == "nonstandard_reporting_basis_not_verified"
+    assert sec.request_count == 0 and retriever.statement_calls == 1
 
 
 def test_retrieved_parent_statement_links_a_verified_answer_to_its_cell() -> None:
