@@ -91,3 +91,7 @@ python -m scripts.run_offline_checks
 Baseline Git commit `4e93619`. The paired report is under
 `.local/g3/inline-runtime-paired/report.json` with SHA-256
 `bd27073ec653102ad1da8e25c352e8042a7f230364ad74f92d6142101e3fd70d`.
+The full CLI rerun regenerated the same document vector hash and
+matched all 104 case outcomes across four arms. It used 2,449,465,344
+bytes peak working set. Its report at `.local/g3/inline-runtime-full/report.json`
+has SHA-256 `98875e961c2cdba21393df962db5a2e9e06af1bf093fe763d0c5e70649cb33e6`.
