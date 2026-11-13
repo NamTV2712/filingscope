@@ -140,6 +140,11 @@ calendar-year scope. Historical graph, retrieval and writer outcomes
 matched, and Windows passed 447 tests with 3 skips.
 [G3 report](G3_FINANCIAL_RETRIEVAL.md).
 
+The G3 follow-up caught the Tesla segment scope failure on the same
+26 pilot questions. All three tracks now withhold the consolidated
+number. The other 25 outcomes and the historical architecture replay
+matched. [Reporting scope replay](G3_REPORTING_SCOPE.md).
+
 ## G4 orchestration and verification
 
 Same-request requirement reuse reduced measured extractor calls

@@ -84,6 +84,10 @@ _NONSTANDARD_BASIS = re.compile(
     r"adjusted\s+(?:revenue|net income|operating income|margin|eps|earnings|profit))\b",
     re.I,
 )
+_SEGMENT_BASIS = re.compile(
+    r"\b(?:energy generation and storage|(?:business |reportable )?segments?)\b",
+    re.I,
+)
 _GROWTH_RE = re.compile(
     r"\b(?:growth|grow(?:s|th|ing)?|increas(?:e|ed|ing)|decreas(?:e|ed|ing)|"
     r"trend|year.over.year|yoy|cagr)\b",
@@ -107,7 +111,7 @@ def _periods(question: str) -> tuple[str, ...]:
 
 
 def requires_nonstandard_reporting_basis(question: str) -> bool:
-    return bool(_NONSTANDARD_BASIS.search(question))
+    return bool(_NONSTANDARD_BASIS.search(question) or _SEGMENT_BASIS.search(question))
 
 
 def _metrics(question: str) -> tuple[MetricRequirement, ...]:

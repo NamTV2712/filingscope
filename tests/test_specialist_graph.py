@@ -5,6 +5,8 @@ import time
 from decimal import Decimal
 from typing import Any
 
+import pytest
+
 from src.agent.complexity_router import ComplexityRouter, ExecutionPath, SourceCapability
 from src.agent.research_progress import ResearchProgress
 from src.agent.specialist_graph import SpecialistResearchGraph
@@ -435,6 +437,32 @@ def test_explicit_statement_uses_table_and_narrative_uses_text() -> None:
     assert adjusted.status == "ABSTAIN"
     assert adjusted.coverage.findings[0].missing_reason == "nonstandard_reporting_basis_not_verified"
     assert sec.request_count == 0 and retriever.statement_calls == 1
+
+
+@pytest.mark.parametrize("use_pdf,use_sec", [(True, False), (False, True), (True, True)])
+def test_segment_revenue_cannot_release_consolidated_value(use_pdf: bool, use_sec: bool) -> None:
+    cik = 1318605
+    sec = FakeSECCompanyFacts() if use_sec else None
+    if sec is not None:
+        sec.facts[cik] = _company_facts("Tesla, Inc.", cik, "96773000000", "97690000000")
+        sec.get_cik = lambda ticker: {"TSLA": cik}[ticker]
+    chunk = _annual_chunk(ticker="TSLA", company="Tesla")
+    chunk.update(reporting_periods=["2024"], text="Tesla reported consolidated revenue of USD 97.69 billion in FY2024.")
+    retriever = FakeRetriever([chunk]) if use_pdf else None
+    graph = SpecialistResearchGraph(
+        router=ComplexityRouter(CorpusMap.from_chunks([chunk])), retriever=retriever, sec_client=sec,
+    )
+    for question in (
+        "What was Tesla's FY2024 energy generation and storage revenue?",
+        "What was Tesla's FY2024 revenue for its energy segment?",
+    ):
+        result = graph.run(question)
+        assert result.status == "ABSTAIN"
+        assert result.coverage.findings[0].missing_reason == "nonstandard_reporting_basis_not_verified"
+        assert not result.citation_evidence_ids
+    if sec is not None:
+        assert sec.request_count == 0
+    assert graph.run("What was Tesla's FY2024 revenue?").status == "VERIFIED"
 
 
 def test_retrieved_parent_statement_links_a_verified_answer_to_its_cell() -> None:

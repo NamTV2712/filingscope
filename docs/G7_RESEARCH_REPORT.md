@@ -81,6 +81,7 @@ and faithfulness on a new real-filing cohort remain unmeasured.
 | SEC iXBRL extraction | 20,723 numeric observations, 18,800 identity keys and 10,285 dimensioned observations. Offline cache replay reproduced the manifest byte for byte. |
 | Structured parser agreement | 7,087/7,087 unique Company Facts pairs agreed. There were 67 multiple-value groups and 8 missing counterparts. The Apple PDF control agreed on 6/6 cells. |
 | SEC 2025 runtime pilot | PDF only grounded 3/23, and Company Facts only and hybrid each grounded 21/23 by frozen locator. All three released consolidated Tesla revenue for an energy business question. |
+| Segment reporting scope follow-up | All three tracks withheld the consolidated Tesla value after the guard change. The other 25 case outcomes matched. [Paired report](G3_REPORTING_SCOPE.md). |
 | Dense retrieval | M12 Recall@10 56.25%, MRR@10 0.3529 and nDCG@5 0.3757. Q5 page locator micro precision 21/291 and required-slot recall 21/37. |
 | Scoped Dense cost | Matching top-10 IDs on 30 paired requests. Rank p50 4.25 → 1.16 ms with cached embeddings. [G3 method](G3_FINANCIAL_RETRIEVAL.md). |
 | M13 routed | 21/21 grounded exact on answerable cases, 21/24 coverage, 0/21 incorrect releases and 3/3 correct abstentions. |
