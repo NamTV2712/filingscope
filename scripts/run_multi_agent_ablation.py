@@ -96,6 +96,13 @@ class _RecordingRetriever:
             "duplicate_candidates": sum(len(ids) for _, _, ids in self.calls) - len(retrieved),
         }
 
+    def ranked_pdf_pages(self) -> tuple[str, ...] | None:
+        """Return the first dense ranking in query/scope order, independent of thread completion."""
+        if not self.calls:
+            return None
+        _, _, ids = min(self.calls, key=lambda call: (call[0], call[1], not call[2], call[2]))
+        return tuple(_pdf_key(self.chunks[chunk_id]) for chunk_id in ids)
+
 
 class _PolicyLayer(EvidenceDecisionLayer):
     def __init__(self, extractor):
@@ -253,6 +260,7 @@ def _specialist_observation(
         handoff_links=len(verification_links),
         resolved_handoff_links=sum(evidence_id in records for evidence_id in verification_links),
         correction_passes=result.usage.correction_passes, trace=(*result.route.route_trace, *result.graph_trace),
+        pdf_ranked_pages=retriever.ranked_pdf_pages(),
     )
 
 

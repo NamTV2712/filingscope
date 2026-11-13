@@ -39,8 +39,9 @@ fixed model revision and dependencies, offline execution, prediction
 receipt before scoring, and issuer-aware membership. For the actual
 freeze also record the Nomic external code revision, prompts, policy
 versions, tool/token/time budgets and the scorer version. Strict G1
-metrics require complete semantic claim, numeric and retrieval labels.
-The legacy final runner reports its existing locator-based scores.
+metrics require semantic claim, numeric and retrieval labels. The
+runner accepts post-prediction reviewer judgments and retains the
+original locator scores. [Primary scoring workflow](G6_PRIMARY_SCORING.md).
 
 ## Historical readiness replay
 

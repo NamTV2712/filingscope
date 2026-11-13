@@ -52,6 +52,7 @@ class AblationObservation:
     handoff_links: int = 0
     resolved_handoff_links: int = 0
     trace: tuple[str, ...] = ()
+    pdf_ranked_pages: tuple[str, ...] | None = None
 
 
 def _normalized(text: str) -> str:

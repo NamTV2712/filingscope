@@ -11,6 +11,7 @@ from scripts import run_independent_final
 from src.evaluation.independent_final import (
     ARMS, CATEGORIES, Corpus, Filing, Freeze, Label, Membership, Question, check_membership, score_cohort,
 )
+from src.evaluation.independent_primary import ReviewedPredictions, score_reviewed_predictions
 from src.evaluation.multi_agent_ablation import AblationObservation
 from src.retrieval.canonical_json import canonical_sha256, sha256_file
 from src.retrieval.frozen_artifacts import corpus_fingerprint
@@ -168,3 +169,85 @@ def test_predict_runs_both_workflows_without_label_file(bundle, monkeypatch):
     assert report["predictions"]["C_routed"]["fixture"]["disposition"] == "VERIFIED"
     assert report["predictions"]["B_adaptive"]["fixture"]["citation_sources"] == (LOCATOR,)
     assert all(arm["fixture"]["llm_calls"] == 0 for arm in report["predictions"].values())
+    assert all(arm["fixture"]["pdf_ranked_pages"] == (LOCATOR,) for arm in report["predictions"].values())
+
+
+def test_semantic_scoring_binds_labels_to_the_frozen_output(bundle, monkeypatch):
+    root, freeze, _, corpus, questions, labels = bundle
+    predictions = _predictions(questions)
+    predictions["C_routed"]["narrative"]["answer"] = "Fixture's business is in electronics. [Source 1]"
+    predictions["B_adaptive"]["lookup"]["citation_sources"] = [None]
+    for arm in ARMS:
+        predictions[arm]["lookup"]["pdf_ranked_pages"] = [LOCATOR] * 2 + ["second_filing#p0"]
+    report_path = root / "predictions.json"
+    report_path.write_text(json.dumps({
+        "git_sha": freeze.git_sha, "freeze_sha256": sha256_file(root / "freeze.json"),
+        "python": freeze.python_version, "dependencies": freeze.dependencies, "predictions": predictions,
+    }), encoding="utf-8")
+    primary = {
+        "schema_version": "filingscope-reviewed-predictions-v1", "reviewers": ["semantic reviewer"],
+        "freeze_sha256": sha256_file(root / "freeze.json"), "predictions_sha256": sha256_file(report_path),
+        "arms": {name: [] for name in ARMS},
+    }
+    for arm, rows in primary["arms"].items():
+        for question, label in zip(questions, labels, strict=True):
+            answered = bool(label.claims)
+            numeric = answered and question.category != "narrative"
+            judgment = {"case_id": question.case_id, "answerable": answered,
+                        "released": answered, "numeric_applicable": numeric}
+            if answered and question.category != "revision":
+                support = arm != "B_adaptive" or question.category != "lookup"
+                judgment.update(answer_exact=True, claims=[{
+                    "claim_id": "claim-1", "supported_by_context": True, "supported_by_citation_set": support,
+                    "citations": [{"citation_id": "Source 1", "supports_claim": support}],
+                }])
+                if numeric:
+                    judgment["numeric_checks"] = {**dict.fromkeys(
+                        ["values", "company", "metric", "period", "currency", "scale", "reporting_basis"], True,
+                    ), "calculation": None}
+            if question.category == "lookup":
+                judgment["retrieval"] = {"granularity": "page", "ranked_ids": predictions[arm]["lookup"]["pdf_ranked_pages"],
+                                         "relevant_ids": [LOCATOR], "gold_targets": {"target": [LOCATOR]}}
+            rows.append(judgment)
+    adjudications = root / "adjudications.json"
+    adjudications.write_text(json.dumps(primary), encoding="utf-8")
+    output = root / "data/report.json"
+    monkeypatch.setattr(run_independent_final, "_git", lambda *args: {
+        ("rev-parse", "--show-toplevel"): str(root), ("rev-parse", "HEAD"): GIT_SHA,
+        ("status", "--porcelain"): "",
+    }.get(args, str(output)))
+    monkeypatch.setattr("sys.argv", [
+        "runner", "score", "--bundle", str(root), "--freeze-sha256", primary["freeze_sha256"],
+        "--predictions", str(report_path), "--predictions-sha256", primary["predictions_sha256"],
+        "--adjudications", str(adjudications), "--adjudications-sha256", sha256_file(adjudications),
+        "--output", str(output),
+    ])
+    assert run_independent_final.main() == 0
+    result = json.loads(output.read_bytes())
+    assert result["adjudications_sha256"] == sha256_file(adjudications)
+    assert result["arms"]["C_routed"]["overall"]["grounded_exact_answers"] == 6
+    strict = result["primary_adjudication"]
+    routed = strict["arms"]["C_routed"]
+    assert routed["primary"]["grounded_exact_accuracy"]["numerator"] == 6
+    assert routed["primary"]["grounded_exact_accuracy"]["denominator"] == 6
+    assert routed["primary"]["numeric_exact_accuracy"]["denominator"] == 5
+    assert routed["retrieval_by_granularity"]["page"]["context_precision_at_10"]["value"] == 0.5
+    assert routed["retrieval_by_granularity"]["page"]["gold_evidence_recall_at_10"]["value"] == 1
+    assert routed["release_risk_intervals"]["all_releases_worst_case"]["numerator"] == 1
+    assert strict["arms"]["B_adaptive"]["primary"]["claim_faithfulness"]["value"] == 1
+    assert strict["arms"]["B_adaptive"]["primary"]["citation_support_precision"]["numerator"] == 5
+    assert strict["paired_grounded_exact"]["grounded_exact_delta"] == pytest.approx(1 / 6)
+
+    reviewed = ReviewedPredictions.model_validate_json(adjudications.read_bytes())
+    kwargs = {"freeze_sha256": primary["freeze_sha256"], "predictions_sha256": primary["predictions_sha256"]}
+    with pytest.raises(ValueError, match="different freeze or prediction"):
+        score_reviewed_predictions(freeze, questions, labels, predictions, reviewed,
+                                   **{**kwargs, "predictions_sha256": CHECKSUM})
+    wrong_rank = predictions["C_routed"]["lookup"]
+    wrong_rank["pdf_ranked_pages"] = [LOCATOR]
+    with pytest.raises(ValueError, match="frozen PDF ranking"):
+        score_reviewed_predictions(freeze, questions, labels, predictions, reviewed, **kwargs)
+    wrong_rank["pdf_ranked_pages"] = [LOCATOR] * 2 + ["second_filing#p0"]
+    predictions["C_routed"]["lookup"]["citation_sources"] = [None]
+    with pytest.raises(ValueError, match="unresolved citation"):
+        score_reviewed_predictions(freeze, questions, labels, predictions, reviewed, **kwargs)

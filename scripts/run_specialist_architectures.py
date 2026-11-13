@@ -199,6 +199,7 @@ def _adaptive(question, route, graph, retriever, sec, request_id):
         evidence_tokens=_evidence_tokens(report.verification_chunks), planned_tasks=tasks, completed_tasks=completed,
         handoff_links=len(links), resolved_handoff_links=sum(key in linked_chunks for key in links),
         correction_passes=release.correction_passes, trace=("single_agent", result.stop_reason.value),
+        pdf_ranked_pages=retriever.ranked_pdf_pages(),
     ), {"adaptive_queries": result.queries_used, "adaptive_stop": result.stop_reason.value,
         "initial_retrieval_error": initial_error, "resolved_slots": _resolved_slots(runtime.coverage)}
 

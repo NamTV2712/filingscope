@@ -11,6 +11,7 @@ from configs.offline_guard import offline_socket_guard
 from scripts.run_completion_evaluation import risk_coverage_points
 from src.evaluation.benchmark_io import wilson_rate, write_json_atomic
 from src.evaluation.independent_final import ARMS, CATEGORIES, Corpus, Freeze, Label, Membership, Question
+from src.evaluation.independent_primary import ReviewedPredictions
 from src.evaluation.m13_failure_replay import expected_slots
 from src.evaluation.multi_agent_ablation import paired_grounded_exact
 from src.retrieval.canonical_json import sha256_file
@@ -69,7 +70,8 @@ def main() -> None:
         write_json_atomic(args.output / "provisional-report.json", report)
         write_json_atomic(args.output / "reviewer-handoff.json", {
             "status": "PROVISIONAL_NOT_INDEPENDENT",
-            "workflow": ["freeze", "predict", "record_prediction_sha256", "release_labels", "score"],
+            "workflow": ["freeze", "predict", "record_prediction_sha256", "release_labels",
+                         "adjudicate_frozen_predictions", "record_adjudication_sha256", "score"],
             "target_questions": 160, "target_issuer_groups_minimum": 20,
             "target_category_counts": dict.fromkeys(sorted(CATEGORIES), 20),
             "reviewer_threshold_proposal": CRITERIA,
@@ -77,9 +79,10 @@ def main() -> None:
                 "Complete exposed issuer/document crosswalk, including G2 and external benchmark exposure",
                 "Later filing inventory, PDF renditions, frozen index and Company Facts snapshots",
                 "Independently authored questions and reviewer-held gold with separately committed hashes",
-                "Optional complete numeric and atomic claim/citation adjudication for G1 strict metrics",
+                "Post-prediction numeric, retrieval and atomic claim/citation judgments for G1 primary metrics",
             ],
-            "schemas": {model.__name__: model.model_json_schema() for model in (Freeze, Membership, Corpus, Question, Label)},
+            "schemas": {model.__name__: model.model_json_schema()
+                        for model in (Freeze, Membership, Corpus, Question, Label, ReviewedPredictions)},
         })
     print(f"Historical readiness replay: {report['case_count']} cases, {report['status']}")
 

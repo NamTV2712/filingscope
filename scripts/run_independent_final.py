@@ -18,6 +18,7 @@ from src.evaluation.benchmark_io import peak_memory_bytes, write_json_atomic
 from src.evaluation.independent_final import (
     ARMS, Corpus, Freeze, Label, Membership, Question, check_membership, read_pinned, read_rows, score_cohort,
 )
+from src.evaluation.independent_primary import ReviewedPredictions, score_reviewed_predictions
 from src.retrieval.canonical_json import sha256_file
 
 
@@ -108,12 +109,17 @@ def main() -> int:
     parser.add_argument("--freeze-sha256", required=True, help="Reviewer-supplied sha256:<hex> before opening the question file")
     parser.add_argument("--predictions", type=Path)
     parser.add_argument("--predictions-sha256", help="Prediction hash recorded before label release")
+    parser.add_argument("--adjudications", type=Path, help="Reviewer-supplied post-prediction G1 judgments")
+    parser.add_argument("--adjudications-sha256", help="Reviewer-recorded hash for the judgment file")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
     if args.mode in ("predict", "score") and args.output is None:
         parser.error("--output is required for predict and score")
     if args.mode == "score" and (args.predictions is None or not args.predictions_sha256):
         parser.error("--predictions and --predictions-sha256 are required for score")
+    if args.adjudications or args.adjudications_sha256:
+        if args.mode != "score" or not (args.adjudications and args.adjudications_sha256):
+            parser.error("Both adjudication arguments are supported in score mode only")
     if args.output is not None:
         # Require a fresh local result file and avoid overwriting sealed inputs.
         root = Path(_git("rev-parse", "--show-toplevel"))
@@ -144,6 +150,15 @@ def main() -> int:
                 raise ValueError("Prediction dependency provenance differs from the reviewer freeze")
             labels = read_rows(bundle / "labels.jsonl", freeze.labels_sha256, Label)
             report = score_cohort(freeze, corpus, questions, labels, predictions["predictions"])
+            if args.adjudications:
+                reviewed = ReviewedPredictions.model_validate_json(read_pinned(
+                    args.adjudications, args.adjudications_sha256,
+                ))
+                report["primary_adjudication"] = score_reviewed_predictions(
+                    freeze, questions, labels, predictions["predictions"], reviewed,
+                    freeze_sha256=args.freeze_sha256, predictions_sha256=args.predictions_sha256,
+                )
+                report["adjudications_sha256"] = args.adjudications_sha256
             report["predictions_sha256"] = args.predictions_sha256
             report["runtime"] = {key: value for key, value in predictions.items() if key != "predictions"}
         report["freeze_sha256"] = args.freeze_sha256
