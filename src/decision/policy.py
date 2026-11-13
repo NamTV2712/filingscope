@@ -12,6 +12,7 @@ from src.decision.models import (
     DecisionBudget,
     DecisionResult,
     EvidenceCoverage,
+    QuestionRequirements,
 )
 from src.decision.requirement_extractor import EvidenceRequirementExtractor
 
@@ -50,8 +51,17 @@ class EvidenceDecisionLayer:
         *,
         budget: DecisionBudget | None = None,
     ) -> DecisionResult:
+        return self._decide(self.assess(question, chunks), budget)
+
+    def decide_requirements(
+        self, requirements: QuestionRequirements, chunks: Iterable[Any], *, budget: DecisionBudget | None = None,
+    ) -> DecisionResult:
+        """Apply the same policy using requirements already parsed by the caller."""
+        return self._decide(self.analyzer.analyze(requirements, chunks), budget)
+
+    @staticmethod
+    def _decide(coverage: EvidenceCoverage, budget: DecisionBudget | None) -> DecisionResult:
         decision_budget = budget or DecisionBudget()
-        coverage = self.assess(question, chunks)
         requirements = coverage.requirements
         gap_requirement_ids = tuple(dict.fromkeys((
             *coverage.missing_requirement_ids,

@@ -136,3 +136,11 @@ from 4.25 ms to 1.16 ms. YoY expansion now preserves YTD and
 calendar-year scope. Historical graph, retrieval and writer outcomes
 matched, and Windows passed 447 tests with 3 skips.
 [G3 report](G3_FINANCIAL_RETRIEVAL.md).
+
+## G4 orchestration and verification
+
+Same-request requirement reuse reduced measured extractor calls
+from 4 to 2 on FAST and 3 to 2 on RESEARCH. The historical graph,
+retrieval and writer replays kept their grounded, release and fault
+outcomes. Windows passed 451 tests with 3 fixture skips.
+[G4 report](G4_AGENT_VERIFICATION.md).

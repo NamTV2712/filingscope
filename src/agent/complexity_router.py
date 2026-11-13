@@ -11,6 +11,7 @@ from typing import Any, TypedDict
 from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, ConfigDict, Field
 
+from src.decision.models import QuestionRequirements
 from src.decision.requirement_extractor import EvidenceRequirementExtractor, requires_nonstandard_reporting_basis
 from src.ingestion.company_facts import METRIC_CONCEPTS, requested_revision_policies
 from src.research.corpus_map import CorpusMap
@@ -193,6 +194,7 @@ class RouterExecution(BaseModel):
 
 class _RouterGraphState(TypedDict, total=False):
     question: str
+    requirements: QuestionRequirements
     force_research: bool
     source_inventory: SourceInventory | None
     decision: ComplexityDecision
@@ -240,7 +242,9 @@ class ComplexityRouter:
         self.graph = self._build_graph()
 
     def classify(self, question: str) -> ComplexityDecision:
-        requirements = self.extractor.extract(question)
+        return self._classify(question, self.extractor.extract(question))
+
+    def _classify(self, question: str, requirements: QuestionRequirements) -> ComplexityDecision:
         entities = len(requirements.entities)
         metrics = len(requirements.metrics)
         periods = len(requirements.periods)
@@ -404,13 +408,16 @@ class ComplexityRouter:
         return graph.compile()
 
     def _classify_node(self, state: _RouterGraphState) -> dict[str, Any]:
-        decision = self.classify(state["question"])
+        question = state["question"]
+        requirements = self.extractor.extract(question)
+        decision = self._classify(question, requirements)
         if state.get("force_research") and decision.path == ExecutionPath.FAST:
             decision = decision.model_copy(update={
                 "path": ExecutionPath.RESEARCH,
                 "reason_codes": (*decision.reason_codes, "research_route_requested"),
             })
         return {
+            "requirements": requirements,
             "decision": decision,
             "route_trace": ["classify_request"],
         }
@@ -474,7 +481,7 @@ class ComplexityRouter:
         if inventory is None:
             return SourceCapability.TEXT_RAG
         question = state["question"]
-        requirements = self.extractor.extract(question)
+        requirements = state["requirements"]
         if len(requirements.evidence) > 1:
             return SourceCapability.COMPOSITE
         if (

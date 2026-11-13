@@ -866,6 +866,8 @@ class EvidenceAnalyst:
 
     def run(self, question: str, runtime: SpecialistRuntime) -> SpecialistTaskResult:
         started = time.perf_counter()
+        if runtime.requirements.question != question:
+            raise ValueError("Evidence analyst requirements belong to a different question")
         runtime.register_plan()
         normalized_pages, ambiguous_rows = _normalize_filing_statements(runtime)
         chunks = [
@@ -880,8 +882,8 @@ class EvidenceAnalyst:
                 chunk["chunk_id"] for chunk in screened
             }
             chunks = screened
-        runtime.decision = runtime.decision_layer.decide(
-            question,
+        runtime.decision = runtime.decision_layer.decide_requirements(
+            runtime.requirements,
             chunks,
             budget=DecisionBudget(remaining_retrieval_attempts=0),
         )
