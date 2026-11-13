@@ -18,6 +18,8 @@ from src.retrieval.canonical_json import sha256_file
 
 CRITERIA = {"minimum_coverage": 0.5, "maximum_incorrect_release_point": 0.05,
             "confidence": 0.95, "maximum_critical_identity_errors": 0}
+FREEZE_RELEASE_RISK = {"minimum_coverage": CRITERIA["minimum_coverage"],
+                       "maximum_incorrect_release": CRITERIA["maximum_incorrect_release_point"]}
 
 
 def historical_report(source: Path) -> dict:
@@ -75,6 +77,7 @@ def main() -> None:
             "target_questions": 160, "target_issuer_groups_minimum": 20,
             "target_category_counts": dict.fromkeys(sorted(CATEGORIES), 20),
             "reviewer_threshold_proposal": CRITERIA,
+            "freeze_release_risk_proposal": FREEZE_RELEASE_RISK,
             "required_external_inputs": [
                 "Complete exposed issuer/document crosswalk, including G2 and external benchmark exposure",
                 "Later filing inventory, PDF renditions, frozen index and Company Facts snapshots",

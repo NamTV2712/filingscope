@@ -9,7 +9,8 @@ import numpy as np
 
 from scripts import run_independent_final
 from src.evaluation.independent_final import (
-    ARMS, CATEGORIES, Corpus, Filing, Freeze, Label, Membership, Question, check_membership, score_cohort,
+    ARMS, CATEGORIES, Corpus, Filing, Freeze, Label, Membership, Question, ReleaseRiskCriteria,
+    check_membership, score_cohort,
 )
 from src.evaluation.independent_primary import ReviewedPredictions, score_reviewed_predictions
 from src.evaluation.multi_agent_ablation import AblationObservation
@@ -174,6 +175,9 @@ def test_predict_runs_both_workflows_without_label_file(bundle, monkeypatch):
 
 def test_semantic_scoring_binds_labels_to_the_frozen_output(bundle, monkeypatch):
     root, freeze, _, corpus, questions, labels = bundle
+    criteria = ReleaseRiskCriteria(minimum_coverage=0.5, maximum_incorrect_release=0.05)
+    freeze = freeze.model_copy(update={"release_risk_criteria": criteria})
+    (root / "freeze.json").write_text(freeze.model_dump_json(), encoding="utf-8")
     predictions = _predictions(questions)
     predictions["C_routed"]["narrative"]["answer"] = "Fixture's business is in electronics. [Source 1]"
     predictions["B_adaptive"]["lookup"]["citation_sources"] = [None]
@@ -234,6 +238,10 @@ def test_semantic_scoring_binds_labels_to_the_frozen_output(bundle, monkeypatch)
     assert routed["retrieval_by_granularity"]["page"]["context_precision_at_10"]["value"] == 0.5
     assert routed["retrieval_by_granularity"]["page"]["gold_evidence_recall_at_10"]["value"] == 1
     assert routed["release_risk_intervals"]["all_releases_worst_case"]["numerator"] == 1
+    assert routed["release_risk_gate"]["status"] == "INCONCLUSIVE"
+    assert routed["release_risk_gate"]["best_case_risk"] == 0
+    assert routed["release_risk_gate"]["worst_case_risk"] == pytest.approx(1 / 7)
+    assert strict["arms"]["B_adaptive"]["release_risk_gate"]["status"] == "DOES_NOT_MEET"
     assert strict["arms"]["B_adaptive"]["primary"]["claim_faithfulness"]["value"] == 1
     assert strict["arms"]["B_adaptive"]["primary"]["citation_support_precision"]["numerator"] == 5
     assert strict["paired_grounded_exact"]["grounded_exact_delta"] == pytest.approx(1 / 6)

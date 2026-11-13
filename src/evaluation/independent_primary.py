@@ -8,7 +8,7 @@ from typing import Annotated, Literal
 from pydantic import Field, model_validator
 
 from src.evaluation.benchmark_io import wilson_rate
-from src.evaluation.independent_final import ARMS, Freeze, Hash, Label, Question
+from src.evaluation.independent_final import ARMS, Freeze, Hash, Label, Question, ReleaseRiskCriteria
 from src.evaluation.multi_agent_ablation import paired_grounded_exact
 from src.evaluation.primary_metrics import (
     Adjudication, Identifier, RetrievalAdjudication, ScoredCase, score_primary_metrics,
@@ -62,6 +62,26 @@ def _validate_claims(review: ScoredCase, prediction: dict) -> None:
         raise ValueError("Claim adjudication must account for every frozen answer citation")
 
 
+def _release_risk_gate(report: dict, criteria: ReleaseRiskCriteria) -> dict:
+    coverage = report["primary"]["answer_coverage"]["value"]
+    bounds = report["diagnostics"]["release_risk_missing_label_bounds"]
+    interval = report["release_risk_intervals"]["all_releases_worst_case"]["wilson_95"]
+    upper = interval[1] if interval is not None else None
+    best_case_risk = bounds["lower"]
+    coverage_met = coverage is not None and coverage >= criteria.minimum_coverage
+    if not coverage_met or (best_case_risk is not None and best_case_risk > criteria.maximum_incorrect_release):
+        status = "DOES_NOT_MEET"
+    elif upper is not None and upper <= criteria.maximum_incorrect_release:
+        status = "MEETS_DESCRIPTIVE_BOUND"
+    else:
+        status = "INCONCLUSIVE"
+    return {
+        "status": status, "criteria": criteria.model_dump(mode="json"), "coverage_met": coverage_met,
+        "best_case_risk": best_case_risk, "worst_case_risk": bounds["upper"],
+        "worst_case_wilson_95_upper": upper,
+    }
+
+
 def score_reviewed_predictions(
     freeze: Freeze, questions: list[Question], labels: list[Label], predictions: dict, reviewed: ReviewedPredictions,
     *, freeze_sha256: str, predictions_sha256: str,
@@ -99,6 +119,8 @@ def score_reviewed_predictions(
             "judged_releases": wilson_rate(risk["numerator"], risk["denominator"]),
             "all_releases_worst_case": wilson_rate(bounds["maximum_errors"], bounds["denominator"]),
         }
+        if freeze.release_risk_criteria is not None:
+            report["release_risk_gate"] = _release_risk_gate(report, freeze.release_risk_criteria)
         reports[arm] = report
     left, right = (reports[arm]["per_case"] for arm in ARMS)
     pairs = [

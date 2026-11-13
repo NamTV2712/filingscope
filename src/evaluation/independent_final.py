@@ -32,6 +32,11 @@ class _Record(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 
+class ReleaseRiskCriteria(_Record):
+    minimum_coverage: float = Field(ge=0, le=1, strict=True)
+    maximum_incorrect_release: float = Field(ge=0, le=1, strict=True)
+
+
 class Freeze(_Record):
     reviewer: Nonempty
     git_sha: Annotated[str, StringConstraints(pattern=r"^[a-f0-9]{40}$")]
@@ -44,6 +49,7 @@ class Freeze(_Record):
     dataset_license: Nonempty
     adjudication: Nonempty
     success_criteria: Nonempty
+    release_risk_criteria: ReleaseRiskCriteria | None = None
     exposed_membership_sha256: Hash
     corpus_sha256: Hash
     questions_sha256: Hash

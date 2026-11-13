@@ -204,6 +204,10 @@ scoring await an eligible reviewer bundle. [G6 report](G6_EVALUATION_READINESS.m
 The G1 reviewer scoring path now binds semantic judgments to both
 frozen arms and exports page rankings for adjudication.
 [Primary scoring workflow](G6_PRIMARY_SCORING.md).
+The reviewer freeze now accepts machine-readable coverage and
+release-risk criteria. Offline fixtures exercise insufficient sample
+size, missing judgments and known threshold violations. The historical
+report reproduced byte for byte. [Release risk gate](G6_RELEASE_RISK_GATE.md).
 
 ## G7 research report
 

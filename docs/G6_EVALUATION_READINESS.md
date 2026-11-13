@@ -15,6 +15,8 @@ source-identity violations in adversarial controls, and a reported
 95% interval on risk. If the uncertainty is too large for a 5% risk
 claim, report that claim as inconclusive. Reviewer independence and
 the exposed-membership crosswalk must be confirmed before the freeze.
+The [frozen release-risk criterion](G6_RELEASE_RISK_GATE.md) provides
+machine-readable coverage and risk thresholds for adjudicated scoring.
 
 ## Handoff and verification
 
