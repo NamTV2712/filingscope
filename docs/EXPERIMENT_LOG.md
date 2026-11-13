@@ -577,6 +577,21 @@ The log separates software-contract checks from answer-quality evidence.
   comparisons give no basis to expand the graph.
   [Phase report](POST_M15_SPECIALIST_ARCHITECTURES.md)
 
+## Q8 — Offline CI, document injection and typed traces
+
+- **Experiment** Inject nine kinds of document instructions and supply a
+  deliberately compromised draft through the mock Groq transport. Check
+  call arguments, release decisions, stage IDs and log contents. Replay
+  the final graph on the same frozen filing and Company Facts snapshots.
+- **Result** All nine attacks withheld the compromised draft, and local
+  tests passed with 399 successes and three missing-fixture skips. The
+  corrected GitHub Actions workflow passed every step. The graph preserved
+  21/21 M13, 14/14 direct and 30/30 source-checked filing answers.
+- **Decision** Keep typed stage traces and the local approved-fact provider
+  boundary. Phoenix, OpenTelemetry and OpenInference remain optional
+  research candidates. The measured debugging needs are covered by the
+  existing graph, ledger and typed spans. [Final report](POST_M15_FINAL_REPORT.md).
+
 ## Planned experiments
 
 Each planned experiment must add its exact hypothesis, baseline, changed

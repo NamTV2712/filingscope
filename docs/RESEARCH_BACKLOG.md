@@ -22,5 +22,13 @@ dependencies and exact next action are recorded in the
 | M14 | ColBERT, multivectors and graph retrieval adaptations | Complete. Dense stays the default | [R6 and fixed-pool comparisons](ADVANCED_RETRIEVAL.md) |
 | M15 | Local evidence-first research UX | Complete | [Live API and Chromium checks](LOCAL_RESEARCH.md) cover verified answers, source provenance, calculations and abstention |
 
-Cloud deployment is not on this backlog. No work may expand the agent graph
-without a defined capability, finite budget, reproducible test, and ablation.
+## After Q8
+
+| Research question | Evidence required |
+| --- | --- |
+| Accuracy and risk on genuinely independent sources | A reviewer-held, issuer- and time-disjoint cohort. Freeze the selected architecture and score coverage, exactness and unsupported release with grouped intervals. [Evaluation protocol](POST_M15_EVALUATION_PROTOCOL.md#independent-cohort-procedure). |
+| Source isolation with fewer tool calls | Compare the current graph with bounded adaptive continuation after a targeted read failure. Match source snapshots, scopes, budgets and injected faults. |
+| Candidate reuse across fact slots | Evaluate deduplication across metric queries within a filing. Check coverage, grounding, duplicate candidates and warm p95 against the Q7 artifact. |
+| Broader narrative and revision evidence | Source-checked controls for disclosures outside the industry grammar and more original/recast pairs. Measure exact support and withholding. |
+
+[Post-M15 final report](POST_M15_FINAL_REPORT.md).

@@ -45,6 +45,10 @@ The same atomic verifier checks both writers. Use
 `--max-correction-passes 0` to disable the default single revision pass.
 [Grounded writer evaluation](POST_M15_GROUNDED_WRITER.md)
 
+Use `--stage-traces` for typed JSON spans on stderr. The spans carry
+hashed request, source and evidence IDs, timestamps, stage status, stable
+failure codes and usage. See the [reproduction guide](POST_M15_REPRODUCIBILITY.md#optional-hosted-experiment-and-local-traces).
+
 ## Evidence boundaries
 
 - Progress is an allowlisted lifecycle enum. The response stream carries
