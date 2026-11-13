@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -132,9 +133,19 @@ _FINANCIAL_TITLE = re.compile(
 _ISSUER_NAME = re.compile(r"\b(?:inc|incorporated|corporation|company|plc|limited|llc|ltd)\b", re.I)
 _TABLE_SCALE = re.compile(r"\b(?:in )?(thousands|millions|billions)(?=\s*[,)]|\s+except|\s*$|\s+(?:19|20)\d{2})", re.I)
 _MONTHS = "January February March April May June July August September October November December".split()
-_MONTH_DAY = rf"({'|'.join(_MONTHS)})\s+([1-9]|[12]\d|3[01])(?!\d)"
+_MONTH_NUMBERS = {
+    alias.casefold(): number
+    for number, month in enumerate(_MONTHS, 1)
+    for alias in (month, month[:3])
+}
+_MONTH_NAME = "|".join(sorted(_MONTH_NUMBERS, key=len, reverse=True))
+_MONTH_DAY = rf"\b({_MONTH_NAME})\.?\s+([1-9]|[12]\d|3[01])(?!\d)"
 _DATE = re.compile(rf"{_MONTH_DAY},?\s*((?:19|20)\d{{2}})\b", re.I)
 _PARTIAL_DATE = re.compile(_MONTH_DAY, re.I)
+_SHARE_COUNT_SCALE = re.compile(
+    r"\b(?:except )?(?:the )?number of shares(?:,? which are (?:reflected|stated|presented) in| in)"
+    r"\s+(?:thousands|millions|billions)\b", re.I,
+)
 _DURATION = re.compile(r"\b(three|six|nine|twelve)\s+months\s+ended\b", re.I)
 _ANNUAL_HEADER = re.compile(r"\b(?:years?\s+ended|(?:52|53)\s+weeks\s+ended|fiscal\s+years?(?!\s+ended))\b", re.I)
 _CHANGE = re.compile(r"\b(?:percent\s+|%\s*)?(?:year.over.year\s+)?change\s*$", re.I)
@@ -214,6 +225,19 @@ def statement_period_kind(text: str) -> PeriodKind | None:
     return heading[1]
 
 
+def statement_report_date(metadata: Mapping[str, object]) -> date | None:
+    """Read the report date from accession-bound filing metadata."""
+    accession = metadata.get("accession_number") or metadata.get("accession")
+    report_date = metadata.get("report_date")
+    if (not isinstance(accession, str) or not re.fullmatch(r"[0-9]{10}-[0-9]{2}-[0-9]{6}", accession)
+            or not isinstance(report_date, str) or not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", report_date)):
+        return None
+    try:
+        return date.fromisoformat(report_date)
+    except ValueError:
+        return None
+
+
 def _parse_dates(header: list[str], years: list[int]) -> list[date | None]:
     joined = " ".join(header)
     matches = list(_DATE.finditer(joined))
@@ -229,9 +253,9 @@ def _parse_dates(header: list[str], years: list[int]) -> list[date | None]:
             pairs = [(match[1], match[2]) for match in partial for _ in range(len(years) // len(partial))]
         else:
             return [None] * len(years)
-    months = {name.casefold(): index for index, name in enumerate(_MONTHS, 1)}
     try:
-        return [date(year, months[month.casefold()], int(day)) for year, (month, day) in zip(years, pairs, strict=True)]
+        return [date(year, _MONTH_NUMBERS[month.casefold()], int(day))
+                for year, (month, day) in zip(years, pairs, strict=True)]
     except ValueError:
         return [None] * len(years)
 
@@ -246,6 +270,8 @@ def _column_periods(
     if not years or len(years) > 8:
         return ()
     dates = _parse_dates(header, years)
+    if confirmed_period_end and dates[0] and dates[0] != confirmed_period_end:
+        return ()
     body = " ".join(header)
     months = [_QUARTER_MONTHS[match.casefold()] for match in _DURATION.findall(body)]
     if any(item.label.startswith(("Q", "CY")) or current[item.start:item.end].upper().startswith("FY")
@@ -330,6 +356,7 @@ def _period_header(line: str) -> bool:
         remaining = remaining[:mention.start] + remaining[mention.end:]
     remaining = re.sub(r"\([^)]*(?:millions|thousands|billions)[^)]*\)", "", remaining, flags=re.I)
     remaining = re.sub(r"\b(?:in )?(?:millions|thousands|billions)\b.*?\b(?:amounts|data)\b", "", remaining, flags=re.I)
+    remaining = _PARTIAL_DATE.sub("", remaining)
     remaining = _CHANGE.sub("", _REVISION.sub("", _DURATION.sub("", _ANNUAL_HEADER.sub("", remaining))))
     remaining = _HEADER_WORD.sub("", re.sub(r"\b(?:at|dollars|amounts|in|USD|EUR|GBP)\b", "", remaining, flags=re.I))
     return not remaining.strip(" ,.;:()$€£%-")
@@ -410,7 +437,8 @@ def parse_statement_columns(
     )
     heading_lines = lines[title + 1:body_start]
     top = " ".join(heading_lines)
-    scales = {item.casefold() for line in heading_lines for item in _TABLE_SCALE.findall(line)}
+    scales = {item.casefold() for line in heading_lines
+              for item in _TABLE_SCALE.findall(_SHARE_COUNT_SCALE.sub("", line))}
     body = lines[body_start:]
     context = " ".join((top, *body[:18]))
     codes = set(re.findall(rf"\b(?:{_CURRENCY_CODE})\b", context))

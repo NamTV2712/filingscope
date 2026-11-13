@@ -26,7 +26,7 @@ from src.decision.models import (
     QuestionRequirements,
 )
 from src.decision.policy import EvidenceDecisionLayer
-from src.decision.statement_columns import parse_statement_columns
+from src.decision.statement_columns import parse_statement_columns, statement_report_date
 from src.generation.answer_generator import (
     AnswerGenerationResult,
     AnswerGenerator,
@@ -983,9 +983,16 @@ def _normalize_filing_statements(runtime: SpecialistRuntime) -> tuple[int, int]:
         chunk["filing_page_checked"] = True
         fiscal_year = int(years[0])
         quarter = re.search(r"(?:19|20)\d{2}Q([1-4])(?:_|$)", document, re.I)
+        report_end = statement_report_date(chunk)
+        xbrl_end = confirmed_year_ends.get((entity, fiscal_year)) if quarter is None else None
+        if report_end is not None and xbrl_end is not None and report_end != xbrl_end:
+            inspected[key] = True
+            chunk["normalized_facts"] = ()
+            runtime.ambiguous_statement_rows += 1
+            continue
         statement = parse_statement_columns(
             text, form=form, fiscal_year=fiscal_year, quarter=int(quarter[1]) if quarter else None,
-            confirmed_period_end=confirmed_year_ends.get((entity, fiscal_year)),
+            confirmed_period_end=report_end or xbrl_end,
         )
         inspected[key] = statement.recognized
         if not statement.recognized:

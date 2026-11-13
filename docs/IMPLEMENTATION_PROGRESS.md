@@ -144,6 +144,11 @@ The G3 follow-up caught the Tesla segment scope failure on the same
 26 pilot questions. All three tracks now withhold the consolidated
 number. The other 25 outcomes and the historical architecture replay
 matched. [Reporting scope replay](G3_REPORTING_SCOPE.md).
+Accession-bound report dates and statement header parsing subsequently
+raised PDF-only grounded exactness from 3/23 to 22/23 and hybrid from
+21/23 to 22/23 on the same pilot. The structured-only arm still
+withheld Walmart's conflicting revenue tags.
+[Statement normalization replay](G3_STATEMENT_NORMALIZATION.md).
 
 ## G4 orchestration and verification
 

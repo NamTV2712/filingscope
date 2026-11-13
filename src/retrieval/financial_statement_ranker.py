@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping
+from datetime import date
 from functools import lru_cache
 from typing import Any
 
 from src.decision.requirement_extractor import EvidenceRequirementExtractor
-from src.decision.statement_columns import parse_statement_columns
+from src.decision.statement_columns import parse_statement_columns, statement_report_date
 from src.retrieval.pdf_page_cache import FrozenPdfPages
 
 
@@ -27,12 +28,16 @@ class FinancialStatementRanker:
         return frozenset((slot.metric_id, slot.period) for slot in self.extractor.extract(query).evidence
                          if slot.quantitative)
 
-    def _read_slots(self, document: str, page: int, form: str, year: int) -> frozenset[tuple[str, str]]:
+    def _read_slots(
+        self, document: str, page: int, form: str, year: int, report_end: date | None,
+    ) -> frozenset[tuple[str, str]]:
         if (document, page) not in self.statement_pages or (text := self.pages.get(document, page)) is None:
             return frozenset()
         quarter = re.search(r"(?:19|20)\d{2}Q([1-4])(?:_|$)", document, re.I)
-        statement = parse_statement_columns(text, form=form, fiscal_year=year,
-                                            quarter=int(quarter[1]) if quarter else None)
+        statement = parse_statement_columns(
+            text, form=form, fiscal_year=year, quarter=int(quarter[1]) if quarter else None,
+            confirmed_period_end=report_end,
+        )
         return frozenset((cell.metric_id, cell.period) for cell in statement.values if not cell.restated)
 
     def priority(self, chunk: Mapping[str, Any], wanted: StatementSlots) -> int:
@@ -45,6 +50,6 @@ class FinancialStatementRanker:
                 or not isinstance(periods, (list, tuple)) or len(periods) != 1
                 or not re.fullmatch(r"(?:19|20)\d{2}", str(periods[0]))):
             return 0
-        observed = self._slots(document, page, form, int(periods[0]))
+        observed = self._slots(document, page, form, int(periods[0]), statement_report_date(chunk))
         return sum(any(metric == candidate and (period is None or period == observed_period)
                        for candidate, observed_period in observed) for metric, period in wanted)

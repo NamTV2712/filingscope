@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from src.decision.period_value_parser import extract_period_value_mentions, period_matches
 from src.decision.requirement_extractor import EvidenceRequirementExtractor
-from src.decision.statement_columns import parse_statement_columns
+from src.decision.statement_columns import parse_statement_columns, statement_report_date
 from src.ingestion.period_identity import PeriodIdentity, PeriodKind, PeriodScope, YearBasis
 
 
@@ -109,3 +109,63 @@ def test_incompatible_currency_marks_withhold_table_observations():
     result = parse_statement_columns(text, form="10-K", fiscal_year=2024)
     assert result.recognized and not result.values
     assert result.ambiguous_rows[0].reason == "period_or_unit_unresolved"
+
+
+def test_january_statement_preserves_total_revenue_and_requires_matching_anchor():
+    text = """Walmart Inc.
+    Consolidated Statements of Income
+    Fiscal Years Ended January 31,
+    (Amounts in millions, except per share data) 2025 2024
+    Revenues:
+    Net sales $ 674,538 $ 642,637
+    Membership and other income 6,447 5,488
+    Total revenues 680,985 648,125
+    Costs and expenses:
+    Operating income 29,348 27,012
+    """
+    report_end = statement_report_date({"accession": "0000104169-25-000021", "report_date": "2025-01-31"})
+    assert report_end == date(2025, 1, 31)
+    assert statement_report_date({"report_date": "2025-01-31"}) is None
+    assert statement_report_date({"accession": "0000104169-25-000021", "report_date": "2025-02-30"}) is None
+    valid = parse_statement_columns(text, form="10-K", fiscal_year=2025, confirmed_period_end=report_end)
+    assert [(item.period, item.amount) for item in valid.values if item.metric_id == "revenue"] == [
+        ("FY2025", Decimal(680_985)), ("FY2024", Decimal(648_125)),
+    ]
+    for anchor in (None, date(2025, 1, 30)):
+        invalid = parse_statement_columns(text, form="10-K", fiscal_year=2025, confirmed_period_end=anchor)
+        assert invalid.recognized and not invalid.values
+
+
+def test_abbreviated_months_preserve_exact_annual_dates():
+    text = """NVIDIA Corporation and Subsidiaries
+    Consolidated Statements of Income
+    (In millions, except per share data)
+    Year Ended
+    Jan 26, 2025 Jan. 28, 2024 Jan 29, 2023
+    Revenue $ 130,497 $ 60,922 $ 26,974
+    """
+    args = {"form": "10-K", "fiscal_year": 2025, "confirmed_period_end": date(2025, 1, 26)}
+    result = parse_statement_columns(text, **args)
+    assert [(value.amount, value.period_identity.end) for value in result.values] == [
+        (Decimal(130_497), date(2025, 1, 26)),
+        (Decimal(60_922), date(2024, 1, 28)),
+        (Decimal(26_974), date(2023, 1, 29)),
+    ]
+    assert not parse_statement_columns(text.replace("Jan 26", "NotJan 26"), **args).values
+
+
+def test_separate_share_count_scale_keeps_dollars_and_quarter_columns():
+    text = """Condensed Consolidated Statements of Operations (Unaudited)
+    (In millions, except number of shares, which are reflected in thousands, and per-share amounts)
+    Three Months Ended Nine Months Ended
+    June 28, June 29, June 28, June 29,
+    2025 2024 2025 2024
+    Total net sales $ 94,036 $ 85,777 $ 313,695 $ 296,105
+    """
+    args = {"form": "10-Q", "fiscal_year": 2025, "quarter": 3, "confirmed_period_end": date(2025, 6, 28)}
+    result = parse_statement_columns(text, **args)
+    values = {value.period: value.base_amount for value in result.values}
+    assert values == {"Q3 FY2025": Decimal(94_036_000_000), "Q3 FY2024": Decimal(85_777_000_000),
+                      "Q3 YTD FY2025": Decimal(313_695_000_000), "Q3 YTD FY2024": Decimal(296_105_000_000)}
+    assert not parse_statement_columns(text.replace("number of shares", "other financial data"), **args).values
+    assert not parse_statement_columns(text, **{**args, "confirmed_period_end": date(2025, 6, 29)}).values

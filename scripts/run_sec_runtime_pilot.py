@@ -168,7 +168,8 @@ def _run(pdf_dir: Path, cache_dir: Path, manifest_path: Path, output: Path, thre
             "source_repository_url": filing["source_url"],
         })
         for chunk in document_chunks:
-            chunk.update(ticker=filing["ticker"], cik=filing["cik"], accession=pdf.accession)
+            chunk.update(ticker=filing["ticker"], cik=filing["cik"], accession=pdf.accession,
+                         report_date=filing["report_date"])
         chunks.extend(document_chunks)
         pdf_records.append({**filing, **stats, "doc_name": pdf.name, "physical_pages": len(pages),
                             "pdf_url": pdf.url, "pdf_sha256": f"sha256:{pdf.sha256}"})
