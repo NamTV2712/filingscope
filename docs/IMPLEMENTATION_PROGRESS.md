@@ -105,3 +105,13 @@ reduction from 14 distinct advisory findings to 6. The remaining
 findings concern the Nomic-compatible Transformers pin.
 [G0 report and replay commands](G0_BASELINE.md) ·
 [Frozen manifest](G0_BASELINE_MANIFEST.json).
+
+## G1 evaluation foundation
+
+G1 builds on G0 commit `7881b440a4bdd1b7b7a8afa54927d66ad4e7be8c`.
+The versioned scorer covers all eight primary metrics with explicit
+applicability and seven offline fixture cases. The mock Jev observer
+preserved deterministic decisions in 65 policy scenarios. Windows passed
+437 tests with 3 skips and Linux WSL passed 436 with 4 skips. All seven
+historical regression reports matched on stable outputs.
+[G1 report, metric definitions and commands](G1_EVALUATION.md).

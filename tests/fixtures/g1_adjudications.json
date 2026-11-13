@@ -1,0 +1,96 @@
+[
+  {
+    "case_id": "numeric-supported",
+    "answerable": true,
+    "released": true,
+    "answer_exact": true,
+    "numeric_applicable": true,
+    "numeric_checks": {
+      "values": true, "company": true, "metric": true, "period": true,
+      "currency": true, "scale": true, "reporting_basis": true, "calculation": null
+    },
+    "claims": [
+      {
+        "claim_id": "revenue",
+        "supported_by_context": true,
+        "supported_by_citation_set": true,
+        "citations": [{"citation_id": "filing-p1", "supports_claim": true}]
+      }
+    ],
+    "retrieval": {
+      "granularity": "page",
+      "ranked_ids": ["p1", "p1", "d1", "d2", "d3", "d4", "d5", "d6", "d7", "d8", "p2"],
+      "relevant_ids": ["p1", "p2"],
+      "gold_targets": {"revenue": ["p1", "p1-alternative"], "note": ["p2"]}
+    }
+  },
+  {
+    "case_id": "wrong-reporting-basis",
+    "answerable": true,
+    "released": true,
+    "answer_exact": false,
+    "numeric_applicable": true,
+    "numeric_checks": {
+      "values": true, "company": true, "metric": true, "period": true,
+      "currency": true, "scale": true, "reporting_basis": false, "calculation": true
+    },
+    "claims": [
+      {
+        "claim_id": "adjusted-income",
+        "supported_by_context": false,
+        "supported_by_citation_set": false,
+        "citations": [{"citation_id": "consolidated-income", "supports_claim": false}]
+      }
+    ],
+    "retrieval": {
+      "granularity": "fact",
+      "ranked_ids": ["original", "original"],
+      "relevant_ids": ["original", "restated"],
+      "gold_targets": {"starting-value": ["original"], "ending-value": ["restated"]}
+    }
+  },
+  {
+    "case_id": "context-support-wrong-citation",
+    "answerable": true,
+    "released": true,
+    "answer_exact": true,
+    "claims": [
+      {
+        "claim_id": "narrative",
+        "supported_by_context": true,
+        "supported_by_citation_set": false,
+        "citations": [{"citation_id": "nearby-unrelated-page", "supports_claim": false}]
+      }
+    ]
+  },
+  {
+    "case_id": "withheld-answerable",
+    "answerable": true,
+    "released": false,
+    "numeric_applicable": true,
+    "retrieval": {
+      "granularity": "page",
+      "ranked_ids": [],
+      "relevant_ids": ["p1"],
+      "gold_targets": {"amount": ["p1"]}
+    }
+  },
+  {
+    "case_id": "withheld-unanswerable",
+    "answerable": false,
+    "released": false,
+    "retrieval": {"granularity": "page", "ranked_ids": ["d1"], "relevant_ids": [], "gold_targets": {}}
+  },
+  {
+    "case_id": "unjudged-release",
+    "answerable": true,
+    "released": true,
+    "numeric_applicable": true,
+    "retrieval": {"granularity": "page", "ranked_ids": ["p1"]}
+  },
+  {
+    "case_id": "released-unanswerable",
+    "answerable": false,
+    "released": true
+  }
+]

@@ -62,8 +62,10 @@ select = ["E9", "F63", "F7", "F82"]
 [tool.mypy]
 python_version = "3.12"
 files = [
+    "src/evaluation/primary_metrics.py",
     "src/policy/decision_backend.py",
     "src/policy/evidence_features.py",
+    "src/policy/jev_observer.py",
     "src/verification/models.py",
 ]
 follow_imports = "silent"
