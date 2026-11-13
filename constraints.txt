@@ -1,0 +1,2 @@
+# Torch can pull setuptools into the runtime dependency graph.
+setuptools>=84.1.0

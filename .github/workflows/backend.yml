@@ -23,20 +23,21 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
-          cache: pip
-      - name: Check tracked files and Python syntax
-        run: |
-          python -m scripts.check_tracked_secrets
-          python -m compileall -q configs scripts src tests
-      - name: Install CPU test dependencies and cache the pinned tokenizer
+      - name: Install locked CPU test dependencies and cache the pinned tokenizer
         env:
           TIKTOKEN_CACHE_DIR: ${{ runner.temp }}/filingscope-tokenizer
         run: |
-          python -m pip install --index-url https://download.pytorch.org/whl/cpu 'torch==2.15.0+cpu'
-          python -m pip install -r requirements.txt
-          python -m pip check
-          python -c "import tiktoken; tiktoken.get_encoding('cl100k_base')"
+          python -m pip install uv==0.11.28
+          uv sync --locked --python 3.12
+          uv pip check
+          uv run --offline --locked python -c "import tiktoken; tiktoken.get_encoding('cl100k_base')"
+      - name: Check tracked files, syntax, lint and policy types
+        run: |
+          uv run --offline --locked python -m scripts.check_tracked_secrets
+          uv run --offline --locked python -m compileall -q configs scripts src tests
+          uv run --offline --locked ruff check configs scripts src tests
+          uv run --offline --locked mypy
       - name: Run offline unit, regression and lightweight evaluation checks
         env:
           TIKTOKEN_CACHE_DIR: ${{ runner.temp }}/filingscope-tokenizer
-        run: python -m scripts.run_offline_checks
+        run: uv run --offline --locked python -m scripts.run_offline_checks

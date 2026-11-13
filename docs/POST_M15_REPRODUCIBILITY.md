@@ -2,23 +2,21 @@
 
 ## Environment and offline CI
 
-Use Python 3.12 and the pinned packages in `requirements.txt`. Install the
-PyTorch wheel for the machine before resolving the requirements. GitHub
-Actions uses the CPU build `torch==2.15.0+cpu` on Ubuntu 24.04. The local
-research replays used Python 3.12.7 on Windows, CPU PyTorch and six threads.
-Manifests record exact installed dependency versions. `psutil==7.2.2`
-provides peak working set measurements for the real-corpus replays.
+Use the [G0 locked CPU setup](G0_BASELINE.md#reproduce) on Windows or Linux
+for current replays. The historical Post-M15 replays used Python 3.12.7 on
+Windows, CPU PyTorch and six threads. Manifests record exact installed
+dependency versions. The locked Windows dev environment includes
+`psutil==7.2.2` for peak working set measurements.
 
 ```powershell
-python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.15.0+cpu
-python -m pip install -r requirements.txt
-python -m pip check
-python -c "import tiktoken; tiktoken.get_encoding('cl100k_base')"
+uv sync --locked --python 3.12
+uv pip check
+uv run --locked python -c "import tiktoken; tiktoken.get_encoding('cl100k_base')"
 $env:HF_HUB_OFFLINE = '1'
 $env:TRANSFORMERS_OFFLINE = '1'
-python -m scripts.check_tracked_secrets
-python -m compileall -q configs scripts src tests
-python -m scripts.run_offline_checks
+uv run --offline --locked python -m scripts.check_tracked_secrets
+uv run --offline --locked python -m compileall -q configs scripts src tests
+uv run --offline --locked python -m scripts.run_offline_checks
 ```
 
 Install dependencies and prime the small, checksum-verified tiktoken
@@ -77,11 +75,11 @@ $env:HF_HUB_OFFLINE = '1'
 $env:TRANSFORMERS_OFFLINE = '1'
 $env:OPENBLAS_NUM_THREADS = '6'
 $runs = 'data/financebench/ablation_runs'
-uv run --offline --with psutil==7.2.2 python -m scripts.run_specialist_architectures `
+uv run --offline --locked python -m scripts.run_specialist_architectures `
   --faults --output "$runs/replay-architectures.json" --manifest "$runs/replay-architectures-manifest.json"
-uv run --offline --with psutil==7.2.2 python -m scripts.run_retrieval_utility `
+uv run --offline --locked python -m scripts.run_retrieval_utility `
   --variants dense natural_dense natural_runtime --safety --output "$runs/replay-natural-runtime.json"
-python -m scripts.run_grounded_writer_evaluation --candidate "$runs/replay-natural-runtime.json" `
+uv run --offline --locked python -m scripts.run_grounded_writer_evaluation --candidate "$runs/replay-natural-runtime.json" `
   --output "$runs/replay-writer-summary.json" --manifest "$runs/replay-writer-manifest.json"
 ```
 

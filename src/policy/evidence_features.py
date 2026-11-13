@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Literal
+from typing import Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from src.decision.models import EvidenceSupport
 
-FEATURE_SCHEMA_VERSION = "1.1.0"
+FEATURE_SCHEMA_VERSION: Final = "1.1.0"
 
 
 class EntityMatch(StrEnum):

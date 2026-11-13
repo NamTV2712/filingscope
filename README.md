@@ -113,19 +113,17 @@ accuracy estimate for FinanceBench or real generated responses. See
 
 ## Local setup
 
-Use Python 3.12 or newer. Install a CPU or CUDA PyTorch wheel appropriate for
-the machine before installing the project requirements.
+Use the locked CPU environment on x86-64 Windows or Linux with Python 3.12
+and uv. See the [G0 setup and reproduction guide](docs/G0_BASELINE.md#reproduce)
+for Linux commands and the manual CUDA installation path.
 
-`requirements.txt` pins Transformers 4.57.6 because the pinned Nomic embedding
+`pyproject.toml` and `requirements.txt` pin Transformers 4.57.6 because the pinned Nomic embedding
 revision uses custom model APIs that are unavailable in Transformers 5. Re-run
 the offline end-to-end preflight before changing this pin.
 
 ```powershell
-python -m venv .venv
+uv sync --locked --python 3.12
 .venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-# Install the PyTorch wheel for this machine (CPU or CUDA) before continuing.
-python -m pip install -r requirements.txt
 Copy-Item .env.example .env
 ```
 
@@ -138,7 +136,8 @@ caches are not included in this repository.
 Run the offline tests from the repository root:
 
 ```powershell
-python -m pytest tests/ -q
+python -c "import tiktoken; tiktoken.get_encoding('cl100k_base')"
+python -m scripts.run_offline_checks
 ```
 
 The synthetic retrieval test uses deterministic test vectors and a temporary

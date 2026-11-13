@@ -1,0 +1,71 @@
+[project]
+name = "filingscope"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "beautifulsoup4==4.12.3",
+    "einops==0.8.2",
+    "fonttools==4.68.0",
+    "groq==1.5.0",
+    "langgraph==1.2.20",
+    "lxml==6.1.1",
+    "numpy==2.5.4",
+    "pydantic==2.10.0",
+    "pydantic-settings==2.4.0",
+    "pypdf==7.0.0",
+    "python-dotenv==1.2.2",
+    "qdrant-client==1.18.0",
+    "rank-bm25==0.2.2",
+    "requests==2.33.0",
+    "sentence-transformers==5.6.0",
+    "tiktoken==0.13.0",
+    "torch==2.15.0+cpu",
+    # The pinned Nomic model uses APIs removed in Transformers 5.
+    "transformers==4.57.6",
+]
+
+[dependency-groups]
+dev = [
+    "mypy==2.4.1",
+    "psutil==7.2.2; sys_platform == 'win32'",
+    "pytest==9.0.3",
+    "ruff==0.17.5",
+]
+
+[tool.uv]
+package = false
+required-version = ">=0.11.28"
+environments = [
+    "sys_platform == 'win32' and platform_machine == 'AMD64'",
+    "sys_platform == 'linux' and platform_machine == 'x86_64'",
+]
+required-environments = [
+    "sys_platform == 'win32' and platform_machine == 'AMD64'",
+    "sys_platform == 'linux' and platform_machine == 'x86_64'",
+]
+constraint-dependencies = ["setuptools>=84.1.0"]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.ruff]
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E9", "F63", "F7", "F82"]
+
+[tool.mypy]
+python_version = "3.12"
+files = [
+    "src/policy/decision_backend.py",
+    "src/policy/evidence_features.py",
+    "src/verification/models.py",
+]
+follow_imports = "silent"
+check_untyped_defs = true
+warn_unused_ignores = true

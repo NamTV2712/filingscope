@@ -1,6 +1,6 @@
 # Implementation progress
 
-Updated: 2026-11-12<br>
+Updated: 2026-11-13<br>
 Branch: `main`<br>
 Remote: `origin` (`https://github.com/NamTV2712/filingscope.git`)<br>
 Deployment: none; explicitly out of scope
@@ -93,3 +93,15 @@ report and the manifest under the ignored evaluation directory.
 | Q6 | COMPLETE | `33073129dc71fbac2cb516e26ca1ec07adce822f` on `origin/main` | Shared approved writer and verifier inputs, prechecked Decimal calculations, provider caps, 3M numeric tokenization and mock verification | Hosted quality not run | 383 passed, 3 skipped | 30/30 grounded, M13 and direct-fact safety retained, six API controls | All nine recorded gates passed | None | Proceed to Q7. [Phase report](POST_M15_GROUNDED_WRITER.md) |
 | Q7 | COMPLETE | `9ea4fd3ddd48c5c88ec09a8a9d1c488d53bdc759` on `origin/main` | Four-way replay, scope-aware assignments, verified narrative disclosures and bounded filing retry | General narrative synthesis and population-level effect unverified | 386 passed, 3 skipped | B/C/D tied 12/12 clean comparisons, 2/2 narratives and 21/21 M13. C retained healthy-source slots 10/10 vs B 5/10 under persistent injected outage. | Passed for measured source isolation. Clean grounded accuracy tied. | None | Proceed to Q8. [Phase report](POST_M15_SPECIALIST_ARCHITECTURES.md) |
 | Q8 | COMPLETE | `7817975ce6b1b64112747050eefba05a25193598` on `origin/main` | Typed stage traces, nine adversarial fixtures, tracked-secret check, offline GitHub Actions, dataset hygiene and reproducibility | Independent final evaluation and hosted quality remain unmeasured | 399 passed, 3 skipped locally. 398 passed, 4 skipped and 100% fixture verification in [GitHub Actions](https://github.com/NamTV2712/filingscope/actions/runs/43339910663). | 21/21 M13, 14/14 direct, 30/30 source-checked filing questions, 12/12 complex and 2/2 narratives | Q8 engineering gates passed | Reviewer-held independent labels are unavailable | [Final report](POST_M15_FINAL_REPORT.md) and [reproduction guide](POST_M15_REPRODUCIBILITY.md). Run the independent protocol when eligible labels are available. |
+
+## G0 engineering baseline
+
+G0 passed on the worktree over `91367269638e55a7e7c26e2f7f78b18efd16fb33`.
+The locked CPU profile and targeted dependency fixes preserve the
+two-plane runtime. Windows passed 403 tests with 3 skips. Linux WSL
+passed 402 with 4 corpus-related skips. Seven paired offline reports
+had identical stable outcomes. The PyPI and OSV audits agreed on a
+reduction from 14 distinct advisory findings to 6. The remaining
+findings concern the Nomic-compatible Transformers pin.
+[G0 report and replay commands](G0_BASELINE.md) ·
+[Frozen manifest](G0_BASELINE_MANIFEST.json).

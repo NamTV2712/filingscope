@@ -9,7 +9,7 @@ from configs.offline_guard import offline_socket_guard
 
 def main() -> int:
     with offline_socket_guard():
-        status = pytest.main(["-q", "-ra", "-m", "not live_network", "tests"])
+        status = pytest.main(["-q", "-ra", "--strict-markers", "-m", "not live_network", "tests"])
         if status:
             return int(status)
         from src.evaluation.verification_evaluation import evaluate_verifications
