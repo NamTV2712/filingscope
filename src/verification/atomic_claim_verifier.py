@@ -7,6 +7,7 @@ from collections.abc import Iterable
 from typing import Any
 
 from src.decision.company_catalog import CompanyCatalog
+from src.decision.filing_disclosures import filing_industry_relations, industry_relation
 from src.decision.models import EvidenceFact, MetricRequirement, QuestionRequirements
 from src.decision.period_value_parser import extract_period_value_mentions, period_matches
 from src.decision.policy import EvidenceDecisionLayer
@@ -33,11 +34,6 @@ _QUALIFIED_EVIDENCE = re.compile(
     r"expected to|forecasts?|projected|assuming|guidance)\b", re.I,
 )
 _SOURCE_SENTENCE_BOUNDARY = re.compile(r"(?<=[.!?])\s+(?=\S)|\s*;\s*|\n")
-_INDUSTRY = re.compile(
-    r"^(?P<entity>.+?)\s+(?P<relation>does\s+not\s+operate\s+in|operates?\s+in|is\s+not\s+in|is\s+in)"
-    r"\s+(?:the\s+)?(?P<industry>.+?)\s+(?:industry|sector)\b(?P<tail>.*)$", re.I,
-)
-_INDUSTRY_TAIL = re.compile(r"^(?:\s+and\s+(?:serves|provides|sells|supplies)\b.*)?[.!?]*$", re.I)
 _INCREASE = re.compile(r"\b(?:grew|increased|rose|gained)\b", re.I)
 _UNCERTAINTY = re.compile(r"\b(?:insufficient evidence|not enough evidence|cannot determine|unable to verify|could not verify)\b", re.I)
 _SPECULATION = re.compile(r"\b(?:may|might|could|would|expects?|forecasts?|projects?)\b", re.I)
@@ -53,19 +49,6 @@ def _text(statement: str) -> str:
 
 def _words(statement: str) -> str:
     return " ".join(re.findall(r"\w+", statement.casefold()))
-
-
-def _industry_relation(statement: str, aliases: set[str], *, source: bool = False) -> tuple[str, bool] | None:
-    frame = _INDUSTRY.fullmatch(statement.strip())
-    if frame is None or _words(frame["entity"]) not in aliases:
-        return None
-    tail = frame["tail"].strip(" .?!")
-    if tail and (not source or not _INDUSTRY_TAIL.fullmatch(frame["tail"])):
-        return None
-    industry = _words(frame["industry"])
-    if _CONJUNCTION.search(f" {industry} ") or _UNVERIFIED_QUALIFIER.search(industry):
-        return None
-    return industry, "not" not in frame["relation"].casefold().split()
 
 
 def _split_atomic(statement: str, layer: EvidenceDecisionLayer) -> list[str]:
@@ -228,7 +211,7 @@ class AtomicClaimVerifier(ClaimLevelVerifier):
         if len(draft.entity_ids) == 1 and len(draft.metric_ids) == 1:
             entity_id = draft.entity_ids[0]
             aliases = {_words(alias) for alias in catalog.aliases_for(entity_id)}
-            relation = _industry_relation(statement, aliases) if draft.metric_ids == ("industry",) else None
+            relation = industry_relation(statement, aliases) if draft.metric_ids == ("industry",) else None
             explicit_topic = bool(layer.extractor.extract(statement).metrics)
             for chunk in chunks:
                 if catalog.metadata_entity_id(
@@ -238,14 +221,15 @@ class AtomicClaimVerifier(ClaimLevelVerifier):
                 chunk_id = chunk.get("chunk_id")
                 if not isinstance(chunk_id, str) or not chunk_id:
                     continue
-                for sentence in _split_clauses(str(chunk.get("text", ""))):
-                    if relation is not None:
-                        source_relation = _industry_relation(sentence, aliases, source=True)
-                        if source_relation and source_relation[0] == relation[0]:
-                            target = supports if source_relation[1] == relation[1] else refutes
+                text = str(chunk.get("text", ""))
+                if relation is not None:
+                    for industry, positive in filing_industry_relations(text, aliases):
+                        if industry == relation[0]:
+                            target = supports if positive == relation[1] else refutes
                             target.add(chunk_id)
-                    elif explicit_topic and _words(statement) and _words(statement) == _words(sentence):
-                        supports.add(chunk_id)
+                elif explicit_topic and any(_words(statement) and _words(statement) == _words(sentence)
+                                            for sentence in _split_clauses(text)):
+                    supports.add(chunk_id)
         if supports and refutes:
             status, reason = ClaimStatus.UNVERIFIABLE, "cited_sources_conflict"
         elif refutes:
@@ -307,6 +291,14 @@ class AtomicClaimVerifier(ClaimLevelVerifier):
             periods = (periods[0], periods[-1])
         if not uses_endpoints and draft.values and draft.values[0].period:
             periods = (draft.values[0].period,)
+        if claim_type == "qualitative":
+            approved_periods = {
+                fact.period for chunk in cited_chunks if chunk.get("chunk_id") in sources
+                for fact in chunk.get("approved_facts", ()) if isinstance(fact, EvidenceFact)
+                and fact.entity_id in draft.entity_ids and fact.metric_id in draft.metric_ids and fact.period
+            }
+            if not periods:
+                periods = tuple(sorted(approved_periods))
         requirements = tuple(item.requirement_id for item in question_requirements.evidence if
             item.entity_id in draft.entity_ids and item.metric_id in draft.metric_ids
             and (item.period is None or any(period_matches(item.period, period) for period in periods)))

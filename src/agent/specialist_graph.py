@@ -31,6 +31,7 @@ from src.agent.specialists import (
     StructuredFinancialDataWorker,
     TableEvidenceWorker,
     _normalize_filing_statements,
+    filing_scope,
 )
 from src.decision.models import CoverageStatus, DecisionResult, EvidenceCoverage, EvidenceFact
 from src.decision.company_catalog import DEFAULT_COMPANY_ALIASES
@@ -107,6 +108,7 @@ class SpecialistExecution(BaseModel):
     evidence_ids: tuple[str, ...]
     citation_evidence_ids: tuple[str, ...] = ()
     candidate_decisions: tuple[EvidencePolicyDecision, ...] = ()
+    filing_assignments: tuple[SpecialistTaskAssignment, ...] = ()
     answer: str
     generation: AnswerGenerationResult | None = None
     coverage: EvidenceCoverage | None = None
@@ -336,6 +338,7 @@ class SpecialistResearchGraph:
                 for chunk in report_chunks
             ),
             candidate_decisions=runtime.candidate_decisions,
+            filing_assignments=tuple(state.get("filing_assignments", ())),
             answer=state.get("answer", ""),
             generation=runtime.generation,
             coverage=runtime.coverage,
@@ -443,7 +446,7 @@ class SpecialistResearchGraph:
         assignments: list[SpecialistTaskAssignment] = []
         pre_results: list[SpecialistTaskResult] = []
         if self.retriever_concurrency_safe:
-            groups = _filing_query_groups(state.get("plan"))
+            groups = _filing_query_groups(state.get("plan"), context.retriever)
             context.deduplicated_query_count = sum(len(group) - 1 for group in groups.values())
             assignments, pre_results = _build_filing_assignments(
                 plan=state.get("plan"),
@@ -662,13 +665,28 @@ class SpecialistResearchGraph:
     ) -> dict[str, Any]:
         context = runtime.context
         context.emit_progress(ResearchProgress.INSPECTING_TABLES)
+        prior_results = state.get("specialist_results", ())
+        retry_ids = {task_id for result in prior_results for task_id in result.retryable_task_ids}
+        retry_results = []
+        if retry_ids and context.budget_tracker.can_start(retrieval=True):
+            assigned_tasks = [task for assignment in state.get("filing_assignments", ()) for task in assignment.tasks]
+            tasks = assigned_tasks or list(state["plan"].tasks)
+            retry_tasks = tuple(task for task in tasks if task.task_id in retry_ids)
+            if retry_tasks:
+                context.emit_progress(ResearchProgress.ADDITIONAL_RETRIEVAL)
+                receipt = FilingResearchWorker().run(retry_tasks, context)
+                retry_results.append(receipt.model_copy(update={"observations": (
+                    *receipt.observations, SpecialistObservation(key="recovery", value="filing_retry"),
+                )}))
         task_result = TableEvidenceWorker().run(context)
         if task_result.retrieval_calls:
             context.emit_progress(ResearchProgress.ADDITIONAL_RETRIEVAL)
         return {
             "trace": [*state.get("trace", ()), "table_worker"],
-            "specialist_results": [*state.get("specialist_results", ()), task_result],
-            "evidence_ids": sorted(set(state.get("evidence_ids", ())) | set(task_result.evidence_ids)),
+            "specialist_results": [*prior_results, *retry_results, task_result],
+            "evidence_ids": sorted(set(state.get("evidence_ids", ())) | {
+                evidence_id for result in (*retry_results, task_result) for evidence_id in result.evidence_ids
+            }),
         }
 
     def _analyst_node(
@@ -908,9 +926,9 @@ def _task_specific_query(task: ResearchTask) -> str:
 
 
 def _filing_query_groups(
-    plan: ResearchPlan | None,
-) -> dict[str, tuple[ResearchTask, ...]]:
-    grouped: dict[str, list[ResearchTask]] = defaultdict(list)
+    plan: ResearchPlan | None, retriever: Any,
+) -> dict[tuple[str, tuple[str, ...]], tuple[ResearchTask, ...]]:
+    grouped: dict[tuple[str, tuple[str, ...]], list[ResearchTask]] = defaultdict(list)
     if plan is None:
         return {}
     for task in plan.tasks:
@@ -919,7 +937,7 @@ def _filing_query_groups(
         query = _task_specific_query(task)
         normalized = " ".join(query.casefold().split())
         if normalized:
-            grouped[normalized].append(task.model_copy(update={"query": query}))
+            grouped[normalized, filing_scope(retriever, task)].append(task.model_copy(update={"query": query}))
     return {
         key: tuple(sorted(grouped[key], key=lambda item: item.task_id))
         for key in sorted(grouped)
@@ -929,7 +947,7 @@ def _filing_query_groups(
 def _build_filing_assignments(
     *,
     plan: ResearchPlan | None,
-    groups: dict[str, tuple[ResearchTask, ...]],
+    groups: dict[tuple[str, tuple[str, ...]], tuple[ResearchTask, ...]],
     budget: RouteBudget,
     wall_time_remaining: float,
 ) -> tuple[list[SpecialistTaskAssignment], list[SpecialistTaskResult]]:
@@ -970,7 +988,7 @@ def _build_filing_assignments(
         len(selected_groups),
     )
     assignments: list[SpecialistTaskAssignment] = []
-    for index, (normalized_query, grouped_tasks) in enumerate(selected_groups):
+    for index, ((normalized_query, scope), grouped_tasks) in enumerate(selected_groups):
         candidate_limit = min(10, base_candidates + int(index < extra_candidates))
         if candidate_limit <= 0:
             pre_results.append(SpecialistTaskResult(
@@ -983,7 +1001,8 @@ def _build_filing_assignments(
             continue
         task_ids = tuple(sorted(task.task_id for task in grouped_tasks))
         requirement_ids = tuple(sorted({req for task in grouped_tasks for req in task.requirement_ids}))
-        assignment_id = f"query-{hashlib.sha256(normalized_query.encode('utf-8')).hexdigest()[:16]}"
+        signature = "\0".join((normalized_query, *scope))
+        assignment_id = f"query-{hashlib.sha256(signature.encode('utf-8')).hexdigest()[:16]}"
         representative = grouped_tasks[0]
         metric = (representative.metric_id or "financial fact").replace("_", " ")
         objective = (
@@ -1007,6 +1026,7 @@ def _build_filing_assignments(
             objective=objective,
             allowed_tools=("filing_retriever.retrieve",),
             evidence_requirement_ids=requirement_ids,
+            source_document_ids=scope,
             budget=worker_budget,
             tasks=grouped_tasks,
         ))

@@ -562,6 +562,21 @@ The log separates software-contract checks from answer-quality evidence.
   mode as default and gate the optional provider by explicit process caps.
   Hosted Q6 quality was not run. [Phase report](POST_M15_GROUNDED_WRITER.md)
 
+## Q7 — Specialist architecture and scoped recovery
+
+- **Experiment** Replay direct SEC, bounded adaptive RAG, routed specialists
+  and forced specialists on the same corpus. Compare clean release and source
+  isolation on paired multi-company, multi-statement requests.
+- **Result** B, C and D tied at 12/12 grounded exact in clean comparisons.
+  Adaptive used 1.58 tools per request and routed specialists used 5.50.
+  Under persistent injected filing failure, routed specialists kept all
+  healthy-issuer slots in 10/10 runs, compared with 5/10 for adaptive.
+  Both withheld complete answers in this fault condition.
+- **Decision** Retain the low-cost direct path and the existing specialist
+  graph with explicit scope isolation and a bounded filing retry. The clean
+  comparisons give no basis to expand the graph.
+  [Phase report](POST_M15_SPECIALIST_ARCHITECTURES.md)
+
 ## Planned experiments
 
 Each planned experiment must add its exact hypothesis, baseline, changed

@@ -7,6 +7,7 @@ from typing import Any
 
 import numpy as np
 
+from src.decision.filing_disclosures import filing_industry_relations
 from src.ingestion.period_identity import PeriodKind
 from src.retrieval.financial_statement_ranker import STATEMENT_CANDIDATE_POOL, FinancialStatementRanker
 from src.retrieval.pdf_page_cache import FrozenPdfPages
@@ -73,7 +74,10 @@ class FrozenDenseRetriever:
             scores = np.where(np.isin(self.document_ids, document_ids), scores, -np.inf)
         ranker = self.statement_ranker if document_ids else None
         wanted = ranker.requirements(query) if ranker is not None else frozenset()
-        pool_size = max(top_k, STATEMENT_CANDIDATE_POOL) if wanted else top_k
+        industry_lookup = ranker is not None and any(
+            metric.metric_id == "industry" for metric in ranker.extractor.extract(query).metrics
+        )
+        pool_size = max(top_k, STATEMENT_CANDIDATE_POOL) if wanted or industry_lookup else top_k
         order = [int(position) for position in np.argsort(-scores, kind="stable")[:pool_size]
                  if np.isfinite(scores[position])]
         if ranker is not None and wanted:
@@ -84,6 +88,16 @@ class FrozenDenseRetriever:
                      "dense_score": float(scores[position]), "retrieval_method": "statement_slot_rank"}
                     for rank, position in enumerate(ranked[:top_k])
                 ]
+        if industry_lookup:
+            def explicit_disclosure(position: int) -> bool:
+                chunk = self.chunks[position]
+                entity = ranker.extractor.catalog.metadata_entity_id(
+                    chunk.get("ticker"), chunk.get("company"), chunk.get("doc_name"), chunk.get("document_id"),
+                )
+                aliases = ranker.extractor.catalog.aliases_for(entity) if entity else ()
+                return bool(aliases and filing_industry_relations(chunk["text"], aliases))
+
+            order = sorted(order, key=lambda position: not explicit_disclosure(position))
         return [
             {**self.chunks[position], "score": float(scores[position]), "score_kind": "dense"}
             for position in order[:top_k]

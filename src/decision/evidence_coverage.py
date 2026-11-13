@@ -10,6 +10,7 @@ from decimal import Decimal
 from typing import Any
 
 from src.decision.company_catalog import CompanyCatalog
+from src.decision.filing_disclosures import filing_industry_relations
 from src.decision.models import (
     CoverageStatus,
     EvidenceCoverage,
@@ -258,7 +259,9 @@ def _facts_from_chunk(
             )
             facts.append(fact)
     else:
-        if _contains_alias(text, metric.aliases):
+        supports_topic = (bool(filing_industry_relations(text, issuer_aliases)) if metric.metric_id == "industry"
+                          else _contains_alias(text, metric.aliases))
+        if supports_topic:
             facts.append(
                 EvidenceFact(
                     evidence_id=chunk_id,

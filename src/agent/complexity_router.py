@@ -59,6 +59,12 @@ _STATEMENT_SOURCE_RE = re.compile(
     r"cash flow statements?|statement of (?:income|operations|earnings|cash flows|financial position))\b",
     re.I,
 )
+
+
+def requires_statement_source(question: str) -> bool:
+    return bool(_STATEMENT_SOURCE_RE.search(question))
+
+
 _SPECIAL_BASIS_RE = re.compile(
     r"\b(?:segment|continuing operations|discontinued operations|excluding|in the notes|restatement)\b",
     re.I,
@@ -481,7 +487,7 @@ class ComplexityRouter:
         slot = requirements.evidence[0]
         task = next((task for task in plan.tasks if slot.requirement_id in task.requirement_ids), None)
         has_table = bool(task and inventory.statement_documents.intersection(task.target_document_ids))
-        if _STATEMENT_SOURCE_RE.search(question):
+        if requires_statement_source(question):
             return SourceCapability.DIRECT_TABLE if has_table else SourceCapability.TEXT_RAG
         supported_forms = {"10k", "10q", "20f", "40f"}
         if (

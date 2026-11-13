@@ -14,9 +14,10 @@ from typing import Any, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.agent.complexity_router import RouteBudget
+from src.agent.complexity_router import RouteBudget, requires_statement_source
 from src.agent.research_progress import ResearchProgress
 from src.decision.models import (
+    CoverageStatus,
     DecisionBudget,
     DecisionResult,
     EvidenceCoverage,
@@ -82,6 +83,9 @@ class SpecialistTaskResult(BaseModel):
     task_ids: tuple[str, ...] = ()
     evidence_ids: tuple[str, ...] = ()
     missing_requirement_ids: tuple[str, ...] = ()
+    resolved_requirement_ids: tuple[str, ...] = ()
+    conflicted_requirement_ids: tuple[str, ...] = ()
+    retryable_task_ids: tuple[str, ...] = ()
     observations: tuple[SpecialistObservation, ...] = ()
     tool_calls: int = Field(default=0, ge=0)
     retrieval_calls: int = Field(default=0, ge=0)
@@ -102,12 +106,22 @@ class SpecialistTaskAssignment(BaseModel):
     objective: str = Field(min_length=1)
     allowed_tools: tuple[str, ...] = ()
     evidence_requirement_ids: tuple[str, ...] = ()
+    source_document_ids: tuple[str, ...] = ()
+    expected_outputs: tuple[str, ...] = ("filing_evidence_ids", "unresolved_requirement_ids")
     budget: RouteBudget
     tasks: tuple[ResearchTask, ...] = Field(min_length=1)
 
 
 class ChunkRetriever(Protocol):
     def retrieve(self, query: str, top_k: int = 5, **filters: Any) -> list[Any]: ...
+
+
+def filing_scope(retriever: ChunkRetriever | None, task: ResearchTask) -> tuple[str, ...]:
+    return tuple(sorted(set(task.target_document_ids))) if getattr(retriever, "supports_document_scope", False) is True else ()
+
+
+def _in_filing_scope(chunk: dict[str, Any], scope: tuple[str, ...]) -> bool:
+    return not scope or (chunk.get("document_id") or chunk.get("doc_name")) in scope
 
 
 class _RuntimeBudget:
@@ -263,26 +277,26 @@ class FilingResearchWorker:
         started = time.perf_counter()
         runtime.register_plan()
         evidence_ids: set[str] = set()
-        task_ids: set[str] = set()
         missing: set[str] = set()
+        retryable_tasks: set[str] = set()
         observations: list[SpecialistObservation] = []
         retrieval_calls_before = runtime.budget_tracker.retrieval_calls
         tools_before = runtime.budget_tracker.tool_calls
         candidates_before = runtime.budget_tracker.candidate_chunks
-        query_groups: dict[str, list[ResearchTask]] = {}
+        query_groups: dict[tuple[str, tuple[str, ...]], list[ResearchTask]] = {}
         for task in tasks:
             if task.query is None or task.source_availability.value == "MISSING":
                 missing.update(task.requirement_ids)
                 continue
             normalized_query = " ".join(task.query.casefold().split())
-            query_groups.setdefault(normalized_query, []).append(task)
+            query_groups.setdefault((normalized_query, filing_scope(runtime.retriever, task)), []).append(task)
 
         if runtime.retriever is None:
             status = SpecialistStatus.UNKNOWN
             missing.update(requirement_id for task in tasks for requirement_id in task.requirement_ids)
             observations.append(SpecialistObservation(key="retrieval", value="retriever_not_configured"))
         else:
-            for grouped_tasks in query_groups.values():
+            for index, ((_, scope), grouped_tasks) in enumerate(query_groups.items()):
                 if not runtime.budget_tracker.remaining_candidates():
                     missing.update(req for task in grouped_tasks for req in task.requirement_ids)
                     observations.append(SpecialistObservation(key="budget", value="candidate_limit_reached"))
@@ -292,14 +306,16 @@ class FilingResearchWorker:
                     observations.append(SpecialistObservation(key="budget", value="retrieval_or_tool_budget_reached"))
                     continue
                 runtime.budget_tracker.charge(retrieval=True)
-                top_k = min(10, runtime.budget_tracker.remaining_candidates())
+                remaining_queries = min(len(query_groups) - index,
+                                        runtime.budget.max_retrieval_calls - runtime.budget_tracker.retrieval_calls + 1)
+                candidate_room = runtime.budget_tracker.remaining_candidates()
+                top_k = min(10, max(1, candidate_room // remaining_queries))
                 try:
-                    scopes = [task.target_document_ids for task in grouped_tasks]
-                    filters = {}
-                    if getattr(runtime.retriever, "supports_document_scope", False) is True and all(scopes):
-                        filters["document_ids"] = tuple(sorted({doc for scope in scopes for doc in scope}))
+                    filters = {"document_ids": scope} if scope else {}
                     found = runtime.retriever.retrieve(grouped_tasks[0].query or "", top_k=top_k, **filters)
                 except Exception as error:  # report an adapter failure without hiding it
+                    if isinstance(error, OSError):
+                        retryable_tasks.update(task.task_id for task in grouped_tasks)
                     observations.append(SpecialistObservation(
                         key="retrieval_error",
                         value=type(error).__name__,
@@ -308,7 +324,7 @@ class FilingResearchWorker:
                     continue
 
                 normalized = [_chunk_mapping(item) for item in found]
-                normalized = [item for item in normalized if item.get("chunk_id")]
+                normalized = [item for item in normalized if item.get("chunk_id") and _in_filing_scope(item, scope)]
                 deduplicated: dict[str, dict[str, Any]] = {}
                 for item in normalized:
                     chunk_id = str(item["chunk_id"])
@@ -343,7 +359,6 @@ class FilingResearchWorker:
                         evidence_ids.add(saved.evidence_id)
                         runtime.evidence_id_by_chunk_id[chunk_id] = saved.evidence_id
                         runtime.preferred_evidence_by_chunk_id.setdefault(chunk_id, saved.evidence_id)
-                        task_ids.add(task.task_id)
                 if not ordered:
                     missing.update(req for task in grouped_tasks for req in task.requirement_ids)
                 else:
@@ -363,9 +378,10 @@ class FilingResearchWorker:
         result = SpecialistTaskResult(
             worker_id=self.worker_id,
             status=status,
-            task_ids=tuple(sorted(task_ids)),
+            task_ids=tuple(sorted(task.task_id for task in tasks)),
             evidence_ids=tuple(sorted(evidence_ids)),
             missing_requirement_ids=tuple(sorted(missing)),
+            retryable_task_ids=tuple(sorted(retryable_tasks)),
             observations=tuple(observations),
             tool_calls=runtime.budget_tracker.tool_calls - tools_before,
             retrieval_calls=runtime.budget_tracker.retrieval_calls - retrieval_calls_before,
@@ -464,12 +480,13 @@ class TableEvidenceWorker:
         # Filing retrieval is the primary candidate path. Spend remaining
         # retrieval budget on a table-shaped query only for tasks that have not
         # yet produced a matching table chunk.
-        table_queries: dict[str, list[dict[str, Any]]] = {}
+        table_queries: dict[tuple[str, tuple[str, ...]], list[dict[str, Any]]] = {}
         for task in (runtime.plan.tasks if runtime.plan else ()):
             if task.task_id in table_tasks_seen or task.query is None or task.source_availability.value == "MISSING":
                 continue
             query = f"{task.query} consolidated financial statement table"
-            key = " ".join(query.casefold().split())
+            scope = filing_scope(runtime.retriever, task)
+            key = " ".join(query.casefold().split()), scope
             if key not in table_queries:
                 top_k = min(10, runtime.budget_tracker.remaining_candidates())
                 if not top_k or runtime.retriever is None or not runtime.budget_tracker.can_start(retrieval=True):
@@ -477,14 +494,15 @@ class TableEvidenceWorker:
                     continue
                 runtime.budget_tracker.charge(retrieval=True)
                 try:
-                    found = runtime.retriever.retrieve(query, top_k=top_k)
+                    filters = {"document_ids": scope} if scope else {}
+                    found = runtime.retriever.retrieve(query, top_k=top_k, **filters)
                     table_queries[key] = [_chunk_mapping(item) for item in found[:top_k]]
                 except Exception as error:
                     table_queries[key] = []
                     observations.append(SpecialistObservation(key="table_retrieval_error", value=type(error).__name__))
             table_candidates = [
                 item for item in table_queries[key]
-                if item.get("chunk_id") and _is_table_chunk(item)
+                if item.get("chunk_id") and _in_filing_scope(item, scope) and _is_table_chunk(item)
                 and _chunk_matches_task(item, task, runtime.ticker_by_company)
             ]
             table_candidates.sort(key=lambda item: (-_score(item), str(item["chunk_id"])))
@@ -600,6 +618,16 @@ class StructuredFinancialDataWorker:
         missing: set[str] = set()
         observations: list[SpecialistObservation] = []
         tools_before = runtime.budget_tracker.tool_calls
+        if requires_statement_source(runtime.requirements.question):
+            result = SpecialistTaskResult(
+                worker_id=self.worker_id, status=SpecialistStatus.SKIPPED,
+                task_ids=tuple(task.task_id for task in tasks),
+                missing_requirement_ids=tuple(sorted({req for task in tasks for req in task.requirement_ids})),
+                observations=(SpecialistObservation(key="xbrl", value="filing_statement_requested"),),
+                elapsed_ms=_elapsed_ms(started),
+            )
+            runtime.save_result(result)
+            return result
         if self.sec_client is None:
             missing.update(req for task in tasks for req in task.requirement_ids)
             result = SpecialistTaskResult(
@@ -724,6 +752,8 @@ class StructuredFinancialDataWorker:
             task_ids=tuple(sorted(task_ids)),
             evidence_ids=tuple(sorted(evidence_ids)),
             missing_requirement_ids=tuple(sorted(missing)),
+            resolved_requirement_ids=tuple(sorted({req for task in tasks if task.task_id in task_ids
+                                                    for req in task.requirement_ids} - missing)),
             observations=tuple(observations),
             tool_calls=runtime.budget_tracker.tool_calls - tools_before,
             elapsed_ms=_elapsed_ms(started),
@@ -888,6 +918,9 @@ class EvidenceAnalyst:
             task_ids=tuple(sorted(task_ids)),
             evidence_ids=tuple(sorted(added)),
             missing_requirement_ids=tuple(sorted(missing)),
+            resolved_requirement_ids=tuple(sorted(finding.requirement_id for finding in runtime.coverage.findings
+                                                   if finding.status == CoverageStatus.FOUND)),
+            conflicted_requirement_ids=runtime.coverage.conflicted_requirement_ids,
             observations=(
                 SpecialistObservation(key="sufficient", value=str(runtime.coverage.sufficient).lower()),
                 SpecialistObservation(key="financial_facts", value=str(len(added))),
@@ -1275,6 +1308,7 @@ def _numeric_source_record(
     supporting_tasks = {
         task.task_id for task in (runtime.plan.tasks if runtime.plan else ())
         if requirement_id in task.requirement_ids
+        and (not (scope := filing_scope(runtime.retriever, task)) or base.document_id in scope)
     }
     return EvidenceRecord.from_source(
         request_id=runtime.request_id,
@@ -1349,31 +1383,36 @@ def _compatible_operands(
 ) -> tuple[list[FinancialFact], list[FinancialFact]] | None:
     earlier_xbrl = [fact for fact in earlier if fact.source_type == EvidenceSourceType.XBRL_FACT]
     later_xbrl = [fact for fact in later if fact.source_type == EvidenceSourceType.XBRL_FACT]
-    if not (earlier_xbrl and later_xbrl):
-        left = [fact for fact in earlier if fact.source_type != EvidenceSourceType.XBRL_FACT]
-        right = [fact for fact in later if fact.source_type != EvidenceSourceType.XBRL_FACT]
-        typed_left = [fact for fact in left if fact.period_identity is not None]
-        typed_right = [fact for fact in right if fact.period_identity is not None]
-        if typed_left or typed_right:
-            signatures = {(fact.period_identity.year_basis, fact.period_identity.scope, fact.period_identity.kind)
-                          for fact in (*typed_left, *typed_right)}
-            return (typed_left, typed_right) if typed_left and typed_right and len(signatures) == 1 else None
-        return (left, right) if left and right else None
+    if earlier_xbrl and later_xbrl and _compatible_xbrl_periods([*earlier_xbrl, *later_xbrl]):
+        return earlier_xbrl, later_xbrl
 
-    selected = [*earlier_xbrl, *later_xbrl]
+    left = [fact for fact in earlier if fact.source_type != EvidenceSourceType.XBRL_FACT]
+    right = [fact for fact in later if fact.source_type != EvidenceSourceType.XBRL_FACT]
+    typed_left = [fact for fact in left if fact.period_identity is not None]
+    typed_right = [fact for fact in right if fact.period_identity is not None]
+    if typed_left or typed_right:
+        signatures = {(fact.period_identity.year_basis, fact.period_identity.scope, fact.period_identity.kind)
+                      for fact in (*typed_left, *typed_right)}
+        return (typed_left, typed_right) if typed_left and typed_right and len(signatures) == 1 else None
+    if earlier_xbrl and later_xbrl:
+        return None
+    return (left, right) if left and right else None
+
+
+def _compatible_xbrl_periods(selected: list[FinancialFact]) -> bool:
     if len({
         (fact.period_identity.year_basis, fact.period_identity.scope, fact.period_identity.kind)
         for fact in selected if fact.period_identity is not None
     }) > 1:
-        return None
+        return False
     if len({fact.financial_concept for fact in selected}) != 1:
-        return None
+        return False
     durations: set[int | None] = set()
     bases: set[tuple[RevisionPolicy, bool]] = set()
     for fact in selected:
         provenance = fact.xbrl_provenance
         if provenance is None:
-            return None
+            return False
         duration = None
         if provenance.period_start is not None:
             duration = (
@@ -1385,11 +1424,9 @@ def _compatible_operands(
             provenance.revision_kind in {RevisionKind.AMENDMENT, RevisionKind.COMPARATIVE_REVISION},
         ))
     if len(bases) != 1 or (None in durations and len(durations) != 1):
-        return None
+        return False
     duration_values = [duration for duration in durations if duration is not None]
-    if duration_values and max(duration_values) - min(duration_values) > 14:
-        return None
-    return earlier_xbrl, later_xbrl
+    return not duration_values or max(duration_values) - min(duration_values) <= 14
 
 
 def _consensus_fact(

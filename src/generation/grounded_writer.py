@@ -12,6 +12,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from configs.end_to_end import GENERATOR_MAX_INPUT_TOKENS, GENERATOR_MAX_OUTPUT_TOKENS, GENERATOR_MODEL_ID
+from src.decision.filing_disclosures import filing_industry_relations
 from src.decision.models import EvidenceCoverage, EvidenceFact, QuestionRequirements
 from src.generation.answer_generator import (
     AnswerGenerationResult, AnswerGenerator, GroqAnswerGenerator, build_generation_messages, estimate_max_cost_usd,
@@ -137,14 +138,29 @@ class DeterministicWriter:
             numbers = report.source_numbers
             sentences = []
             for finding in report.coverage.findings:
+                industries: dict[tuple[str, str, bool], set[int]] = {}
                 for fact in finding.facts:
-                    if not fact.value or fact.evidence_id not in sources:
+                    if fact.evidence_id not in sources:
                         continue
                     source = sources[fact.evidence_id]
+                    if fact.metric_id == "industry" and fact.value_kind == "topic":
+                        entity = next(item for item in report.requirements.entities if item.entity_id == fact.entity_id)
+                        aliases = (entity.canonical_name,)
+                        text = source.chunk.get("text", "")
+                        if isinstance(text, str):
+                            for industry, positive in filing_industry_relations(text, aliases):
+                                industries.setdefault((entity.canonical_name.rstrip("."), industry, positive), set()).add(numbers[fact.evidence_id])
+                        continue
+                    if not fact.value:
+                        continue
                     provenance = source.records[0].xbrl_provenance if report.revision_policy is not None else None
                     revision = provenance.revision_kind if provenance else None
                     sentences.append(f"{fact_sentence(report.requirements, fact, revision)} [Source {numbers[fact.evidence_id]}]")
                     break
+                if len(industries) == 1:
+                    (company, industry, positive), citations = next(iter(industries.items()))
+                    relation = "operates in" if positive else "does not operate in"
+                    sentences.append(f"{company} {relation} the {industry} industry. [Source {min(citations)}]")
             answer = " ".join(sentences)
         if not answer:
             return no_answer()

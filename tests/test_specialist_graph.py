@@ -590,6 +590,27 @@ def test_failed_worker_keeps_sibling_evidence_and_charges_attempt() -> None:
     assert result.coverage is not None and not result.coverage.sufficient
 
 
+def test_transient_filing_worker_failure_retries_only_failed_query() -> None:
+    class TransientRetriever(ConcurrentFixtureRetriever):
+        def __init__(self):
+            super().__init__()
+            self.timed_out = False
+
+        def retrieve(self, query, top_k=5, **filters):
+            if query.startswith("microsoft") and not self.timed_out:
+                self.timed_out = True
+                self.calls.append((query, top_k))
+                raise TimeoutError("fixture timeout")
+            return super().retrieve(query, top_k, **filters)
+
+    retriever = TransientRetriever()
+    result = SpecialistResearchGraph(retriever=retriever).run("Compare Apple and Microsoft revenue for FY2024.")
+    assert result.verification.disposition.value == "VERIFIED"
+    assert [query for query, _ in retriever.calls].count("microsoft revenue FY2024") == 2
+    assert [query for query, _ in retriever.calls].count("apple revenue FY2024") == 1
+    assert result.usage.retrieval_calls == len(retriever.calls) <= result.route.budget.max_retrieval_calls
+
+
 def test_filing_and_table_search_reuse_duplicate_queries() -> None:
     question = "Compare Apple and Microsoft revenue for FY2024."
     router = ComplexityRouter()
@@ -611,6 +632,52 @@ def test_filing_and_table_search_reuse_duplicate_queries() -> None:
         if record.ticker == "AAPL" and not record.metric_id
     )
     assert "duplicate-apple" in source.task_ids
+
+
+def test_identical_queries_with_different_document_scopes_are_independent() -> None:
+    class ScopedRetriever(ConcurrentFixtureRetriever):
+        supports_document_scope = True
+
+        def retrieve(self, query, top_k=5, *, document_ids=()):
+            with self.lock:
+                self.calls.append((query, document_ids))
+            chunk = _annual_chunk()
+            return [chunk]
+
+    question = "Compare Apple and Microsoft revenue for FY2024."
+    router = ComplexityRouter()
+    route = router.route(question)
+    first, second = route.research_plan.tasks
+    first = first.model_copy(update={"target_document_ids": ("AAPL_annual_report.pdf",)})
+    second = second.model_copy(update={"target_document_ids": ("MSFT_annual_report.pdf",)})
+    extra = first.model_copy(update={"task_id": "other-filing", "target_document_ids": ("other-filing.pdf",)})
+    route = route.model_copy(update={"research_plan": route.research_plan.model_copy(update={"tasks": (first, second, extra)})})
+    retriever = ScopedRetriever()
+    result = SpecialistResearchGraph(router=router, retriever=retriever).run(question, route=route)
+
+    assert set(retriever.calls).issuperset({("apple revenue FY2024", task.target_document_ids) for task in (first, extra)})
+    assert result.usage.deduplicated_query_tasks == 0
+    assert {assignment.source_document_ids for assignment in result.filing_assignments} == {
+        first.target_document_ids, second.target_document_ids, extra.target_document_ids,
+    }
+    assert all({second.task_id, extra.task_id}.isdisjoint(row.task_ids) for row in result.ledger_snapshot.evidence_records)
+    assert result.coverage is not None and not result.coverage.sufficient
+
+
+def test_narrative_industry_uses_verified_first_person_filing_disclosure() -> None:
+    chunk = _annual_chunk()
+    chunk["reporting_periods"] = [2024]
+    chunk["text"] = "We operate in the consumer electronics industry."
+    question = "What industry did Apple operate in according to its FY2024 10-K?"
+    result = SpecialistResearchGraph(retriever=FakeRetriever([chunk])).run(question)
+
+    assert result.route.source_capability == SourceCapability.TEXT_RAG
+    assert result.verification.disposition.value == "VERIFIED"
+    assert "consumer electronics industry" in result.answer
+
+    chunk["text"] += " We do not operate in the consumer electronics industry."
+    conflicted = SpecialistResearchGraph(retriever=FakeRetriever([chunk])).run(question)
+    assert conflicted.verification.disposition.value == "ABSTAIN"
 
 
 def test_unmarked_retriever_retains_serial_query_plan() -> None:
