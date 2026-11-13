@@ -208,6 +208,9 @@ The reviewer freeze now accepts machine-readable coverage and
 release-risk criteria. Offline fixtures exercise insufficient sample
 size, missing judgments and known threshold violations. The historical
 report reproduced byte for byte. [Release risk gate](G6_RELEASE_RISK_GATE.md).
+The [draft G6 exposure inventory](G6_EXPOSURE_INVENTORY.md) consolidates
+68 CIKs and 91 local document IDs for the reviewer to verify. Both
+offline runs produced identical inventory and source receipt hashes.
 
 ## G7 research report
 

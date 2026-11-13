@@ -17,6 +17,8 @@ claim, report that claim as inconclusive. Reviewer independence and
 the exposed-membership crosswalk must be confirmed before the freeze.
 The [frozen release-risk criterion](G6_RELEASE_RISK_GATE.md) provides
 machine-readable coverage and risk thresholds for adjudicated scoring.
+The [draft exposure inventory](G6_EXPOSURE_INVENTORY.md) provides 68
+CIKs and 91 local document IDs for reviewer verification.
 
 ## Handoff and verification
 
