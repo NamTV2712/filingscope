@@ -75,6 +75,39 @@ class PilotCase:
     cells: tuple[StatementCell, ...]
 
 
+@dataclass(frozen=True)
+class NarrativeCase:
+    case_id: str
+    question: str
+    pdf: FilingPDF
+    page: int
+    statement: str
+    excerpts: tuple[str, ...]
+
+
+NARRATIVE_CASES = (
+    NarrativeCase("apple_products", "What types of products did Apple describe in its FY2025 10-K?", APPLE, 3,
+                  "Apple designs, manufactures and markets smartphones, personal computers, tablets, wearables and accessories",
+                  ("designs, manufactures and markets smartphones, personal computers, tablets, wearables and accessories",)),
+    NarrativeCase("apple_disruption_risks", "What risks from political events and trade disputes did Apple disclose in its FY2025 10-K?", APPLE, 8,
+                  "Apple's business can be impacted by political events and trade and other international disputes",
+                  ("business can be impacted by political events, trade and other international disputes",)),
+    NarrativeCase("tesla_segments", "What were Tesla's reportable business segments in its FY2024 10-K?", TESLA, 4,
+                  "Tesla operates two reportable segments, automotive and energy generation and storage",
+                  ("We operate as two reportable segments: (i) automotive and (ii) energy generation and storage.",)),
+    NarrativeCase("tesla_currency_risks", "What foreign currency risks did Tesla disclose in its FY2024 10-K?", TESLA, 25,
+                  "Tesla is exposed to fluctuations in currency exchange rates",
+                  ("We are exposed to fluctuations in currency exchange rates.",)),
+    NarrativeCase("nvidia_segments", "What business segments did NVIDIA report in its FY2025 10-K?", NVIDIA, 96,
+                  "NVIDIA reports in two segments, Compute & Networking and Graphics",
+                  ("We report our business results in two segments. The Compute & Networking segment includes",
+                   "The Graphics segment includes")),
+    NarrativeCase("walmart_segments", "What were Walmart's reportable segments in its FY2025 10-K?", WALMART, 7,
+                  "Walmart's three reportable segments are Walmart U.S., Walmart International and Sam's Club U.S.",
+                  ("Our operations comprise three reportable segments: Walmart U.S., Walmart International and Sam's Club U.S.",)),
+)
+
+
 AAPL_REVENUE = StatementCell(APPLE, 31, "Total net sales", 0, "revenue", "FY2025", 416_161,
                              "RevenueFromContractWithCustomerExcludingAssessedTax", "2024-09-29", "2025-09-27")
 AAPL_PRIOR_REVENUE = StatementCell(APPLE, 31, "Total net sales", 1, "revenue", "FY2024", 391_035,

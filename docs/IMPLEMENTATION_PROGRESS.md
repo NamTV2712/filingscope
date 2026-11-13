@@ -136,6 +136,9 @@ Independently reviewed mixed and narrative cohorts remain open.
 The dimensioned replay resolved 10/10 PDF-transcribed facts and
 withheld 50/50 perturbed identities. It keeps the exact filing anchors.
 [Dimensioned replay](G2_DIMENSIONED_REPLAY.md).
+The [SEC narrative track](G2_SEC_NARRATIVE.md) measured six
+author-checked questions. All three inventories abstained. The PDF arms
+retrieved evidence for five cases including valid alternative pages.
 
 ## G3 financial understanding and scoped retrieval
 

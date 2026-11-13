@@ -7,10 +7,11 @@ import numpy as np
 import pytest
 
 from configs.financebench import P1_EMBEDDING_REVISION
-from configs.sec_runtime_pilot import AAPL_PRIOR_REVENUE, AAPL_Q_REVENUE, AAPL_YTD_REVENUE, CASES, PDFS
+from configs.sec_runtime_pilot import AAPL_PRIOR_REVENUE, AAPL_Q_REVENUE, AAPL_YTD_REVENUE, CASES, NARRATIVE_CASES, PDFS
 from scripts.run_sec_runtime_pilot import (
     _check_pdf_cell,
     _eligible_sec_locators,
+    _label_narrative_case,
     _load_manifest,
     _load_pilot_vectors,
     _pdf_ranking_metrics,
@@ -23,6 +24,7 @@ from src.evaluation.multi_agent_ablation import AblationObservation
 from src.ingestion.sec_corpus import SourceCache
 from src.ingestion.sec_client import SECEdgarClient
 from src.retrieval.canonical_json import canonical_json_bytes, sha256_file
+from src.retrieval.pdf_page_cache import FrozenPdfPages
 
 
 def test_pilot_is_pinned_to_frozen_2025_filings():
@@ -41,6 +43,21 @@ def test_pdf_cell_checks_column_and_rejects_ambiguous_row():
         _check_pdf_cell(replace(AAPL_Q_REVENUE, column=2), row)
     with pytest.raises(ValueError, match="PDF cell differs"):
         _check_pdf_cell(AAPL_Q_REVENUE, f"{row}\n{row}")
+
+
+def test_narrative_label_requires_every_excerpt_on_the_pinned_page(tmp_path):
+    case = NARRATIVE_CASES[4]
+    path = tmp_path / "pages.jsonl"
+    path.write_bytes(canonical_json_bytes({
+        "doc_name": case.pdf.name, "page_number": case.page, "text": "\n".join(case.excerpts),
+    }) + b"\n")
+    pages = FrozenPdfPages(path, expected_sha256=sha256_file(path))
+    claim, = _label_narrative_case(case, pages).claims
+    assert claim.statement == case.statement
+    assert claim.source_slots == ((f"{case.pdf.name}#p{case.page}",),)
+    for tampered in (replace(case, page=case.page + 1), replace(case, excerpts=(*case.excerpts, "different segment"))):
+        with pytest.raises(ValueError, match="Narrative reference excerpt differs"):
+            _label_narrative_case(tampered, pages)
 
 
 def test_pilot_reuse_requires_matching_ordered_chunks_and_vector_hash(tmp_path):

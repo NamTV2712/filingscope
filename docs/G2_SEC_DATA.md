@@ -127,6 +127,8 @@ multi-issuer, revision and unanswerable controls. All three configurations
 released consolidated Tesla revenue in response to a segment question.
 Independently reviewed narrative evaluation, page relevance and strict
 atomic claim/citation adjudication remain open. [Runtime pilot](G2_RUNTIME_REPLAY.md).
+An [author-checked narrative track](G2_SEC_NARRATIVE.md) measures six
+non-XBRL questions separately on the same filing corpus.
 
 ## Regression and resources
 

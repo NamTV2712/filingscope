@@ -16,10 +16,10 @@ from typing import Any
 from configs.financebench import P1_EMBEDDING_REVISION
 from configs.multi_agent_ablation import AblationCase, GoldClaim
 from configs.offline_guard import offline_socket_guard
-from configs.sec_runtime_pilot import CASES, PDFS, SEC_MANIFEST_SHA256, STATUS, PilotCase, StatementCell
+from configs.sec_runtime_pilot import CASES, NARRATIVE_CASES, PDFS, SEC_MANIFEST_SHA256, STATUS, NarrativeCase, PilotCase, StatementCell
 from scripts.run_multi_agent_ablation import _PolicyLayer, _RecordingRetriever, _solo, _specialist_observation
 from scripts.run_specialist_architectures import _adaptive
-from src.agent.complexity_router import ComplexityRouter
+from src.agent.complexity_router import ComplexityRouter, ExecutionPath
 from src.agent.specialist_graph import SpecialistResearchGraph
 from src.decision.policy import EvidenceDecisionLayer
 from src.evaluation.benchmark_io import peak_memory_bytes, write_json_atomic
@@ -111,6 +111,14 @@ def _label_case(case: PilotCase, sec_locators: dict[StatementCell, tuple[str, ..
         for cell in case.cells
     )
     return AblationCase(case.case_id, "development", case.category, case.question, case.intended_path, claims)
+
+
+def _label_narrative_case(case: NarrativeCase, pages: FrozenPdfPages) -> AblationCase:
+    page = " ".join((pages.get(case.pdf.name, case.page) or "").split())
+    if not case.excerpts or any(not excerpt or " ".join(excerpt.split()) not in page for excerpt in case.excerpts):
+        raise ValueError(f"Narrative reference excerpt differs from {case.pdf.name} page {case.page}")
+    claim = GoldClaim("", (), ((f"{case.pdf.name}#p{case.page}",),), statement=case.statement)
+    return AblationCase(case.case_id, "development", "narrative", case.question, ExecutionPath.FAST, (claim,))
 
 
 def _validate_track(track: str, observed: AblationObservation, statement_calls: int) -> None:
@@ -253,7 +261,7 @@ def _run_ranking_controls(
 def _run(
     pdf_dir: Path, cache_dir: Path, manifest_path: Path, output: Path, threads: int, *,
     architecture_controls: bool = False, inline_facts: Path | None = None,
-    ranking_controls: bool = False, reuse_pilot_vectors: Path | None = None,
+    ranking_controls: bool = False, reuse_pilot_vectors: Path | None = None, narrative_controls: bool = False,
 ) -> None:
     import numpy as np
     import torch
@@ -293,6 +301,14 @@ def _run(
                 stream.write(canonical_json_bytes({"doc_name": name, **page}) + b"\n")
     pages_hash = sha256_file(pages_path)
     pages_cache = FrozenPdfPages(pages_path, expected_sha256=pages_hash)
+    narrative_cases = tuple(_label_narrative_case(case, pages_cache) for case in NARRATIVE_CASES) if narrative_controls else ()
+    narrative_reference = output / "narrative-reference.json"
+    if narrative_cases:
+        write_json_atomic(narrative_reference, {
+            "status": STATUS, "label_source": "AUTHOR_CHECKED_PDF_DISCLOSURES", "pages_sha256": pages_hash,
+            "cases": [asdict(case) for case in narrative_cases],
+            "source_checks": [asdict(case) for case in NARRATIVE_CASES],
+        })
     sec = _prepare_sec(manifest, cache_dir, output / "company-facts", tickers)
     sec_locators = {}
     for cell in dict.fromkeys(cell for case in CASES for cell in case.cells):
@@ -366,6 +382,12 @@ def _run(
             "document_only_dense": _run_track("document_only", cases, router, dense, sec, ticker_by_company),
         }
         report["peak_memory_bytes"] = peak_memory_bytes()
+    if narrative_cases:
+        report["narrative_controls"] = {
+            "reference_sha256": sha256_file(narrative_reference),
+            "tracks": {track: _run_track(track, narrative_cases, router, index, sec, ticker_by_company) for track in TRACKS},
+        }
+        report["peak_memory_bytes"] = peak_memory_bytes()
     if inline_reference is not None:
         report["inline_reference"] = inline_reference
     write_json_atomic(output / "report.json", report)
@@ -380,6 +402,7 @@ def main() -> None:
     parser.add_argument("--threads", type=int, choices=range(1, 17), default=6)
     parser.add_argument("--architecture-controls", action="store_true")
     parser.add_argument("--ranking-controls", action="store_true", help="Compare Dense, document scope and statement ranking")
+    parser.add_argument("--narrative-controls", action="store_true", help="Replay source-checked narrative questions separately")
     parser.add_argument("--reuse-pilot-vectors", type=Path, help="Use verified document vectors from a prior pilot run")
     parser.add_argument("--inline-facts", type=Path, help="Frozen G2 facts directory for the optional Inline XBRL arm")
     args = parser.parse_args()
@@ -387,7 +410,8 @@ def main() -> None:
     with offline_socket_guard():
         _run(args.pdfs, args.cache, args.manifest, args.output, args.threads,
              architecture_controls=args.architecture_controls, inline_facts=args.inline_facts,
-             ranking_controls=args.ranking_controls, reuse_pilot_vectors=args.reuse_pilot_vectors)
+             ranking_controls=args.ranking_controls, reuse_pilot_vectors=args.reuse_pilot_vectors,
+             narrative_controls=args.narrative_controls)
 
 
 if __name__ == "__main__":
