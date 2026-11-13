@@ -67,25 +67,35 @@ class FrozenDenseRetriever:
         norm = np.linalg.norm(query_vector)
         if not np.isfinite(norm) or norm == 0:
             raise ValueError("The query embedding must be finite and nonzero")
-        scores = self.vectors @ (query_vector / norm)
-        if eligible is not None:
-            scores = np.where(eligible, scores, -np.inf)
+        scope = eligible
         if document_ids:
-            scores = np.where(np.isin(self.document_ids, document_ids), scores, -np.inf)
+            document_scope = np.isin(self.document_ids, document_ids)
+            scope = document_scope if scope is None else document_scope & scope
+        query_vector = query_vector / norm
+        if scope is None or np.count_nonzero(scope) * 2 >= len(self.vectors):
+            scores = self.vectors @ query_vector
+            if scope is not None:
+                scores = np.where(scope, scores, -np.inf)
+            positions = None
+        else:
+            positions = np.flatnonzero(scope)
+            scores = self.vectors[positions] @ query_vector
         ranker = self.statement_ranker if document_ids else None
         wanted = ranker.requirements(query) if ranker is not None else frozenset()
         industry_lookup = ranker is not None and any(
             metric.metric_id == "industry" for metric in ranker.extractor.extract(query).metrics
         )
         pool_size = max(top_k, STATEMENT_CANDIDATE_POOL) if wanted or industry_lookup else top_k
-        order = [int(position) for position in np.argsort(-scores, kind="stable")[:pool_size]
-                 if np.isfinite(scores[position])]
+        local_order = [int(position) for position in np.argsort(-scores, kind="stable")[:pool_size]
+                       if np.isfinite(scores[position])]
+        order = local_order if positions is None else [int(positions[position]) for position in local_order]
+        dense_scores = dict(zip(order, scores[local_order], strict=True))
         if ranker is not None and wanted:
             ranked = sorted(order, key=lambda position: -ranker.priority(self.chunks[position], wanted))
             if ranked[:top_k] != order[:top_k]:
                 return [
                     {**self.chunks[position], "score": float(len(ranked) - rank), "score_kind": "rank",
-                     "dense_score": float(scores[position]), "retrieval_method": "statement_slot_rank"}
+                     "dense_score": float(dense_scores[position]), "retrieval_method": "statement_slot_rank"}
                     for rank, position in enumerate(ranked[:top_k])
                 ]
         if industry_lookup:
@@ -99,6 +109,6 @@ class FrozenDenseRetriever:
 
             order = sorted(order, key=lambda position: not explicit_disclosure(position))
         return [
-            {**self.chunks[position], "score": float(scores[position]), "score_kind": "dense"}
+            {**self.chunks[position], "score": float(dense_scores[position]), "score_kind": "dense"}
             for position in order[:top_k]
         ]

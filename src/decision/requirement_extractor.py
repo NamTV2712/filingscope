@@ -190,15 +190,9 @@ class EvidenceRequirementExtractor:
         if cumulative and _DISCRETE_RE.search(question) and not any(" YTD " in period for period in periods):
             cumulative_unresolved = True
         if len(periods) == 1 and re.search(r"\b(?:year.over.year|yoy)\b", question, re.I):
-            period_year = re.search(r"\d{4}", periods[0])
-            if period_year is not None:
-                year = int(period_year.group(0))
-                prior_period = (
-                    f"{periods[0].split()[0]} FY{year - 1}"
-                    if periods[0].startswith("Q")
-                    else f"FY{year - 1}"
-                )
-                periods = (prior_period, periods[0])
+            period = periods[0]
+            prior_period = f"{period[:-4]}{int(period[-4:]) - 1}"
+            periods = (prior_period, period)
         relative_period = bool(_RELATIVE_PERIOD_RE.search(question))
 
         operations: list[str] = []

@@ -127,3 +127,12 @@ Historical architecture, retrieval and writer results reproduced.
 Full document/hybrid QA and independently adjudicated mixed cohorts
 remain open. [G2 report](G2_SEC_DATA.md) ·
 [Frozen SEC manifest](G2_SEC_CORPUS_MANIFEST.json).
+
+## G3 financial understanding and scoped retrieval
+
+G3 retains Dense and the current statement ranker. Scoped scoring
+matched all 30 top-ten rankings while reducing paired rank p50
+from 4.25 ms to 1.16 ms. YoY expansion now preserves YTD and
+calendar-year scope. Historical graph, retrieval and writer outcomes
+matched, and Windows passed 447 tests with 3 skips.
+[G3 report](G3_FINANCIAL_RETRIEVAL.md).
