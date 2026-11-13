@@ -37,3 +37,20 @@ def test_submissions_filter_and_revision_relationship():
     with pytest.raises(ValueError, match="CIK mismatch"):
         filings_from_submissions(payload, cik=789019, ticker="MSFT", cutoff=date(2025, 12, 31),
                                  forms=frozenset({"10-K"}))
+
+
+def test_current_report_item_is_exact_and_keeps_periodic_filings():
+    payload = {"cik": 320193, "filings": {"recent": {
+        "form": ["8-K", "8-K", "8-K/A", "10-K"],
+        "accessionNumber": [f"0000320193-25-{number:06d}" for number in (1, 2, 3, 4)],
+        "filingDate": ["2025-11-01", "2025-11-02", "2025-11-03", "2025-11-04"],
+        "reportDate": ["2025-11-01", "2025-11-01", "2025-11-01", "2025-09-27"],
+        "primaryDocument": ["aapl1.htm", "aapl2.htm", "aapl3.htm", "aapl4.htm"],
+        "items": ["9.01, 2.02", "5.02,9.01", "2.02", ""],
+    }}}
+    rows = filings_from_submissions(
+        payload, cik=320193, ticker="AAPL", cutoff=date(2025, 12, 31),
+        forms=frozenset({"10-K", "8-K", "8-K/A"}), current_report_item="2.02",
+    )
+    assert [row.form_type for row in rows] == ["10-K", "8-K/A", "8-K"]
+    assert rows[-1].primary_document == "aapl1.htm"

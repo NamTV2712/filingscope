@@ -1,0 +1,124 @@
+{
+  "arelle_version": "2.47.4",
+  "current_report_item": "2.02",
+  "cutoff": "2025-12-31",
+  "filings": [
+    {
+      "accession_number": "0000320193-25-000077",
+      "amendment_relationship": null,
+      "archive": {
+        "sha256": "sha256:991f18a6131070f47f9df299f5b8ecfa697ab0618cbdcf56d7ac7c6b6200b60f",
+        "size": 27638,
+        "url": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000077/0000320193-25-000077-xbrl.zip"
+      },
+      "cik": 320193,
+      "dimensioned_observations": 0,
+      "facts_sha256": "sha256:59b8e054c288435c1598606c5f452585f3424925c5186041824c690da2788b0b",
+      "filing_date": "2025-10-30",
+      "form_type": "8-K",
+      "numeric_observations": 0,
+      "primary_document": "aapl-20251030.htm",
+      "report_date": "2025-10-30",
+      "skipped": {
+        "nil_or_non_numeric": 43
+      },
+      "source_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000077/aapl-20251030.htm",
+      "ticker": "AAPL"
+    },
+    {
+      "accession_number": "0001045810-25-000228",
+      "amendment_relationship": null,
+      "archive": {
+        "sha256": "sha256:7e5a3f0a7e07e32517c58c7e6bd1c54ee7aad64a5ab3fc1ecbcf6f270f5406f1",
+        "size": 38260,
+        "url": "https://www.sec.gov/Archives/edgar/data/1045810/000104581025000228/0001045810-25-000228-xbrl.zip"
+      },
+      "cik": 1045810,
+      "dimensioned_observations": 0,
+      "facts_sha256": "sha256:63c1c15ea3ae99339e44eb4d109875b8a733df783e685c633a50d8dce0288784",
+      "filing_date": "2025-11-19",
+      "form_type": "8-K",
+      "numeric_observations": 0,
+      "primary_document": "nvda-20251119.htm",
+      "report_date": "2025-11-19",
+      "skipped": {
+        "nil_or_non_numeric": 22
+      },
+      "source_url": "https://www.sec.gov/Archives/edgar/data/1045810/000104581025000228/nvda-20251119.htm",
+      "ticker": "NVDA"
+    },
+    {
+      "accession_number": "0001628280-25-045861",
+      "amendment_relationship": null,
+      "archive": {
+        "sha256": "sha256:a81659e0d19fc3038b2c4985b3067984d50898f6db46d5efb9160041ed1d0cae",
+        "size": 23669,
+        "url": "https://www.sec.gov/Archives/edgar/data/1318605/000162828025045861/0001628280-25-045861-xbrl.zip"
+      },
+      "cik": 1318605,
+      "dimensioned_observations": 0,
+      "facts_sha256": "sha256:5fa88dd386325b60f1d3ed0814720c115482d1bb7f2eccc51199004f4667bbb0",
+      "filing_date": "2025-10-22",
+      "form_type": "8-K",
+      "numeric_observations": 0,
+      "primary_document": "tsla-20251022.htm",
+      "report_date": "2025-10-22",
+      "skipped": {
+        "nil_or_non_numeric": 22
+      },
+      "source_url": "https://www.sec.gov/Archives/edgar/data/1318605/000162828025045861/tsla-20251022.htm",
+      "ticker": "TSLA"
+    }
+  ],
+  "first_filed": "2025-01-01",
+  "forms": [
+    "8-K"
+  ],
+  "issuers": [
+    {
+      "cik": "0000320193",
+      "company_facts": {
+        "sha256": "sha256:f085735b4d08fb116ade18d24247ffabe11df8eb52eae6556b165831f15ef1ad",
+        "size": 3859564,
+        "url": "https://data.sec.gov/api/xbrl/companyfacts/CIK0000320193.json"
+      },
+      "submissions": {
+        "sha256": "sha256:ecc3321932506974dec32db5b7f475a95a4756ed3839d9b5d57122db0e824e08",
+        "size": 163926,
+        "url": "https://data.sec.gov/submissions/CIK0000320193.json"
+      },
+      "ticker": "AAPL"
+    },
+    {
+      "cik": "0001045810",
+      "company_facts": {
+        "sha256": "sha256:19ef503a5770f5660964b3c3aea6937579d9b359da344afe6a9adf59c63d26ff",
+        "size": 4092966,
+        "url": "https://data.sec.gov/api/xbrl/companyfacts/CIK0001045810.json"
+      },
+      "submissions": {
+        "sha256": "sha256:092e307ba8b409e49bd89a410eeb3134e7d193ea083eaf6e687539702b2ede07",
+        "size": 160083,
+        "url": "https://data.sec.gov/submissions/CIK0001045810.json"
+      },
+      "ticker": "NVDA"
+    },
+    {
+      "cik": "0001318605",
+      "company_facts": {
+        "sha256": "sha256:c951e0ae2402dd8cf8f39319928adccc4196b997941fe40b0d4d6b8060802db1",
+        "size": 3700279,
+        "url": "https://data.sec.gov/api/xbrl/companyfacts/CIK0001318605.json"
+      },
+      "submissions": {
+        "sha256": "sha256:f032ecbccff22c2b7e2fd040e920bba5565bdffc373aefe901b426e514a04bdd",
+        "size": 162131,
+        "url": "https://data.sec.gov/submissions/CIK0001318605.json"
+      },
+      "ticker": "TSLA"
+    }
+  ],
+  "max_per_form_per_issuer": 1,
+  "schema": "filingscope-sec-ixbrl-corpus-v1",
+  "unavailable_filings": []
+}

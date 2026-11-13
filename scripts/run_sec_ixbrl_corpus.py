@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from collections import Counter
 from contextlib import nullcontext
 from datetime import date
@@ -32,8 +33,11 @@ def build(args, client: SECEdgarClient | None) -> tuple[dict, dict]:
         normalized = normalize_cik(cik)
         path, submissions = cache.source(SECEdgarClient.SUBMISSIONS_URL_TEMPLATE.format(cik=normalized), MAX_METADATA_BYTES)
         metadata = json.loads(path.read_bytes())
-        available = filings_from_submissions(metadata, cik=cik, ticker=ticker, cutoff=args.cutoff, forms=frozenset(args.form))
+        scope = {"cik": cik, "ticker": ticker, "cutoff": args.cutoff, "forms": frozenset(args.form)}
+        available = filings_from_submissions(metadata, **scope)
         links = revision_links(available)
+        if args.current_report_item is not None:
+            available = filings_from_submissions(metadata, current_report_item=args.current_report_item, **scope)
         _, company_facts = cache.source(SECEdgarClient.COMPANY_FACTS_URL_TEMPLATE.format(cik=normalized), MAX_METADATA_BYTES)
         issuers.append({"ticker": ticker, "cik": normalized, "submissions": submissions, "company_facts": company_facts})
         selected = [filing for form in sorted(set(args.form))
@@ -72,6 +76,8 @@ def build(args, client: SECEdgarClient | None) -> tuple[dict, dict]:
         "forms": sorted(set(args.form)), "max_per_form_per_issuer": args.per_form,
         "issuers": issuers, "filings": filings, "unavailable_filings": unavailable,
     }
+    if args.current_report_item is not None:
+        manifest["current_report_item"] = args.current_report_item
     telemetry = {"by_accession": resources, "request_attempts": client.request_count if client else 0,
                  "peak_memory_bytes": peak_memory_bytes(), "provider_cost_usd": 0}
     return manifest, telemetry
@@ -91,6 +97,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--issuer", action="append", required=True, type=_issuer)
     parser.add_argument("--form", action="append", choices=sorted(FORMS), required=True)
+    parser.add_argument("--current-report-item", help="Filter 8-K and 8-K/A by EDGAR item code, such as 2.02")
     parser.add_argument("--cutoff", type=date.fromisoformat, required=True)
     parser.add_argument("--per-form", type=int, default=1)
     parser.add_argument("--cache", type=Path, required=True)
@@ -103,6 +110,10 @@ def main() -> None:
         parser.error("Use unique issuers and 1–5 filings per form")
     if not SEC_FIRST_FILED <= args.cutoff <= date.today():
         parser.error("Cutoff must fall between 2025-01-01 and today")
+    if args.current_report_item is not None and (
+        not re.fullmatch(r"[1-9]\.[0-9]{2}", args.current_report_item) or not {"8-K", "8-K/A"}.intersection(args.form)
+    ):
+        parser.error("A current report item requires an EDGAR item code and an 8-K or 8-K/A form")
     if args.output.exists() and any(args.output.iterdir()):
         parser.error("Use a fresh output directory")
     client = SECEdgarClient(settings.sec_user_agent) if args.acquire else None

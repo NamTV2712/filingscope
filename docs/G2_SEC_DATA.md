@@ -47,8 +47,9 @@ during 2025. The Tesla amendment was linked to the unique original
 do not establish a financial restatement. Comparative or recast
 observations keep their separate accession. Confirmed restatement
 classification requires explicit filing evidence. The CLI can request
-10-Q/A and 8-K archives. The measured selection had no 10-Q/A, and
-8-K was outside the frozen run.
+10-Q/A and 8-K archives. The measured selection had no 10-Q/A.
+The separate [8-K replay](G2_SEC_CURRENT_REPORTS.md) pinned three
+Item 2.02 archives and checked the financial evidence in their exhibits.
 
 ### Parser comparison
 

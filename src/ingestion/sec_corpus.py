@@ -65,17 +65,21 @@ class SourceCache:
 
 
 def filings_from_submissions(
-    payload: dict, *, cik: int, ticker: str, cutoff: date, forms: frozenset[str],
+    payload: dict, *, cik: int, ticker: str, cutoff: date, forms: frozenset[str], current_report_item: str | None = None,
 ) -> list[FilingMetadata]:
     if normalize_cik(payload["cik"]) != normalize_cik(cik):
         raise ValueError("SEC Submissions CIK mismatch")
     recent = payload["filings"]["recent"]
     rows = []
-    for form, accession, filed, report, primary in zip(
+    items = recent["items"] if current_report_item is not None else [""] * len(recent["form"])
+    for form, accession, filed, report, primary, item_list in zip(
         recent["form"], recent["accessionNumber"], recent["filingDate"],
-        recent["reportDate"], recent["primaryDocument"], strict=True,
+        recent["reportDate"], recent["primaryDocument"], items, strict=True,
     ):
         if form not in forms or not SEC_FIRST_FILED <= date.fromisoformat(filed) <= cutoff:
+            continue
+        if (current_report_item is not None and form in {"8-K", "8-K/A"}
+                and current_report_item not in {item.strip() for item in item_list.split(",")}):
             continue
         if not ACCESSION.fullmatch(accession) or not PRIMARY_DOCUMENT.fullmatch(primary):
             continue

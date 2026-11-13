@@ -136,6 +136,10 @@ Independently reviewed mixed and narrative cohorts remain open.
 The dimensioned replay resolved 10/10 PDF-transcribed facts and
 withheld 50/50 perturbed identities. It keeps the exact filing anchors.
 [Dimensioned replay](G2_DIMENSIONED_REPLAY.md).
+The selected 8-K replay pinned three earnings-report accessions.
+All had zero numeric iXBRL observations. Six financial cells from two
+linked HTML exhibits agreed with the corresponding periodic Company
+Facts entries. [Current reports](G2_SEC_CURRENT_REPORTS.md).
 The [SEC narrative track](G2_SEC_NARRATIVE.md) measured six
 author-checked questions. All three inventories abstained. The PDF arms
 retrieved evidence for five cases including valid alternative pages.
