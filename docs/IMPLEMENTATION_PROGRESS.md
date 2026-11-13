@@ -115,3 +115,15 @@ preserved deterministic decisions in 65 policy scenarios. Windows passed
 437 tests with 3 skips and Linux WSL passed 436 with 4 skips. All seven
 historical regression reports matched on stable outputs.
 [G1 report, metric definitions and commands](G1_EVALUATION.md).
+
+## G2 SEC data and benchmark cohorts
+
+G2 is **PARTIALLY_COMPLETE**. The verified extraction covers 17 real
+SEC filings and 20,723 numeric observations. The offline manifest
+reproduced byte for byte. There were 7,087 exact unique-value Company
+Facts pairs and 6/6 exact PDF controls. Pilot/development/validation
+contain 32/100/72 provisional lookups with disjoint issuer groups.
+Historical architecture, retrieval and writer results reproduced.
+Full document/hybrid QA and independently adjudicated mixed cohorts
+remain open. [G2 report](G2_SEC_DATA.md) ·
+[Frozen SEC manifest](G2_SEC_CORPUS_MANIFEST.json).

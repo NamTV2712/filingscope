@@ -1,0 +1,521 @@
+{
+  "arelle_version": "2.47.4",
+  "cutoff": "2025-12-31",
+  "filings": [
+    {
+      "accession_number": "0000320193-25-000079",
+      "amendment_relationship": null,
+      "archive": {
+        "sha256": "sha256:b866968e851df2476ac98358634e1b341265aa61e51e36632c755c30a8f91250",
+        "size": 399390,
+        "url": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/0000320193-25-000079-xbrl.zip"
+      },
+      "cik": 320193,
+      "dimensioned_observations": 415,
+      "facts_sha256": "sha256:6473ab1b37919edb311903d8067730c0eef5063b57e4c634bf9537f8f91c16a2",
+      "filing_date": "2025-10-31",
+      "form_type": "10-K",
+      "numeric_observations": 962,
+      "primary_document": "aapl-20250927.htm",
+      "report_date": "2025-09-27",
+      "skipped": {
+        "nil_or_non_numeric": 164,
+        "unsupported_or_invalid_transform": 5
+      },
+      "source_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/aapl-20250927.htm",
+      "ticker": "AAPL"
+    },
+    {
+      "accession_number": "0000320193-25-000073",
+      "amendment_relationship": null,
+      "archive": {
+        "sha256": "sha256:ba81ca9576dd509b1533bd0403e5dee8dac3e9fc1f4dec62c92672a659a09b86",
+        "size": 166913,
+        "url": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000073/0000320193-25-000073-xbrl.zip"
+      },
+      "cik": 320193,
+      "dimensioned_observations": 363,
+      "facts_sha256": "sha256:cfa8c9a28cc2e34578887f9d9b6a505952f14cc6296f7b6d8a23bbc590a43a6f",
+      "filing_date": "2025-08-01",
+      "form_type": "10-Q",
+      "numeric_observations": 680,
+      "primary_document": "aapl-20250628.htm",
+      "report_date": "2025-06-28",
+      "skipped": {
+        "nil_or_non_numeric": 86,
+        "unsupported_or_invalid_transform": 3
+      },
+      "source_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000073/aapl-20250628.htm",
+      "ticker": "AAPL"
+    },
+    {
+      "accession_number": "0001018724-25-000004",
+      "amendment_relationship": null,
+      "archive": {
+        "sha256": "sha256:553330753cdd21c8b48cb7486f51ef2bbec76ca2f67a7108faa5f232f1084a8c",
+        "size": 390106,
+        "url": "https://www.sec.gov/Archives/edgar/data/1018724/000101872425000004/0001018724-25-000004-xbrl.zip"
+      },
+      "cik": 1018724,
+      "dimensioned_observations": 512,
+      "facts_sha256": "sha256:b41ec4414b1c9c73959e378658504e99a51ed4201e7e2f7d4f52ff9556befbf5",
+      "filing_date": "2025-02-07",
+      "form_type": "10-K",
+      "numeric_observations": 1256,
+      "primary_document": "amzn-20241231.htm",
+      "report_date": "2024-12-31",
+      "skipped": {
+        "nil_or_non_numeric": 240,
+        "unsupported_or_invalid_transform": 3
+      },
+      "source_url": "https://www.sec.gov/Archives/edgar/data/1018724/000101872425000004/amzn-20241231.htm",
+      "ticker": "AMZN"
+    },
+    {
+      "accession_number": "0001018724-25-000123",
+      "amendment_relationship": null,
+      "archive": {
+        "sha256": "sha256:8cc992bc0cff56fb3ae49cbee49c3b3b99a8dd989ae2883b4e4e54b73a5a8ac6",
+        "size": 365072,
+        "url": "https://www.sec.gov/Archives/edgar/data/1018724/000101872425000123/0001018724-25-000123-xbrl.zip"
+      },
+      "cik": 1018724,
+      "dimensioned_observations": 368,
+      "facts_sha256": "sha256:ebaccddc13dd40c52f3f05aed3a4b2f12e22f8c00fd229ea95884a6c4402b8ee",
+      "filing_date": "2025-10-31",
+      "form_type": "10-Q",
+      "numeric_observations": 1081,
+      "primary_document": "amzn-20250930.htm",
+      "report_date": "2025-09-30",
+      "skipped": {
+        "nil_or_non_numeric": 118,
+        "unsupported_or_invalid_transform": 6
+      },
+      "source_url": "https://www.sec.gov/Archives/edgar/data/1018724/000101872425000123/amzn-20250930.htm",
+      "ticker": "AMZN"
+    },
+    {
+      "accession_number": "0001652044-25-000014",
+      "amendment_relationship": null,
+      "archive": {
+        "sha256": "sha256:5ad381d156ebec694885107d00ba64abca47c1248af705e4661f5c23106bd09a",
+        "size": 678483,
+        "url": "https://www.sec.gov/Archives/edgar/data/1652044/000165204425000014/0001652044-25-000014-xbrl.zip"
+      },
+      "cik": 1652044,
+      "dimensioned_observations": 730,
+      "facts_sha256": "sha256:7c9db7cf055be5795c41c6553ccbe3a9083a6521af4edeecff77b8ca7df88a5f",
+      "filing_date": "2025-02-05",
+      "form_type": "10-K",
+      "numeric_observations": 1520,
+      "primary_document": "goog-20241231.htm",
+      "report_date": "2024-12-31",
+      "skipped": {
+        "nil_or_non_numeric": 197,
+        "unsupported_or_invalid_transform": 4
+      },
+      "source_url": "https://www.sec.gov/Archives/edgar/data/1652044/000165204425000014/goog-20241231.htm",
+      "ticker": "GOOG"
+    },
+    {
+      "accession_number": "0001652044-25-000091",
+      "amendment_relationship": null,
+      "archive": {
+        "sha256": "sha256:1b1c2f4a9eb6221e87922b5eba727c2b8ac21f8e1441403c9628dabeb61ca0d4",
+        "size": 328201,
+        "url": "https://www.sec.gov/Archives/edgar/data/1652044/000165204425000091/0001652044-25-000091-xbrl.zip"
+      },
+      "cik": 1652044,
+      "dimensioned_observations": 868,
+      "facts_sha256": "sha256:27f2a0fafd4bd8ee8e4eab0f79928b26ee9ea1fc3c58d7643eb71a5ffbd3cfad",
+      "filing_date": "2025-10-30",
+      "form_type": "10-Q",
+      "numeric_observations": 1585,
+      "primary_document": "goog-20250930.htm",
+      "report_date": "2025-09-30",
+      "skipped": {
+        "nil_or_non_numeric": 144,
+        "unsupported_or_invalid_transform": 3
+      },
+      "source_url": "https://www.sec.gov/Archives/edgar/data/1652044/000165204425000091/goog-20250930.htm",
+      "ticker": "GOOG"
+    },
+    {
+      "accession_number": "0000021344-25-000011",
+      "amendment_relationship": null,
+      "archive": {
+        "sha256": "sha256:81ace0d214c88d1ae3df05f296fa3d0ffc064fb8d394f067b75a1cfce163848b",
+        "size": 1014804,
+        "url": "https://www.sec.gov/Archives/edgar/data/21344/000002134425000011/0000021344-25-000011-xbrl.zip"
+      },
+      "cik": 21344,
+      "dimensioned_observations": 1527,
+      "facts_sha256": "sha256:e42e2f029f2291c56f31acba1b290e8fe3902c3aa456aaa15ebcd820c21cc1ac",
+      "filing_date": "2025-02-20",
+      "form_type": "10-K",
+      "numeric_observations": 2527,
+      "primary_document": "ko-20241231.htm",
+      "report_date": "2024-12-31",
+      "skipped": {
+        "nil_or_non_numeric": 278,
+        "unsupported_or_invalid_transform": 3
+      },
+      "source_url": "https://www.sec.gov/Archives/edgar/data/21344/000002134425000011/ko-20241231.htm",
+      "ticker": "KO"
+    },
+    {
+      "accession_number": "0001628280-25-046054",
+      "amendment_relationship": null,
+      "archive": {
+        "sha256": "sha256:8debfe1efbcb1fb8b71c5fd7e0ffbb45d52983c408566ffe22584b68cd05f25e",
+        "size": 541837,
+        "url": "https://www.sec.gov/Archives/edgar/data/21344/000162828025046054/0001628280-25-046054-xbrl.zip"
+      },
+      "cik": 21344,
+      "dimensioned_observations": 855,
+      "facts_sha256": "sha256:7405949daafd70b5d8326adac6352f852ce24b58f6de11b1ceb52ee800980ae4",
+      "filing_date": "2025-10-23",
+      "form_type": "10-Q",
+      "numeric_observations": 1657,
+      "primary_document": "ko-20250926.htm",
+      "report_date": "2025-09-26",
+      "skipped": {
+        "nil_or_non_numeric": 166
+      },
+      "source_url": "https://www.sec.gov/Archives/edgar/data/21344/000162828025046054/ko-20250926.htm",
+      "ticker": "KO"
+    },
+    {
+      "accession_number": "0000950170-25-100235",
+      "amendment_relationship": null,
+      "archive": {
+        "sha256": "sha256:686c646c38390117a4c85515f3aa585cab888b20612222fe5e2263bbd0e4630a",
+        "size": 547941,
+        "url": "https://www.sec.gov/Archives/edgar/data/789019/000095017025100235/0000950170-25-100235-xbrl.zip"
+      },
+      "cik": 789019,
+      "dimensioned_observations": 810,
+      "facts_sha256": "sha256:0c8efe4832a11c32bc13f2004328f6c654b9496e7122ed2f26d3137b5eeb19fa",
+      "filing_date": "2025-07-30",
+      "form_type": "10-K",
+      "numeric_observations": 1544,
+      "primary_document": "msft-20250630.htm",
+      "report_date": "2025-06-30",
+      "skipped": {
+        "nil_or_non_numeric": 280,
+        "unsupported_or_invalid_transform": 5
+      },
+      "source_url": "https://www.sec.gov/Archives/edgar/data/789019/000095017025100235/msft-20250630.htm",
+      "ticker": "MSFT"
+    },
+    {
+      "accession_number": "0001193125-25-256321",
+      "amendment_relationship": null,
+      "archive": {
+        "sha256": "sha256:5ef6a98df34b1a1815c992f4144ec90353d063adcfea1f7ad4c7ce7985df70b7",
+        "size": 334091,
+        "url": "https://www.sec.gov/Archives/edgar/data/789019/000119312525256321/0001193125-25-256321-xbrl.zip"
+      },
+      "cik": 789019,
+      "dimensioned_observations": 625,
+      "facts_sha256": "sha256:7808f09b56c8f63ce76f0b613b5d43cc2526685c4c1a1011cd6f6a41f33b19e8",
+      "filing_date": "2025-10-29",
+      "form_type": "10-Q",
+      "numeric_observations": 1058,
+      "primary_document": "msft-20250930.htm",
+      "report_date": "2025-09-30",
+      "skipped": {
+        "nil_or_non_numeric": 175
+      },
+      "source_url": "https://www.sec.gov/Archives/edgar/data/789019/000119312525256321/msft-20250930.htm",
+      "ticker": "MSFT"
+    },
+    {
+      "accession_number": "0001045810-25-000023",
+      "amendment_relationship": null,
+      "archive": {
+        "sha256": "sha256:483c0b2c3c632a19019cbe4574057261938353b01db0edee79625f754afd1dac",
+        "size": 534785,
+        "url": "https://www.sec.gov/Archives/edgar/data/1045810/000104581025000023/0001045810-25-000023-xbrl.zip"
+      },
+      "cik": 1045810,
+      "dimensioned_observations": 496,
+      "facts_sha256": "sha256:7ef41b9da296f8d2928ad3ecdc982e93c1e90161eb6872ec362fde3fd0725bba",
+      "filing_date": "2025-02-26",
+      "form_type": "10-K",
+      "numeric_observations": 1226,
+      "primary_document": "nvda-20250126.htm",
+      "report_date": "2025-01-26",
+      "skipped": {
+        "nil_or_non_numeric": 188,
+        "unsupported_or_invalid_transform": 3
+      },
+      "source_url": "https://www.sec.gov/Archives/edgar/data/1045810/000104581025000023/nvda-20250126.htm",
+      "ticker": "NVDA"
+    },
+    {
+      "accession_number": "0001045810-25-000230",
+      "amendment_relationship": null,
+      "archive": {
+        "sha256": "sha256:9cf64e4f43f4169b4869842046f07535bf126a186a7cb0c7de0b11e1cb09da2f",
+        "size": 256314,
+        "url": "https://www.sec.gov/Archives/edgar/data/1045810/000104581025000230/0001045810-25-000230-xbrl.zip"
+      },
+      "cik": 1045810,
+      "dimensioned_observations": 433,
+      "facts_sha256": "sha256:ba11d594b12c23102052053ad1a38e3dffd0687dca85e83f0a651a61c6055b16",
+      "filing_date": "2025-11-19",
+      "form_type": "10-Q",
+      "numeric_observations": 948,
+      "primary_document": "nvda-20251026.htm",
+      "report_date": "2025-10-26",
+      "skipped": {
+        "nil_or_non_numeric": 109,
+        "unsupported_or_invalid_transform": 3
+      },
+      "source_url": "https://www.sec.gov/Archives/edgar/data/1045810/000104581025000230/nvda-20251026.htm",
+      "ticker": "NVDA"
+    },
+    {
+      "accession_number": "0001628280-25-003063",
+      "amendment_relationship": null,
+      "archive": {
+        "sha256": "sha256:bb3d8381ff2fd4b4187020d850d07eb02433409b1914e561bb8af820bdcdbe5c",
+        "size": 614058,
+        "url": "https://www.sec.gov/Archives/edgar/data/1318605/000162828025003063/0001628280-25-003063-xbrl.zip"
+      },
+      "cik": 1318605,
+      "dimensioned_observations": 646,
+      "facts_sha256": "sha256:94a8bdd1e4f1b68860e5095ff47fe7f6646c4df83e414f2ee843e0d8d39143a6",
+      "filing_date": "2025-01-30",
+      "form_type": "10-K",
+      "numeric_observations": 1450,
+      "primary_document": "tsla-20241231.htm",
+      "report_date": "2024-12-31",
+      "skipped": {
+        "nil_or_non_numeric": 239,
+        "unsupported_or_invalid_transform": 8
+      },
+      "source_url": "https://www.sec.gov/Archives/edgar/data/1318605/000162828025003063/tsla-20241231.htm",
+      "ticker": "TSLA"
+    },
+    {
+      "accession_number": "0001104659-25-042659",
+      "amendment_relationship": {
+        "original_accession": "0001628280-25-003063",
+        "status": "UNIQUE_SAME_PERIOD_FORM"
+      },
+      "archive": {
+        "sha256": "sha256:90f1933fa37f4937af8a88f70206274b2e6594496f27ed16445f807469761036",
+        "size": 74617,
+        "url": "https://www.sec.gov/Archives/edgar/data/1318605/000110465925042659/0001104659-25-042659-xbrl.zip"
+      },
+      "cik": 1318605,
+      "dimensioned_observations": 0,
+      "facts_sha256": "sha256:6554e95af99afd5c0d3fde0176bfc29bbdfc9f4c6ceea1a5abf0194fc92b9d00",
+      "filing_date": "2025-04-30",
+      "form_type": "10-K/A",
+      "numeric_observations": 2,
+      "primary_document": "tm252787d2_10ka.htm",
+      "report_date": "2024-12-31",
+      "skipped": {
+        "nil_or_non_numeric": 35
+      },
+      "source_url": "https://www.sec.gov/Archives/edgar/data/1318605/000110465925042659/tm252787d2_10ka.htm",
+      "ticker": "TSLA"
+    },
+    {
+      "accession_number": "0001628280-25-045968",
+      "amendment_relationship": null,
+      "archive": {
+        "sha256": "sha256:c3b9024f6ea6e44f852c9291e7507bb8df4c9d52d40eb0ac8089f6ad2e895e3a",
+        "size": 238133,
+        "url": "https://www.sec.gov/Archives/edgar/data/1318605/000162828025045968/0001628280-25-045968-xbrl.zip"
+      },
+      "cik": 1318605,
+      "dimensioned_observations": 602,
+      "facts_sha256": "sha256:756a108d666a31cba994bb2f841a2b5965382a029c45d7460cd33d8471ba30a3",
+      "filing_date": "2025-10-23",
+      "form_type": "10-Q",
+      "numeric_observations": 1119,
+      "primary_document": "tsla-20250930.htm",
+      "report_date": "2025-09-30",
+      "skipped": {
+        "nil_or_non_numeric": 101,
+        "unsupported_or_invalid_transform": 8
+      },
+      "source_url": "https://www.sec.gov/Archives/edgar/data/1318605/000162828025045968/tsla-20250930.htm",
+      "ticker": "TSLA"
+    },
+    {
+      "accession_number": "0000104169-25-000021",
+      "amendment_relationship": null,
+      "archive": {
+        "sha256": "sha256:2976d7e7bdde2332eb14346c9882ff3bfb5632472cace98876703d3ad918a4bb",
+        "size": 490921,
+        "url": "https://www.sec.gov/Archives/edgar/data/104169/000010416925000021/0000104169-25-000021-xbrl.zip"
+      },
+      "cik": 104169,
+      "dimensioned_observations": 545,
+      "facts_sha256": "sha256:b367d52049afa7d9286ded8c8eb3630d8c2bcc399a34b49f72278f010ccf1a9f",
+      "filing_date": "2025-03-14",
+      "form_type": "10-K",
+      "numeric_observations": 1188,
+      "primary_document": "wmt-20250131.htm",
+      "report_date": "2025-01-31",
+      "skipped": {
+        "nil_or_non_numeric": 201,
+        "unsupported_or_invalid_transform": 17
+      },
+      "source_url": "https://www.sec.gov/Archives/edgar/data/104169/000010416925000021/wmt-20250131.htm",
+      "ticker": "WMT"
+    },
+    {
+      "accession_number": "0000104169-25-000191",
+      "amendment_relationship": null,
+      "archive": {
+        "sha256": "sha256:8743338dbcb759a91054f3305842913ce7ef47aad183ded8345d36ebc96ca941",
+        "size": 263341,
+        "url": "https://www.sec.gov/Archives/edgar/data/104169/000010416925000191/0000104169-25-000191-xbrl.zip"
+      },
+      "cik": 104169,
+      "dimensioned_observations": 490,
+      "facts_sha256": "sha256:f23fbabdde7ddf5c5af9ec1a1b618e698c10553a1328aa86b62afd793c448d24",
+      "filing_date": "2025-12-03",
+      "form_type": "10-Q",
+      "numeric_observations": 920,
+      "primary_document": "wmt-20251031.htm",
+      "report_date": "2025-10-31",
+      "skipped": {
+        "nil_or_non_numeric": 108,
+        "unsupported_or_invalid_transform": 10
+      },
+      "source_url": "https://www.sec.gov/Archives/edgar/data/104169/000010416925000191/wmt-20251031.htm",
+      "ticker": "WMT"
+    }
+  ],
+  "first_filed": "2025-01-01",
+  "forms": [
+    "10-K",
+    "10-K/A",
+    "10-Q",
+    "10-Q/A"
+  ],
+  "issuers": [
+    {
+      "cik": "0000320193",
+      "company_facts": {
+        "sha256": "sha256:f085735b4d08fb116ade18d24247ffabe11df8eb52eae6556b165831f15ef1ad",
+        "size": 3859564,
+        "url": "https://data.sec.gov/api/xbrl/companyfacts/CIK0000320193.json"
+      },
+      "submissions": {
+        "sha256": "sha256:ecc3321932506974dec32db5b7f475a95a4756ed3839d9b5d57122db0e824e08",
+        "size": 163926,
+        "url": "https://data.sec.gov/submissions/CIK0000320193.json"
+      },
+      "ticker": "AAPL"
+    },
+    {
+      "cik": "0001018724",
+      "company_facts": {
+        "sha256": "sha256:acddb7c0a6973a1fd08372de3b292298a34eae7f42a7eedc4bdebd3ac659c8fd",
+        "size": 4554378,
+        "url": "https://data.sec.gov/api/xbrl/companyfacts/CIK0001018724.json"
+      },
+      "submissions": {
+        "sha256": "sha256:c2c36f85c91b5d57c0808db46c216d089401d3ad0c5b813ac828b8830481fd80",
+        "size": 160388,
+        "url": "https://data.sec.gov/submissions/CIK0001018724.json"
+      },
+      "ticker": "AMZN"
+    },
+    {
+      "cik": "0001652044",
+      "company_facts": {
+        "sha256": "sha256:f87bc183f74b45ecf9a0933e0e0a1b6b97ead51a9d29367a7dae436574e1c1d0",
+        "size": 3250837,
+        "url": "https://data.sec.gov/api/xbrl/companyfacts/CIK0001652044.json"
+      },
+      "submissions": {
+        "sha256": "sha256:a7dd89f0032d17e00d156fbb4d2fd6a7713a01d38cfe0c9da0db8617886a327d",
+        "size": 152889,
+        "url": "https://data.sec.gov/submissions/CIK0001652044.json"
+      },
+      "ticker": "GOOG"
+    },
+    {
+      "cik": "0000021344",
+      "company_facts": {
+        "sha256": "sha256:87a4173fcd3d662d18d19e0e885095aa5e3812b74c54d1ee55808ff1540a8081",
+        "size": 5206922,
+        "url": "https://data.sec.gov/api/xbrl/companyfacts/CIK0000021344.json"
+      },
+      "submissions": {
+        "sha256": "sha256:ede90e9b67863d77b17bef580f3a266a7572ae88448ed3e8e20ff584b7cfad91",
+        "size": 158887,
+        "url": "https://data.sec.gov/submissions/CIK0000021344.json"
+      },
+      "ticker": "KO"
+    },
+    {
+      "cik": "0000789019",
+      "company_facts": {
+        "sha256": "sha256:8c1903c041f5c27e86ed15f37debb1f41882b7904bba129ef9edc76478b1e8ea",
+        "size": 4938072,
+        "url": "https://data.sec.gov/api/xbrl/companyfacts/CIK0000789019.json"
+      },
+      "submissions": {
+        "sha256": "sha256:4d4ff98b1deea7b90123e2b99c059cdac4343de0dccbdfdc9855e788419f893e",
+        "size": 186640,
+        "url": "https://data.sec.gov/submissions/CIK0000789019.json"
+      },
+      "ticker": "MSFT"
+    },
+    {
+      "cik": "0001045810",
+      "company_facts": {
+        "sha256": "sha256:19ef503a5770f5660964b3c3aea6937579d9b359da344afe6a9adf59c63d26ff",
+        "size": 4092966,
+        "url": "https://data.sec.gov/api/xbrl/companyfacts/CIK0001045810.json"
+      },
+      "submissions": {
+        "sha256": "sha256:092e307ba8b409e49bd89a410eeb3134e7d193ea083eaf6e687539702b2ede07",
+        "size": 160083,
+        "url": "https://data.sec.gov/submissions/CIK0001045810.json"
+      },
+      "ticker": "NVDA"
+    },
+    {
+      "cik": "0001318605",
+      "company_facts": {
+        "sha256": "sha256:c951e0ae2402dd8cf8f39319928adccc4196b997941fe40b0d4d6b8060802db1",
+        "size": 3700279,
+        "url": "https://data.sec.gov/api/xbrl/companyfacts/CIK0001318605.json"
+      },
+      "submissions": {
+        "sha256": "sha256:f032ecbccff22c2b7e2fd040e920bba5565bdffc373aefe901b426e514a04bdd",
+        "size": 162131,
+        "url": "https://data.sec.gov/submissions/CIK0001318605.json"
+      },
+      "ticker": "TSLA"
+    },
+    {
+      "cik": "0000104169",
+      "company_facts": {
+        "sha256": "sha256:49330f98609f70fcef4054edc90bc811398a58c4bf26dc0b218d607967a8dbe4",
+        "size": 3771831,
+        "url": "https://data.sec.gov/api/xbrl/companyfacts/CIK0000104169.json"
+      },
+      "submissions": {
+        "sha256": "sha256:974a8f4fe73fc5e16ea8bf18ba149f747fe778ce05a749e46e3006e7bc73216b",
+        "size": 157341,
+        "url": "https://data.sec.gov/submissions/CIK0000104169.json"
+      },
+      "ticker": "WMT"
+    }
+  ],
+  "max_per_form_per_issuer": 1,
+  "schema": "filingscope-sec-ixbrl-corpus-v1",
+  "unavailable_filings": []
+}

@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
 from typing import Optional
+from urllib.parse import urlsplit
 import requests
 
 from src.ingestion.company_facts import normalize_cik
@@ -116,7 +117,7 @@ class SECEdgarClient:
             return 1
         return 2
 
-    def _throttled_get(self, url: str, timeout: int = 15) -> requests.Response:
+    def _throttled_get(self, url: str, timeout: int = 15, **options) -> requests.Response:
         """All outgoing requests MUST go through this function — do not call
         self.session.get() directly in other functions. This is the ONLY place
         to handle rate-limit and map status code to a separate exception."""
@@ -126,15 +127,51 @@ class SECEdgarClient:
 
         logger.debug("GET %s", url)
         self._request_count += 1
-        response = self.session.get(url, timeout=timeout)
-        self._last_request_time = time.monotonic()
+        try:
+            response = self.session.get(url, timeout=timeout, **options)
+        finally:
+            self._last_request_time = time.monotonic()
 
         if response.status_code == 404:
+            response.close()
             raise EdgarNotFoundError(f"Resource not found: {url}")
         if response.status_code == 429:
+            response.close()
             raise EdgarRateLimitError(f"Rate-limited when calling: {url}")
-        response.raise_for_status()  # raise for any other 4xx/5xx status codes
+        try:
+            response.raise_for_status()
+        except requests.HTTPError:
+            response.close()
+            raise
         return response
+
+    def fetch_bounded(self, url: str, *, max_bytes: int) -> bytes:
+        """Fetch one SEC source, with a single retry for transient failures."""
+        parts = urlsplit(url)
+        if (parts.scheme != "https" or parts.netloc not in {"www.sec.gov", "data.sec.gov"}
+                or parts.query or parts.fragment or max_bytes <= 0):
+            raise ValueError("Expected an official SEC URL and a positive size limit")
+        for attempt in range(2):
+            try:
+                with self._throttled_get(url, stream=True, allow_redirects=False) as response:
+                    if response.status_code != 200:
+                        raise EdgarClientError(f"Unexpected SEC response status: {response.status_code}")
+                    size = response.headers.get("Content-Length")
+                    if size is not None and int(size) > max_bytes:
+                        raise EdgarClientError("SEC source exceeds byte limit")
+                    started = time.monotonic()
+                    content = bytearray()
+                    for chunk in response.iter_content(64 * 1024):
+                        content.extend(chunk)
+                        if len(content) > max_bytes or time.monotonic() - started > 60:
+                            raise EdgarClientError("SEC transfer exceeds byte or time limit")
+                    return bytes(content)
+            except (requests.Timeout, requests.ConnectionError, requests.HTTPError, EdgarRateLimitError) as error:
+                if attempt or (isinstance(error, requests.HTTPError) and
+                               (error.response is None or error.response.status_code not in {500, 502, 503, 504})):
+                    raise
+                time.sleep(2)
+        raise AssertionError("SEC retry loop exhausted")
 
     def get_cik(self, ticker: str) -> int:
         """Get CIK from ticker. File ticker map is large (several MB) so we only load

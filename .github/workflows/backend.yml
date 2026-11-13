@@ -41,3 +41,7 @@ jobs:
         env:
           TIKTOKEN_CACHE_DIR: ${{ runner.temp }}/filingscope-tokenizer
         run: uv run --offline --locked python -m scripts.run_offline_checks
+      - name: Run optional Inline XBRL parser fixtures
+        run: |
+          uv sync --locked --extra ixbrl
+          uv run --offline --locked --extra ixbrl python -m pytest -q tests/test_inline_xbrl.py
