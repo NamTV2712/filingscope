@@ -157,6 +157,10 @@ Tesla segment case. Hybrid with iXBRL grounded 23/23, compared with
 22/23 for hybrid. The other 25 answers and dispositions matched.
 Windows passed 499 tests with 3 skips and WSL passed 498 with 4 skips.
 [Dimensioned runtime replay](G3_DIMENSIONED_RUNTIME.md).
+The SEC pilot ranking ablation improved frozen-locator recall from
+22/26 to 25/26. A four-case author review found alternative valid
+evidence on several pages. Reviewed recall was 4/5 for Dense and
+5/5 for statement ranking. [Ranking report](G3_SEC_RANKING.md).
 
 ## G4 orchestration and verification
 

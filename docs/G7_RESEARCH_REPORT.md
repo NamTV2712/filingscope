@@ -88,6 +88,7 @@ and faithfulness on a new real-filing cohort remain unmeasured.
 | Dimensioned runtime follow-up | The optional Inline XBRL arm grounded 23/23 on the same pilot. It verified Tesla FY2024 energy generation and storage segment revenue with the SEC fact anchor. Hybrid grounded 22/23, and the other 25 outcomes matched. [Paired report](G3_DIMENSIONED_RUNTIME.md). |
 | Dense retrieval | M12 Recall@10 56.25%, MRR@10 0.3529 and nDCG@5 0.3757. Q5 page locator micro precision 21/291 and required-slot recall 21/37. |
 | Scoped Dense cost | Matching top-10 IDs on 30 paired requests. Rank p50 4.25 → 1.16 ms with cached embeddings. [G3 method](G3_FINANCIAL_RETRIEVAL.md). |
+| SEC pilot retrieval | Statement ranking recovered 25/26 frozen evidence targets versus 22/26 for Dense. On four selected questions with author-reviewed alternatives, page Context Precision@10 was 11/36 versus 8/38. Both PDF-only graphs grounded 22/23. [Ranking report](G3_SEC_RANKING.md). |
 | M13 routed | 21/21 grounded exact on answerable cases, 21/24 coverage, 0/21 incorrect releases and 3/3 correct abstentions. |
 | Q5/Q6 natural statement | 30/30 grounded exact on answerable cases and 0/30 incorrect releases. 38 tools and 14 embedding calls. |
 | Q7 outage | Adaptive retained healthy-source evidence on 5/10 persistent failures and routed LangGraph retained it on 10/10. Both recovered 10/10 one-time failures. |

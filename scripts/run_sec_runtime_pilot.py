@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import io
 import json
 import re
 import time
@@ -23,6 +25,7 @@ from src.decision.policy import EvidenceDecisionLayer
 from src.evaluation.benchmark_io import peak_memory_bytes, write_json_atomic
 from src.evaluation.company_facts_replay import CompanyFactsReplay
 from src.evaluation.multi_agent_ablation import AblationObservation, evaluate_observation, summarize_ablation
+from src.evaluation.primary_metrics import RetrievalAdjudication, score_retrieval
 from src.ingestion.company_facts import ResolvedCompanyFact
 from src.ingestion.pdf_ingestion import chunk_pdf_pages, extract_pdf_pages
 from src.ingestion.sec_corpus import MAX_METADATA_BYTES, SourceCache
@@ -179,9 +182,78 @@ def _run_architecture_controls(
     return {name: {"overall": summarize_ablation(rows), "per_case": rows} for name, rows in rows_by_arm.items()}
 
 
+def _load_pilot_vectors(directory: Path, *, chunks_hash: str, rows: int, dimension: int):
+    import numpy as np
+
+    report = json.loads((directory / "report.json").read_bytes())
+    if report["chunks_sha256"] != chunks_hash or report["embedding_revision"] != P1_EMBEDDING_REVISION:
+        raise ValueError("Frozen vectors do not match the reconstructed chunks and model")
+    content = (directory / "normalized-vectors.npy").read_bytes()
+    if report["vectors_sha256"] != f"sha256:{hashlib.sha256(content).hexdigest()}":
+        raise ValueError("Frozen vector bytes differ from the pilot report")
+    vectors = np.load(io.BytesIO(content), allow_pickle=False)
+    if (vectors.shape != (rows, dimension) or vectors.dtype != np.float32
+            or not np.allclose(np.linalg.norm(vectors, axis=1), 1.0, atol=1e-5)):
+        raise ValueError("Frozen vectors must have the expected shape, dtype and unit norms")
+    return vectors
+
+
+def _pdf_ranking_metrics(cases: tuple[PilotCase, ...], rankings: dict[str, tuple[str, ...]]) -> dict:
+    adjudications = []
+    for case in cases:
+        targets = {f"cell_{i}": frozenset({f"{cell.pdf.name}#p{cell.page}"}) for i, cell in enumerate(case.cells)}
+        relevant = frozenset(page for choices in targets.values() for page in choices)
+        adjudications.append(RetrievalAdjudication(
+            granularity="page", ranked_ids=rankings[case.case_id], relevant_ids=relevant, gold_targets=targets,
+        ))
+    metrics = score_retrieval(adjudications)["page"]
+    return {
+        "gold_locator_precision_at_10": metrics["context_precision_at_10"],
+        "gold_evidence_recall_at_10": metrics["gold_evidence_recall_at_10"],
+    }
+
+
+def _run_ranking_controls(
+    cases: tuple[PilotCase, ...], router: ComplexityRouter, dense: FrozenDenseRetriever, ranked: FrozenDenseRetriever,
+) -> dict:
+    import numpy as np
+
+    answerable = tuple(case for case in cases if case.cells)
+    methods = ("dense", "scoped_dense", "scoped_statement_rank")
+    rows: dict[str, list[dict]] = {name: [] for name in methods}
+    for i, case in enumerate(answerable):
+        route = router.route(case.question)
+        tasks = route.research_plan.tasks if route.research_plan else ()
+        scope = tuple(sorted({doc for task in tasks for doc in task.target_document_ids}))
+        # Rotate order to reduce bias from running one arm first on every query.
+        offset = i % len(methods)
+        for method in methods[offset:] + methods[:offset]:
+            document_ids = scope if method != "dense" else ()
+            index = ranked if method == "scoped_statement_rank" else dense
+            started = time.perf_counter()
+            retrieved = []
+            if document_ids or method == "dense":
+                retrieved = index.retrieve(case.question, top_k=10, document_ids=document_ids)
+            latency_ms = (time.perf_counter() - started) * 1_000
+            if document_ids and any(chunk["document_id"] not in document_ids for chunk in retrieved):
+                raise RuntimeError(f"{method} returned an out-of-scope result for {case.case_id}")
+            rows[method].append({
+                "case_id": case.case_id, "document_scope": document_ids,
+                "ranked_pages": tuple(f"{chunk['doc_name']}#p{chunk['page_number']}" for chunk in retrieved),
+                "ranked_chunks": tuple(chunk["chunk_id"] for chunk in retrieved), "latency_ms": round(latency_ms, 3),
+            })
+    return {name: {
+        **_pdf_ranking_metrics(answerable, {row["case_id"]: row["ranked_pages"] for row in records}),
+        "p50_ms": round(float(np.percentile([row["latency_ms"] for row in records], 50)), 3),
+        "p95_ms": round(float(np.percentile([row["latency_ms"] for row in records], 95)), 3),
+        "per_case": records,
+    } for name, records in rows.items()}
+
+
 def _run(
     pdf_dir: Path, cache_dir: Path, manifest_path: Path, output: Path, threads: int, *,
     architecture_controls: bool = False, inline_facts: Path | None = None,
+    ranking_controls: bool = False, reuse_pilot_vectors: Path | None = None,
 ) -> None:
     import numpy as np
     import torch
@@ -239,13 +311,17 @@ def _run(
     corpus = CorpusMap.from_chunks(chunks, index_generation_id=chunks_hash)
     router = ComplexityRouter(corpus)
     embedder = Embedder(device="cpu", revision=P1_EMBEDDING_REVISION)
-    print(f"Embedding {len(chunks)} chunks", flush=True)
-    vectors = np.asarray(embedder.embed_documents([chunk["text"] for chunk in chunks], show_progress_bar=False),
-                         dtype=np.float32)
-    norms = np.linalg.norm(vectors, axis=1, keepdims=True)
-    if not np.all(np.isfinite(norms) & (norms > 0)):
-        raise ValueError("Document embeddings must be finite and nonzero")
-    vectors /= norms
+    if reuse_pilot_vectors is None:
+        print(f"Embedding {len(chunks)} chunks", flush=True)
+        vectors = np.asarray(embedder.embed_documents([chunk["text"] for chunk in chunks], show_progress_bar=False),
+                             dtype=np.float32)
+        norms = np.linalg.norm(vectors, axis=1, keepdims=True)
+        if not np.all(np.isfinite(norms) & (norms > 0)):
+            raise ValueError("Document embeddings must be finite and nonzero")
+        vectors /= norms
+    else:
+        print(f"Reusing frozen vectors for {len(chunks)} chunks", flush=True)
+        vectors = _load_pilot_vectors(reuse_pilot_vectors, chunks_hash=chunks_hash, rows=len(chunks), dimension=embedder.dimension)
     vector_path = output / "normalized-vectors.npy"
     np.save(vector_path, vectors, allow_pickle=False)
     index = FrozenDenseRetriever(chunks, vectors, embedder, pdf_pages=pages_cache,
@@ -283,6 +359,13 @@ def _run(
     if architecture_controls:
         report["architecture_controls"] = _run_architecture_controls(cases, router, index, sec, ticker_by_company)
         report["peak_memory_bytes"] = peak_memory_bytes()
+    if ranking_controls:
+        dense = FrozenDenseRetriever(chunks, vectors, embedder, pdf_pages=pages_cache)
+        report["ranking_controls"] = {
+            "ranking_only": _run_ranking_controls(CASES, router, dense, index),
+            "document_only_dense": _run_track("document_only", cases, router, dense, sec, ticker_by_company),
+        }
+        report["peak_memory_bytes"] = peak_memory_bytes()
     if inline_reference is not None:
         report["inline_reference"] = inline_reference
     write_json_atomic(output / "report.json", report)
@@ -296,12 +379,15 @@ def main() -> None:
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--threads", type=int, choices=range(1, 17), default=6)
     parser.add_argument("--architecture-controls", action="store_true")
+    parser.add_argument("--ranking-controls", action="store_true", help="Compare Dense, document scope and statement ranking")
+    parser.add_argument("--reuse-pilot-vectors", type=Path, help="Use verified document vectors from a prior pilot run")
     parser.add_argument("--inline-facts", type=Path, help="Frozen G2 facts directory for the optional Inline XBRL arm")
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=False)
     with offline_socket_guard():
         _run(args.pdfs, args.cache, args.manifest, args.output, args.threads,
-             architecture_controls=args.architecture_controls, inline_facts=args.inline_facts)
+             architecture_controls=args.architecture_controls, inline_facts=args.inline_facts,
+             ranking_controls=args.ranking_controls, reuse_pilot_vectors=args.reuse_pilot_vectors)
 
 
 if __name__ == "__main__":

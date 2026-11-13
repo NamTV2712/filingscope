@@ -1,0 +1,97 @@
+{
+  "cases": {
+    "apple_nvidia_revenue": {
+      "reviewed_pages": [
+        "AAPL_2025Q3_10Q#p8",
+        "AAPL_2025_10K#p31",
+        "NVDA_2025_10K#p10",
+        "NVDA_2025_10K#p143",
+        "NVDA_2025_10K#p161",
+        "NVDA_2025_10K#p162",
+        "NVDA_2025_10K#p169",
+        "NVDA_2025_10K#p17",
+        "NVDA_2025_10K#p170",
+        "NVDA_2025_10K#p171",
+        "NVDA_2025_10K#p18"
+      ],
+      "targets": {
+        "apple_revenue": [
+          "AAPL_2025_10K#p31"
+        ],
+        "nvidia_revenue": [
+          "NVDA_2025_10K#p143",
+          "NVDA_2025_10K#p169",
+          "NVDA_2025_10K#p170",
+          "NVDA_2025_10K#p171"
+        ]
+      }
+    },
+    "apple_quarter_revenue": {
+      "reviewed_pages": [
+        "AAPL_2025Q3_10Q#p14",
+        "AAPL_2025Q3_10Q#p15",
+        "AAPL_2025Q3_10Q#p17",
+        "AAPL_2025Q3_10Q#p3",
+        "AAPL_2025Q3_10Q#p4",
+        "AAPL_2025Q3_10Q#p8",
+        "AAPL_2025_10K#p23",
+        "AAPL_2025_10K#p25",
+        "AAPL_2025_10K#p31",
+        "AAPL_2025_10K#p36",
+        "AAPL_2025_10K#p38"
+      ],
+      "targets": {
+        "apple_quarter_revenue": [
+          "AAPL_2025Q3_10Q#p3",
+          "AAPL_2025Q3_10Q#p8",
+          "AAPL_2025Q3_10Q#p17"
+        ]
+      }
+    },
+    "apple_ytd_revenue": {
+      "reviewed_pages": [
+        "AAPL_2025Q3_10Q#p13",
+        "AAPL_2025Q3_10Q#p14",
+        "AAPL_2025Q3_10Q#p17",
+        "AAPL_2025Q3_10Q#p3",
+        "AAPL_2025Q3_10Q#p4",
+        "AAPL_2025Q3_10Q#p8",
+        "AAPL_2025_10K#p25",
+        "AAPL_2025_10K#p26",
+        "AAPL_2025_10K#p31",
+        "AAPL_2025_10K#p32",
+        "AAPL_2025_10K#p38"
+      ],
+      "targets": {
+        "apple_ytd_revenue": [
+          "AAPL_2025Q3_10Q#p3",
+          "AAPL_2025Q3_10Q#p8",
+          "AAPL_2025Q3_10Q#p17"
+        ]
+      }
+    },
+    "tesla_energy": {
+      "reviewed_pages": [
+        "TSLA_2024_10K#p34",
+        "TSLA_2024_10K#p39",
+        "TSLA_2024_10K#p4",
+        "TSLA_2024_10K#p40",
+        "TSLA_2024_10K#p41",
+        "TSLA_2024_10K#p42",
+        "TSLA_2024_10K#p50",
+        "TSLA_2024_10K#p51",
+        "TSLA_2024_10K#p54",
+        "TSLA_2024_10K#p9"
+      ],
+      "targets": {
+        "tesla_energy": [
+          "TSLA_2024_10K#p39",
+          "TSLA_2024_10K#p51"
+        ]
+      }
+    }
+  },
+  "method": "AUTHOR_REVIEWED_DEVELOPMENT_EXPOSED",
+  "pages_sha256": "sha256:f4ffa093f7b0f325eda948e82288050207d03e814abded4e1a903fe2bd5341b5",
+  "reference_sha256": "sha256:44f0c295511c23bff75a3b65ab76f8a9f467a9da2d07249b92bae6714b2b8f53"
+}
