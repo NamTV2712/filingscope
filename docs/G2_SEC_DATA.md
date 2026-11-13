@@ -130,6 +130,9 @@ Independently reviewed narrative evaluation, page relevance and strict
 atomic claim/citation adjudication remain open. [Runtime pilot](G2_RUNTIME_REPLAY.md).
 An [author-checked narrative track](G2_SEC_NARRATIVE.md) measures six
 non-XBRL questions separately on the same filing corpus.
+The [mixed benchmark](G2_SEC_MIXED_COHORTS.md) adds 204 provisional cases
+across all eight categories, including eight author-checked narrative
+cases and one amendment case. It retains the legacy lookup artifacts.
 
 ## Regression and resources
 

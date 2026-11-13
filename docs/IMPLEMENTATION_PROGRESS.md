@@ -130,7 +130,11 @@ Historical architecture, retrieval and writer results reproduced.
 A 26-question runtime pilot measured 3/23 grounded exact with PDF
 only and 21/23 with either Company Facts only or hybrid. All three
 arms confused Tesla segment revenue with consolidated revenue.
-Independently reviewed mixed and narrative cohorts remain open.
+The separate mixed benchmark covers all eight planned categories in
+32/100/72 cases. Structured lookup matched 187/187 numeric cases and
+withheld 8/8 missing-unit controls. Its narrative and revision labels
+are author-checked. Mixed document and hybrid QA and independent review
+remain open. [Mixed cohorts](G2_SEC_MIXED_COHORTS.md).
 [Runtime pilot](G2_RUNTIME_REPLAY.md) · [G2 report](G2_SEC_DATA.md) ·
 [Frozen SEC manifest](G2_SEC_CORPUS_MANIFEST.json).
 The dimensioned replay resolved 10/10 PDF-transcribed facts and

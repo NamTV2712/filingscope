@@ -12,14 +12,15 @@ from time import perf_counter
 from configs.offline_guard import offline_socket_guard
 from src.evaluation.benchmark_io import peak_memory_bytes, write_json_atomic
 from src.evaluation.sec_ixbrl_evaluation import build_cohorts, compare_filing
+from src.evaluation.sec_mixed_cohorts import build_mixed_cohorts
 from src.ingestion.sec_corpus import MAX_METADATA_BYTES, SourceCache
-from src.retrieval.canonical_json import sha256_file
+from src.retrieval.canonical_json import canonical_sha256, sha256_file
 
 MEMBERSHIP = {"pilot": {"AAPL", "AMZN"}, "development": {"GOOG", "KO", "MSFT"}, "validation": {"NVDA", "TSLA", "WMT"}}
 LIMITS = {"pilot": 32, "development": 100, "validation": 72}
 
 
-def evaluate(corpus: Path, cache_path: Path) -> tuple[dict, dict]:
+def evaluate(corpus: Path, cache_path: Path, *, mixed: bool = False) -> tuple[dict, dict]:
     started = perf_counter()
     manifest_path = corpus / "manifest.json"
     manifest = json.loads(manifest_path.read_bytes())
@@ -69,6 +70,23 @@ def evaluate(corpus: Path, cache_path: Path) -> tuple[dict, dict]:
         "resources": {"wall_seconds": round(perf_counter() - started, 3), "peak_memory_bytes": peak_memory_bytes(),
                       "provider_calls": 0, "provider_tokens": 0, "provider_cost_usd": 0},
     }
+    if mixed:
+        cohorts, diagnostic = build_mixed_cohorts(rows, manifest["filings"], corpus, cache, MEMBERSHIP, LIMITS, sources)
+        summary["cohorts"] = {
+            name: {"cases": len(items), "issuers": len({doc["cik"] for case in items for doc in case["documents"]}),
+                   "categories": dict(Counter(case["category"] for case in items)),
+                   "label_provenance": dict(Counter(case["label_provenance"] for case in items)),
+                   "cases_sha256": canonical_sha256(items)}
+            for name, items in cohorts.items()
+        }
+        summary["tracks"] = {
+            "structured_only": {"method": "Company Facts exact accession, concept, currency and interval lookup",
+                                "by_cohort_and_category": diagnostic},
+            "document_only": {"status": "NOT_RUN_ON_MIXED_COHORTS"},
+            "hybrid": {"status": "NOT_RUN_ON_MIXED_COHORTS"},
+            "narrative_non_xbrl": {"status": "AUTHOR_CHECKED_REFERENCES_PREDICTIONS_NOT_RUN"},
+        }
+        summary["resources"].update(wall_seconds=round(perf_counter() - started, 3), peak_memory_bytes=peak_memory_bytes())
     return {"summary": summary, "comparisons": rows}, cohorts
 
 
@@ -77,18 +95,23 @@ def main() -> None:
     parser.add_argument("--corpus", type=Path, required=True)
     parser.add_argument("--cache", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--mixed-cohorts", action="store_true", help="Build the issuer-disjoint mixed evaluation cohorts")
     args = parser.parse_args()
     if args.output.exists() and any(args.output.iterdir()):
         parser.error("Use a fresh output directory")
     with offline_socket_guard():
-        comparison, cohorts = evaluate(args.corpus, args.cache)
+        comparison, cohorts = evaluate(args.corpus, args.cache, mixed=args.mixed_cohorts)
     write_json_atomic(args.output / "comparison.json", comparison)
     for name, cases in cohorts.items():
-        write_json_atomic(args.output / f"{name}.json", {
+        cohort = {
             "status": "PROVISIONAL_NOT_INDEPENDENT",
             "corpus_manifest_sha256": comparison["summary"]["corpus_manifest_sha256"],
             "cases": cases,
-        })
+        }
+        if args.mixed_cohorts:
+            cohort["schema"] = "filingscope-sec-mixed-cohort-v1"
+            cohort["cases_sha256"] = comparison["summary"]["cohorts"][name]["cases_sha256"]
+        write_json_atomic(args.output / f"{name}.json", cohort)
     print(json.dumps(comparison["summary"], sort_keys=True))
 
 

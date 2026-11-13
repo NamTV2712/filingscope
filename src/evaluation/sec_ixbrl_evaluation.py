@@ -41,12 +41,12 @@ METRICS = {
 }
 
 
-def company_facts_values(payload: dict, cik: str, accession: str) -> dict:
+def company_facts_values(payload: dict, cik: str, accession: str, *, currency: str = "USD") -> dict:
     if normalize_cik(payload["cik"]) != cik:
         raise ValueError("Company Facts CIK mismatch")
     values = defaultdict(set)
     for tag, concept in payload["facts"].get("us-gaap", {}).items():
-        for observation in concept["units"].get("USD", ()):
+        for observation in concept["units"].get(currency, ()):
             if observation.get("accn") == accession:
                 values[tag, observation.get("start"), observation["end"]].add(Decimal(str(observation["val"])))
     return values
