@@ -25,9 +25,10 @@ from src.decision.period_value_parser import (
     extract_period_value_pairs,
     period_matches,
 )
-from src.decision.requirement_extractor import requires_nonstandard_reporting_basis
+from src.decision.requirement_extractor import permits_energy_segment_lookup, requires_nonstandard_reporting_basis
 from src.ingestion.company_facts import matches_requested_revision, requested_revision_policies
 from src.ingestion.period_identity import intervals_agree
+from src.ingestion.segment_revenue import ENERGY_ENTITY, ENERGY_METRIC, ENERGY_PERIOD, is_energy_evidence
 from src.retrieval.structured_lookup import structured_lookup
 
 
@@ -329,7 +330,12 @@ class EvidenceCoverageAnalyzer:
 
         for requirement in requirements.evidence:
             metric = metric_by_id[requirement.metric_id]
-            if requirement.quantitative and nonstandard_basis:
+            energy_segment = (
+                metric.metric_id == ENERGY_METRIC and requirement.entity_id == ENERGY_ENTITY
+                and requirement.period == ENERGY_PERIOD and len(requirements.evidence) == 1
+                and permits_energy_segment_lookup(requirements.question)
+            )
+            if requirement.quantitative and nonstandard_basis and not energy_segment:
                 findings.append(EvidenceFinding(
                     requirement_id=requirement.requirement_id, entity_id=requirement.entity_id,
                     metric_id=requirement.metric_id, period=requirement.period, status=CoverageStatus.MISSING,
@@ -342,6 +348,8 @@ class EvidenceCoverageAnalyzer:
             revision_mismatch = False
             unit_mismatch = False
             for chunk in deduplicated:
+                if energy_segment and not is_energy_evidence(chunk):
+                    continue
                 entity_ids = _entity_ids(chunk, self.catalog)
                 if requirement.entity_id not in entity_ids:
                     continue
@@ -443,6 +451,8 @@ class EvidenceCoverageAnalyzer:
             elif candidate_facts:
                 status = CoverageStatus.MISSING
                 reason = "insufficient_period_observations"
+            elif energy_segment and entity_chunks == 0:
+                status, reason = CoverageStatus.MISSING, "nonstandard_reporting_basis_not_verified"
             elif entity_chunks == 0:
                 status = CoverageStatus.MISSING
                 reason = "entity_mismatch"

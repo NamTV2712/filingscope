@@ -13,7 +13,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from src.decision.models import EvidenceRequirement, QuestionRequirements
-from src.ingestion.company_facts import XbrlProvenance
+from src.ingestion.company_facts import InlineXbrlProvenance, XbrlProvenance
 from src.ingestion.period_identity import PeriodIdentity
 from src.research.planner import ResearchPlan, ResearchTask
 from src.verification.models import ClaimStatus, VerificationResult
@@ -157,7 +157,7 @@ class EvidenceRecord(BaseModel):
     retrieval_observations: tuple[RetrievalObservation, ...] = ()
     discovered_by: tuple[str, ...] = Field(default=("unknown",), min_length=1)
     source_revision: str | None = None
-    xbrl_provenance: XbrlProvenance | None = None
+    xbrl_provenance: XbrlProvenance | InlineXbrlProvenance | None = None
     evidence_status: EvidenceStatus = EvidenceStatus.UNKNOWN
     task_id: str | None = None
     task_ids: tuple[str, ...] = ()
@@ -327,7 +327,7 @@ class FinancialFact(BaseModel):
     currency: str | None = None
     source_type: EvidenceSourceType
     source_revision: str | None = None
-    xbrl_provenance: XbrlProvenance | None = None
+    xbrl_provenance: XbrlProvenance | InlineXbrlProvenance | None = None
 
     @classmethod
     def from_evidence(

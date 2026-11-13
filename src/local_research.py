@@ -6,6 +6,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from src.agent.specialist_graph import SpecialistExecution
+from src.ingestion.company_facts import InlineXbrlProvenance
 from src.ledger.models import EvidenceRecord, EvidenceSourceType
 from src.verification.models import ClaimStatus
 from src.verification.response_policy import INSUFFICIENT_EVIDENCE_ANSWER
@@ -25,7 +26,7 @@ def _public_url(value: str | None) -> str | None:
 
 def _source(record: EvidenceRecord, citation: int | None) -> dict[str, Any]:
     xbrl = record.xbrl_provenance
-    return {
+    result = {
         "id": record.evidence_id,
         "citation": citation,
         "company": record.company,
@@ -48,6 +49,10 @@ def _source(record: EvidenceRecord, citation: int | None) -> dict[str, Any]:
         "end": xbrl.period_end if xbrl else None,
         "facts_url": _public_url(xbrl.company_facts_url) if xbrl else None,
     }
+    if isinstance(xbrl, InlineXbrlProvenance):
+        result["inline_identity_sha256"] = xbrl.inline_identity_sha256
+        result["dimensions"] = [{"axis": axis, "member": member} for axis, member in xbrl.dimensions]
+    return result
 
 
 _SEARCH_WORKERS = {

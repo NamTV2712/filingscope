@@ -11,7 +11,9 @@ from src.decision.filing_disclosures import filing_industry_relations, industry_
 from src.decision.models import EvidenceFact, MetricRequirement, QuestionRequirements
 from src.decision.period_value_parser import extract_period_value_mentions, period_matches
 from src.decision.policy import EvidenceDecisionLayer
+from src.decision.requirement_extractor import permits_energy_segment_lookup
 from src.ingestion.company_facts import matches_requested_revision, requested_revision_policies
+from src.ingestion.segment_revenue import ENERGY_ENTITY, ENERGY_METRIC, ENERGY_PERIOD, ENERGY_SECTION, is_energy_evidence
 from src.verification.claim_verifier import ClaimLevelVerifier, _BRACKET_RE, _FALLBACK_RE, _GROWTH_RE, _split_clauses
 from src.verification.models import (
     CitationStatus, ClaimAssessment, ClaimDraft, ClaimStatus, ResponseDisposition, VerificationResult,
@@ -130,7 +132,23 @@ class AtomicClaimVerifier(ClaimLevelVerifier):
         evidence_ids: tuple[str, ...],
     ) -> ClaimAssessment:
         statement = _text(draft.statement)
-        explicit_metrics = layer.extractor.extract(statement).metrics
+        asserted_scope = layer.extractor.extract(statement)
+        explicit_metrics = asserted_scope.metrics
+        requested_segment = any(metric.metric_id == ENERGY_METRIC for metric in question_requirements.metrics)
+        asserted_segment = any(metric.metric_id == ENERGY_METRIC for metric in explicit_metrics)
+        cited_segment = any(chunk.get("section") == ENERGY_SECTION for chunk in cited_chunks)
+        if draft.values and (requested_segment or asserted_segment or cited_segment) and not (
+            requested_segment and asserted_segment and cited_segment
+            and permits_energy_segment_lookup(question) and permits_energy_segment_lookup(statement, assertion=True)
+            and tuple(entity.entity_id for entity in asserted_scope.entities) == (ENERGY_ENTITY,)
+            and asserted_scope.periods == (ENERGY_PERIOD,)
+            and all(is_energy_evidence(chunk) for chunk in cited_chunks)
+        ):
+            return ClaimAssessment(
+                claim_id=draft.claim_id, statement=draft.statement, status=ClaimStatus.UNSUPPORTED,
+                citation_status=CitationStatus.VALID, citations=draft.citations, evidence_ids=evidence_ids,
+                reason_codes=("dimensioned_claim_scope_mismatch",),
+            )
         if draft.values and (
             _UNVERIFIED_QUALIFIER.search(statement) or len(draft.values) != 1 or len(draft.entity_ids) != 1
             or len(explicit_metrics) != 1

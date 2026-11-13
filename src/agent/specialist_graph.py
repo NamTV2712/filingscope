@@ -49,7 +49,7 @@ from src.generation.grounded_writer import (
     calculation_sentence, fact_sentence,
 )
 from src.ingestion.sec_client import SECEdgarClient
-from src.ingestion.company_facts import RevisionPolicy, requested_revision_policies
+from src.ingestion.company_facts import ResolvedCompanyFact, RevisionPolicy, requested_revision_policies
 from src.ingestion.chunker import count_tokens
 from src.ledger.evidence_ledger import EvidenceLedger, LedgerConflictError, LedgerReferenceError
 from src.ledger.models import (
@@ -178,6 +178,7 @@ class SpecialistResearchGraph:
         router: ComplexityRouter | None = None,
         retriever: Any | None = None,
         sec_client: SECEdgarClient | None = None,
+        inline_energy_fact: ResolvedCompanyFact | None = None,
         generator: AnswerGenerator | None = None,
         provider_limits: ProviderLimits | None = None,
         max_correction_passes: Literal[0, 1] = 1,
@@ -191,6 +192,7 @@ class SpecialistResearchGraph:
         self.router = router or ComplexityRouter()
         self.retriever = retriever
         self.sec_client = sec_client
+        self.inline_energy_fact = inline_energy_fact
         self.generator = generator
         self.provider_writer = OptionalProviderWriter(generator, provider_limits) if generator is not None else None
         self.deterministic_writer = DeterministicWriter()
@@ -207,6 +209,7 @@ class SpecialistResearchGraph:
                 and (entity := catalog.metadata_entity_id(ticker, company)) is not None
             ) if sec_client is not None else frozenset(),
             statement_documents=frozenset(getattr(retriever, "statement_document_ids", ())),
+            inline_energy_revenue=inline_energy_fact is not None,
         )
         self.retriever_concurrency_safe = (
             retriever is not None
@@ -273,6 +276,7 @@ class SpecialistResearchGraph:
             plan=route.research_plan,
             retriever=self.retriever,
             sec_client=self.sec_client,
+            inline_energy_fact=self.inline_energy_fact,
             ticker_by_company=self.ticker_by_company,
             generator=self.generator,
             decision_layer=EvidenceDecisionLayer(extractor=self.router.extractor),

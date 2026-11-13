@@ -12,8 +12,11 @@ from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.decision.models import QuestionRequirements
-from src.decision.requirement_extractor import EvidenceRequirementExtractor, requires_nonstandard_reporting_basis
+from src.decision.requirement_extractor import (
+    EvidenceRequirementExtractor, permits_energy_segment_lookup, requires_nonstandard_reporting_basis,
+)
 from src.ingestion.company_facts import METRIC_CONCEPTS, requested_revision_policies
+from src.ingestion.segment_revenue import ENERGY_ENTITY, ENERGY_METRIC, ENERGY_PERIOD
 from src.research.corpus_map import CorpusMap
 from src.research.planner import (
     CorpusAwarePlanner,
@@ -101,6 +104,7 @@ class SourceCapability(StrEnum):
 class SourceInventory:
     xbrl_entities: frozenset[str] = frozenset()
     statement_documents: frozenset[str] = frozenset()
+    inline_energy_revenue: bool = False
 
 
 class RouteBudget(BaseModel):
@@ -482,6 +486,11 @@ class ComplexityRouter:
             return SourceCapability.TEXT_RAG
         question = state["question"]
         requirements = state["requirements"]
+        if inventory.inline_energy_revenue and len(plan.tasks) == 1 and len(requirements.evidence) == 1:
+            slot = requirements.evidence[0]
+            if ((slot.entity_id, slot.metric_id, slot.period) == (ENERGY_ENTITY, ENERGY_METRIC, ENERGY_PERIOD)
+                    and permits_energy_segment_lookup(question)):
+                return SourceCapability.DIRECT_XBRL
         if len(requirements.evidence) > 1:
             return SourceCapability.COMPOSITE
         if (

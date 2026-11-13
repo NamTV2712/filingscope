@@ -1,4 +1,4 @@
-"""Replay identical PDF-labeled SEC questions with three offline source inventories."""
+"""Replay identical PDF-labeled SEC questions with offline source inventories."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import json
 import re
 import time
 from collections import Counter
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Any
 
@@ -23,8 +23,10 @@ from src.decision.policy import EvidenceDecisionLayer
 from src.evaluation.benchmark_io import peak_memory_bytes, write_json_atomic
 from src.evaluation.company_facts_replay import CompanyFactsReplay
 from src.evaluation.multi_agent_ablation import AblationObservation, evaluate_observation, summarize_ablation
+from src.ingestion.company_facts import ResolvedCompanyFact
 from src.ingestion.pdf_ingestion import chunk_pdf_pages, extract_pdf_pages
 from src.ingestion.sec_corpus import MAX_METADATA_BYTES, SourceCache
+from src.ingestion.segment_revenue import ENERGY_FILING, ENERGY_IDENTITY, load_energy_revenue
 from src.research.corpus_map import CorpusMap
 from src.retrieval.canonical_json import canonical_json_bytes, canonical_sha256, sha256_file
 from src.retrieval.financial_statement_ranker import FinancialStatementRanker
@@ -32,6 +34,7 @@ from src.retrieval.frozen_dense import FrozenDenseRetriever
 from src.retrieval.pdf_page_cache import FrozenPdfPages
 
 TRACKS = {"document_only": (True, False), "structured_only": (False, True), "hybrid": (True, True)}
+INLINE_TRACK = "hybrid_inline"
 
 
 def _load_manifest(path: Path) -> dict:
@@ -108,8 +111,10 @@ def _label_case(case: PilotCase, sec_locators: dict[StatementCell, tuple[str, ..
 
 
 def _validate_track(track: str, observed: AblationObservation, statement_calls: int) -> None:
-    use_pdf, use_sec = TRACKS[track]
+    use_pdf, use_sec = TRACKS["hybrid" if track == INLINE_TRACK else track]
     sources = observed.retrieved_sources.union(item for item in observed.citation_sources if item is not None)
+    if track != INLINE_TRACK and any(s.startswith("ixbrl:") for s in sources):
+        raise RuntimeError(f"{track} used an Inline XBRL source")
     if not use_pdf and (observed.retrieval_calls or statement_calls or any(not s.startswith("sec:") for s in sources)):
         raise RuntimeError(f"{track} used a PDF source")
     if not use_sec and (observed.sec_calls or any(s.startswith("sec:") for s in sources)):
@@ -120,12 +125,13 @@ def _validate_track(track: str, observed: AblationObservation, statement_calls: 
 
 def _run_track(
     track: str, cases: tuple[AblationCase, ...], router: ComplexityRouter, index: FrozenDenseRetriever,
-    sec: CompanyFactsReplay, ticker_by_company: dict[str, str],
+    sec: CompanyFactsReplay, ticker_by_company: dict[str, str], *, inline_energy_fact: ResolvedCompanyFact | None = None,
 ) -> dict[str, Any]:
-    use_pdf, use_sec = TRACKS[track]
+    use_pdf, use_sec = TRACKS["hybrid" if track == INLINE_TRACK else track]
     recorder = _RecordingRetriever(index)
     graph = SpecialistResearchGraph(router=router, retriever=recorder if use_pdf else None,
-                                    sec_client=sec if use_sec else None, ticker_by_company=ticker_by_company)
+                                    sec_client=sec if use_sec else None, ticker_by_company=ticker_by_company,
+                                    inline_energy_fact=inline_energy_fact)
     policy = _PolicyLayer(router.extractor)
     rows = []
     for case in cases:
@@ -175,7 +181,7 @@ def _run_architecture_controls(
 
 def _run(
     pdf_dir: Path, cache_dir: Path, manifest_path: Path, output: Path, threads: int, *,
-    architecture_controls: bool = False,
+    architecture_controls: bool = False, inline_facts: Path | None = None,
 ) -> None:
     import numpy as np
     import torch
@@ -249,6 +255,21 @@ def _run(
     for track in TRACKS:
         print(f"Running {track}", flush=True)
         results[track] = _run_track(track, cases, router, index, sec, ticker_by_company)
+    inline_reference = None
+    if inline_facts is not None:
+        # Declare the fact locator separately. The PDF-transcribed gold stays frozen.
+        locator = f"ixbrl:{ENERGY_IDENTITY.fact_id}"
+        inline_cases = tuple(replace(case, claims=(replace(
+            case.claims[0], source_slots=((*case.claims[0].source_slots[0], locator),),
+        ),)) if case.case_id == "tesla_energy" else case for case in cases)
+        accession = ENERGY_FILING.accession_number
+        digest = filings[accession]["facts_sha256"]
+        fact = load_energy_revenue(inline_facts / f"{accession}.json", digest)
+        inline_reference = {"case_id": "tesla_energy", "locator": locator,
+                            "source_url": fact.filing_url, "extraction_sha256": digest}
+        print(f"Running {INLINE_TRACK}", flush=True)
+        results[INLINE_TRACK] = _run_track(INLINE_TRACK, inline_cases, router, index, sec, ticker_by_company,
+                                           inline_energy_fact=fact)
     report = {
         "schema": "filingscope.sec-runtime-pilot.v1", "status": STATUS, "label_source": "PDF_TRANSCRIBED",
         "scorer": "ablation_complete_claims_locator", "tracks": results,
@@ -262,6 +283,8 @@ def _run(
     if architecture_controls:
         report["architecture_controls"] = _run_architecture_controls(cases, router, index, sec, ticker_by_company)
         report["peak_memory_bytes"] = peak_memory_bytes()
+    if inline_reference is not None:
+        report["inline_reference"] = inline_reference
     write_json_atomic(output / "report.json", report)
 
 
@@ -273,11 +296,12 @@ def main() -> None:
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--threads", type=int, choices=range(1, 17), default=6)
     parser.add_argument("--architecture-controls", action="store_true")
+    parser.add_argument("--inline-facts", type=Path, help="Frozen G2 facts directory for the optional Inline XBRL arm")
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=False)
     with offline_socket_guard():
         _run(args.pdfs, args.cache, args.manifest, args.output, args.threads,
-             architecture_controls=args.architecture_controls)
+             architecture_controls=args.architecture_controls, inline_facts=args.inline_facts)
 
 
 if __name__ == "__main__":

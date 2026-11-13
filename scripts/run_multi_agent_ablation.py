@@ -22,6 +22,7 @@ from src.decision.policy import EvidenceDecisionLayer
 from src.evaluation.company_facts_replay import CompanyFactsReplay, acquire_company_facts
 from src.evaluation.multi_agent_ablation import AblationObservation, evaluate_observation, summarize_ablation
 from src.ingestion.chunker import count_tokens
+from src.ingestion.company_facts import InlineXbrlProvenance
 from src.ledger.evidence_ledger import EvidenceLedger
 from src.ledger.models import EvidenceRecord, EvidenceSourceType
 from src.policy.candidate_gate import CandidateEvidenceGate
@@ -120,6 +121,8 @@ def _pdf_key(row: dict[str, Any]) -> str:
 
 
 def _ledger_key(record: EvidenceRecord) -> str | None:
+    if isinstance(record.xbrl_provenance, InlineXbrlProvenance):
+        return f"ixbrl:{record.xbrl_provenance.inline_identity_sha256}"
     if record.xbrl_provenance is not None:
         return f"sec:{record.xbrl_provenance.accession}"
     if record.document_id and record.page is not None:

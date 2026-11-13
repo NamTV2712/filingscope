@@ -10,7 +10,7 @@ from decimal import Decimal, InvalidOperation
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from src.ingestion.period_identity import PeriodIdentity, PeriodKind
 
@@ -107,11 +107,16 @@ class XbrlProvenance(BaseModel):
     accession: str
     filing_fiscal_year: int
     filing_fiscal_period: str
-    company_facts_url: str
+    company_facts_url: str | None
     revision_policy: RevisionPolicy
     revision_kind: RevisionKind
     original_accession: str
     history: tuple[FactRevision, ...]
+
+
+class InlineXbrlProvenance(XbrlProvenance):
+    inline_identity_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    dimensions: tuple[tuple[str, str], ...] = Field(min_length=1)
 
 
 @dataclass(frozen=True)

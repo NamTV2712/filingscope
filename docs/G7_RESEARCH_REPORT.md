@@ -49,9 +49,10 @@ flowchart TD
 ```
 
 The runtime uses the frozen Dense and statement-rank path with
-Company Facts where configured. The G2 Inline XBRL corpus path is
-available for offline ingestion and evaluation. Qdrant/BM25 and
-cross-encoder experiments use separate runtime retrieval modes.
+Company Facts where configured. An optional G3 pilot arm passes one
+accession-bound Inline XBRL observation through the same runtime.
+Qdrant/BM25 and cross-encoder experiments use separate runtime
+retrieval modes.
 Jev exercises the existing feature contract with an injected mock.
 The Python policy determines candidate acceptance and final release.
 [G0 conformance matrix](G0_BASELINE.md#architecture-conformance-and-implementation-inventory).
@@ -84,6 +85,7 @@ and faithfulness on a new real-filing cohort remain unmeasured.
 | SEC 2025 runtime pilot | PDF only grounded 3/23, and Company Facts only and hybrid each grounded 21/23 by frozen locator. All three released consolidated Tesla revenue for an energy business question. |
 | Segment reporting scope follow-up | All three tracks withheld the consolidated Tesla value after the guard change. The other 25 case outcomes matched. [Paired report](G3_REPORTING_SCOPE.md). |
 | Statement normalization follow-up | PDF-only and hybrid each grounded 22/23 on the same provisional pilot. Company Facts only grounded 21/23 and withheld Walmart's conflicting revenue tags. The two PDF arms resolved Walmart from its income statement. [Paired report](G3_STATEMENT_NORMALIZATION.md). |
+| Dimensioned runtime follow-up | The optional Inline XBRL arm grounded 23/23 on the same pilot. It verified Tesla FY2024 energy generation and storage segment revenue with the SEC fact anchor. Hybrid grounded 22/23, and the other 25 outcomes matched. [Paired report](G3_DIMENSIONED_RUNTIME.md). |
 | Dense retrieval | M12 Recall@10 56.25%, MRR@10 0.3529 and nDCG@5 0.3757. Q5 page locator micro precision 21/291 and required-slot recall 21/37. |
 | Scoped Dense cost | Matching top-10 IDs on 30 paired requests. Rank p50 4.25 → 1.16 ms with cached embeddings. [G3 method](G3_FINANCIAL_RETRIEVAL.md). |
 | M13 routed | 21/21 grounded exact on answerable cases, 21/24 coverage, 0/21 incorrect releases and 3/3 correct abstentions. |

@@ -152,6 +152,11 @@ raised PDF-only grounded exactness from 3/23 to 22/23 and hybrid from
 21/23 to 22/23 on the same pilot. The structured-only arm still
 withheld Walmart's conflicting revenue tags.
 [Statement normalization replay](G3_STATEMENT_NORMALIZATION.md).
+The optional accession-bound Inline XBRL path recovered the remaining
+Tesla segment case. Hybrid with iXBRL grounded 23/23, compared with
+22/23 for hybrid. The other 25 answers and dispositions matched.
+Windows passed 499 tests with 3 skips and WSL passed 498 with 4 skips.
+[Dimensioned runtime replay](G3_DIMENSIONED_RUNTIME.md).
 
 ## G4 orchestration and verification
 

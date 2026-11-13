@@ -26,6 +26,7 @@ from src.decision.models import (
     QuestionRequirements,
 )
 from src.decision.policy import EvidenceDecisionLayer
+from src.decision.requirement_extractor import permits_energy_segment_lookup
 from src.decision.statement_columns import parse_statement_columns, statement_report_date
 from src.generation.answer_generator import (
     AnswerGenerationResult,
@@ -35,6 +36,7 @@ from src.generation.grounded_writer import GroundedReportInput
 from src.ingestion.sec_client import SECEdgarClient
 from src.ingestion.company_facts import (
     CompanyFactsResolver,
+    InlineXbrlProvenance,
     METRIC_CONCEPTS,
     MONETARY_CURRENCIES,
     ResolvedCompanyFact,
@@ -42,6 +44,9 @@ from src.ingestion.company_facts import (
     RevisionPolicy,
 )
 from src.ingestion.period_identity import PeriodKind, PeriodScope
+from src.ingestion.segment_revenue import (
+    ENERGY_ENTITY, ENERGY_IDENTITY, ENERGY_METRIC, ENERGY_PERIOD, ENERGY_SECTION, is_energy_revenue,
+)
 from src.ledger.evidence_ledger import EvidenceLedger
 from src.ledger.models import (
     CalculationValidationStatus,
@@ -201,6 +206,7 @@ class SpecialistRuntime:
     sec_client: SECEdgarClient | None = None
     ticker_by_company: dict[str, str] = field(default_factory=dict)
     generator: AnswerGenerator | None = None
+    inline_energy_fact: ResolvedCompanyFact | None = None
     decision_layer: EvidenceDecisionLayer = field(default_factory=EvidenceDecisionLayer)
     candidate_gate: CandidateEvidenceGate | None = None
     verifier: ClaimLevelVerifier = field(default_factory=ClaimLevelVerifier)
@@ -621,6 +627,8 @@ class StructuredFinancialDataWorker:
         missing: set[str] = set()
         observations: list[SpecialistObservation] = []
         tools_before = runtime.budget_tracker.tool_calls
+        if any(task.metric_id == ENERGY_METRIC for task in tasks):
+            return self._run_energy_lookup(tasks, runtime)
         if requires_statement_source(runtime.requirements.question):
             result = SpecialistTaskResult(
                 worker_id=self.worker_id, status=SpecialistStatus.SKIPPED,
@@ -725,7 +733,7 @@ class StructuredFinancialDataWorker:
                     ))
                     continue
                 record = None if resolution.fact is None else self._record_fact(
-                    task, ticker, resolver, resolution.fact, runtime,
+                    task, ticker, resolver.cik, resolver.company, resolution.fact, runtime,
                 )
                 if record is not None:
                     evidence_ids.add(record.evidence_id)
@@ -764,11 +772,46 @@ class StructuredFinancialDataWorker:
         runtime.save_result(result)
         return result
 
+    def _run_energy_lookup(
+        self, tasks: tuple[ResearchTask, ...], runtime: SpecialistRuntime,
+    ) -> SpecialistTaskResult:
+        started = time.perf_counter()
+        tools_before = runtime.budget_tracker.tool_calls
+        candidates_before = runtime.budget_tracker.candidate_chunks
+        requirements = runtime.requirements
+        fact = runtime.inline_energy_fact
+        record = None
+        if (
+            len(tasks) == len(requirements.evidence) == 1 and fact is not None
+            and tasks[0].entity_id == ENERGY_ENTITY and tasks[0].metric_id == ENERGY_METRIC
+            and tasks[0].period == ENERGY_PERIOD and set(tasks[0].form_types) <= {"10k"}
+            and requirements.requested_currency in {None, "USD"}
+            and all(operation.operation == "lookup" for operation in requirements.operations)
+            and runtime.xbrl_revision_policy == RevisionPolicy.AS_REPORTED
+            and permits_energy_segment_lookup(requirements.question) and is_energy_revenue(fact)
+            and runtime.budget_tracker.can_start()
+        ):
+            runtime.budget_tracker.charge()
+            record = self._record_fact(tasks[0], ENERGY_ENTITY, ENERGY_IDENTITY.cik, "Tesla", fact, runtime)
+        slots = tuple(sorted({req for task in tasks for req in task.requirement_ids}))
+        result = SpecialistTaskResult(
+            worker_id=self.worker_id, status=SpecialistStatus.COMPLETE if record else SpecialistStatus.UNKNOWN,
+            task_ids=tuple(task.task_id for task in tasks), evidence_ids=(record.evidence_id,) if record else (),
+            resolved_requirement_ids=slots if record else (), missing_requirement_ids=() if record else slots,
+            observations=(SpecialistObservation(key="xbrl", value="inline_segment" if record else "inline_segment_unavailable"),),
+            tool_calls=runtime.budget_tracker.tool_calls - tools_before,
+            candidate_chunks=runtime.budget_tracker.candidate_chunks - candidates_before,
+            elapsed_ms=_elapsed_ms(started),
+        )
+        runtime.save_result(result)
+        return result
+
     def _record_fact(
         self,
         task: ResearchTask,
         ticker: str,
-        resolver: CompanyFactsResolver,
+        cik: str,
+        company: str,
         fact: ResolvedCompanyFact,
         runtime: SpecialistRuntime,
     ) -> EvidenceRecord | None:
@@ -776,23 +819,26 @@ class StructuredFinancialDataWorker:
         concept = f"{provenance.taxonomy}:{provenance.tag}"
         interval = f"{provenance.period_start or 'instant'}:{provenance.period_end}"
         revision = f"{provenance.accession}|{concept}|{interval}|{fact.currency}"
-        chunk_id = f"xbrl-{resolver.cik}-{revision}"
+        inline = isinstance(provenance, InlineXbrlProvenance)
+        if inline:
+            revision = provenance.inline_identity_sha256
+        chunk_id = f"xbrl-{cik}-{revision}"
         is_new_candidate = chunk_id not in runtime.source_chunks
         if is_new_candidate and not runtime.budget_tracker.remaining_candidates():
             return None
         metric = _metric_label(runtime.requirements, task.metric_id or "")
         record = runtime.ledger.add_evidence(EvidenceRecord.from_source(
             request_id=runtime.request_id,
-            document_id=f"CIK{resolver.cik}:{provenance.accession}",
+            document_id=f"CIK{cik}:{provenance.accession}",
             chunk_id=chunk_id,
-            company=resolver.company,
+            company=company,
             ticker=ticker,
-            cik=resolver.cik,
+            cik=cik,
             form_type=fact.form,
             filing_date=fact.filing_date,
             fiscal_period=fact.fiscal_period,
             period_identity=fact.period_identity,
-            section="xbrl_company_facts",
+            section=ENERGY_SECTION if inline else "xbrl_company_facts",
             metric=metric,
             metric_id=task.metric_id,
             financial_concept=concept,
@@ -837,12 +883,12 @@ class StructuredFinancialDataWorker:
             "document_id": record.document_id,
             "doc_name": record.document_id,
             "ticker": ticker,
-            "company": task.company_name or resolver.company,
+            "company": task.company_name or company,
             "filing_date": fact.filing_date,
             "section": record.section,
             "source_url": fact.filing_url,
             "text": (
-                f"{resolver.company} {metric} for {fact.fiscal_period}: "
+                f"{company} {metric} for {fact.fiscal_period}: "
                 f"{value_text} ({revision_text}, {concept})."
             ),
             "financial_concept": concept,
@@ -852,6 +898,8 @@ class StructuredFinancialDataWorker:
             "source_revision": revision,
             "revision_kind": provenance.revision_kind,
         }
+        if inline:
+            runtime.source_chunks[chunk_id]["inline_provenance"] = provenance
         runtime.evidence_id_by_chunk_id[chunk_id] = record.evidence_id
         runtime.preferred_evidence_by_chunk_id[chunk_id] = record.evidence_id
         runtime.chunk_tasks.setdefault(chunk_id, set()).add(task.task_id)
@@ -1194,7 +1242,7 @@ def _chunk_mapping(value: Any) -> dict[str, Any]:
     else:
         raise TypeError("retrieval chunks must be mappings or structured objects")
     return {key: item for key, item in data.items()
-            if key not in {"normalized_facts", "approved_facts", "filing_page_checked", "revision_kind"}}
+            if key not in {"normalized_facts", "approved_facts", "filing_page_checked", "revision_kind", "inline_provenance"}}
 
 
 def _score(chunk: dict[str, Any]) -> float:

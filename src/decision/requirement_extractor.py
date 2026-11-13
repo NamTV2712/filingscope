@@ -15,9 +15,11 @@ from src.decision.models import (
 )
 from src.ingestion.company_facts import requested_currencies
 from src.ingestion.period_identity import period_mentions
+from src.ingestion.segment_revenue import ENERGY_ALIASES, ENERGY_FILING, ENERGY_LABEL, ENERGY_METRIC
 
 
 _METRIC_DEFINITIONS: tuple[MetricRequirement, ...] = (
+    MetricRequirement(metric_id=ENERGY_METRIC, display_name=ENERGY_LABEL, aliases=ENERGY_ALIASES),
     MetricRequirement(metric_id="revenue", display_name="revenue", aliases=(
         "total net sales", "total revenue", "net sales", "revenues", "revenue", "sales",
     )),
@@ -88,6 +90,13 @@ _SEGMENT_BASIS = re.compile(
     r"\b(?:energy generation and storage|(?:business |reportable )?segments?)\b",
     re.I,
 )
+_ENERGY_METRIC_RE = re.compile(r"\b(?:" + "|".join(map(re.escape, ENERGY_ALIASES)) + r")\b", re.I)
+_ENERGY_ACCESSION_RE = re.compile(r"\b\d{10}-\d{2}-\d{6}\b")
+_ENERGY_LOOKUP_WORDS = frozenset({
+    "what", "was", "is", "the", "how", "much", "did", "report", "reported", "total", "tesla", "tsla",
+    "inc", "s", "for", "in", "from", "of", "its", "according", "to", "form", "filing", "sec", "accession",
+    "as", "filed", "originally", "dollars", "usd", "million", "millions", "billion", "billions",
+})
 _GROWTH_RE = re.compile(
     r"\b(?:growth|grow(?:s|th|ing)?|increas(?:e|ed|ing)|decreas(?:e|ed|ing)|"
     r"trend|year.over.year|yoy|cagr)\b",
@@ -114,6 +123,20 @@ def requires_nonstandard_reporting_basis(question: str) -> bool:
     return bool(_NONSTANDARD_BASIS.search(question) or _SEGMENT_BASIS.search(question))
 
 
+def permits_energy_segment_lookup(question: str, *, assertion: bool = False) -> bool:
+    """Admit a plain segment-total lookup or assertion with recognized qualifiers."""
+    if not _ENERGY_METRIC_RE.search(question) or any(
+        accession != ENERGY_FILING.accession_number for accession in _ENERGY_ACCESSION_RE.findall(question)
+    ):
+        return False
+    remainder = _ENERGY_METRIC_RE.sub(" ", question)
+    remainder = _ENERGY_ACCESSION_RE.sub(" ", remainder)
+    remainder = re.sub(r"\b(?:fy\s*)?2024\b|\b10-?k\b", " ", remainder, flags=re.I)
+    if assertion:
+        remainder = re.sub(r"\b\d[\d,.]*\b", " ", remainder)
+    return set(re.findall(r"\w+", remainder.casefold())) <= _ENERGY_LOOKUP_WORDS
+
+
 def _metrics(question: str) -> tuple[MetricRequirement, ...]:
     folded = question.casefold().replace("’", "'")
     found: dict[str, tuple[int, int]] = {}
@@ -138,6 +161,10 @@ def _metrics(question: str) -> tuple[MetricRequirement, ...]:
         metric_id
         for metric_id, _ in sorted(found.items(), key=lambda item: (item[1], item[0]))
     ]
+    if ENERGY_METRIC in found and "revenue" in found:
+        remainder = _ENERGY_METRIC_RE.sub(" ", folded)
+        if not re.search(r"\brevenues?\b|\bsales\b", remainder):
+            ordered_ids.remove("revenue")
     return tuple(
         next(metric for metric in _METRIC_DEFINITIONS if metric.metric_id == metric_id)
         for metric_id in ordered_ids
