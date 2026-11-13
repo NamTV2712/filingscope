@@ -13,7 +13,9 @@ answerable M13 development-exposed cases. Its 0/21 incorrect releases have a
 descriptive Wilson 95% upper bound of 15.46%.
 
 The Groq GPT-OSS 120B comparison measured closed-book and filing-context
-answers on a 26-question development pilot. Live Jev remains pending.
+answers on a 26-question development pilot. A separate candidate-level
+comparison measured Groq relevance observations on SEC filing pages.
+Live Jev remains pending.
 Independent final evaluation awaits a reviewer-held cohort.
 The [research report](docs/G7_RESEARCH_REPORT.md) covers the implemented
 architecture, results, limitations and reproduction commands.
@@ -261,7 +263,7 @@ metric, leakage, and reproduction details.
 | M15 | Local evidence-first research UX | Implemented on loopback. [Local workspace](docs/LOCAL_RESEARCH.md) |
 | G0–G1 | Reproducible baseline, eight primary metrics and offline Jev scaffold | Verified. [Progress](docs/IMPLEMENTATION_PROGRESS.md#g0-engineering-baseline) |
 | G2–G4 | SEC iXBRL data, scoped Dense and requirement reuse | Parser and runtime comparisons verified. Mixed G2 cohorts remain provisional. [Progress](docs/IMPLEMENTATION_PROGRESS.md#g2-sec-data-and-benchmark-cohorts) |
-| G5–G7 | Baseline comparison, independent handoff and research report | Offline evidence documented. Live API validation and independent scoring pending. [Research report](docs/G7_RESEARCH_REPORT.md) |
+| G5–G7 | Baseline comparison, independent handoff and research report | Hosted Groq and offline results documented. Live Jev and independent scoring pending. [Research report](docs/G7_RESEARCH_REPORT.md) |
 
 No answer quality or end-to-end agent performance claims are made by the
 retrieval-only FinanceBench benchmark.

@@ -12,7 +12,9 @@ model calls are permitted under the current authorization.
 Use the fixed M13 cases and P1/SEC sources for the architecture
 comparison. Compare Dense, Adaptive, forced LangGraph and full routed
 LangGraph on the same case IDs. Record hosted closed-book and
-long-context availability separately.
+long-context availability separately. The later Groq observer
+comparison reuses the semantic observation contract on labeled SEC
+pages. [Structured observer comparison](G5_GROQ_OBSERVER.md).
 
 ## Observer and dry run
 

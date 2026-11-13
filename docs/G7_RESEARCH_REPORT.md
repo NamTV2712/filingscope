@@ -93,6 +93,7 @@ and faithfulness on a new real-filing cohort remain unmeasured.
 | Q7 outage | Adaptive retained healthy-source evidence on 5/10 persistent failures and routed LangGraph retained it on 10/10. Both recovered 10/10 one-time failures. |
 | G4 requirement reuse | Instrumented extractor calls 4 → 2 for FAST and 3 → 2 for RESEARCH. Stable historical outputs matched. [G4 method](G4_AGENT_VERIFICATION.md). |
 | Jev mock | Positive and timeout mocks preserved 60/60 expected policy decisions. Negative mock matched 40/60 with 20 ACCEPT → WEAK downgrades and zero hard false accepts. Live inference remains blocked. |
+| Groq structured observer | 16 valid classifications on 18 SEC candidate pages, 11/16 correct support judgments, 5/10 false support judgments and zero changes to policy dispositions. All five hard rejections stayed rejected. [Observer comparison](G5_GROQ_OBSERVER.md). |
 | Hosted model controls | Groq GPT-OSS 120B completed both matched arms. A typed numeric replay matched the author's review, with 0/23 exact closed-book and 22/23 exact with context, including 20/23 with all frozen PDF locators. The original shared scorer gave 0/23 and 1/23. [Groq benchmark](G5_GROQ_BASELINES.md) · [Typed replay](G5_GROQ_SCORER_REPLAY.md). |
 | Matched local model controls | On the 26-case SEC pilot, Adaptive and routed each grounded 22/23 by frozen locator. Local Qwen 7B scored 0/23 exact closed-book and 1/23 grounded long-context under the shared scorer. Author review found 17/23 long-context answers correct in financial identity and 12/23 fully matched to the frozen locators. [G5 local report](G5_LOCAL_MODEL_BASELINES.md). |
 
@@ -171,17 +172,13 @@ outcomes. These disposition points do not support continuous AURC.
 ## Status
 
 **KEEP** the measured backend changes, reproducible setup and
-deterministic authority. **DEFER** live provider comparisons and
-independent claims until authorized inputs exist. The remaining
-research gaps include adjudicated mixed cohorts, full Inline XBRL
-taxonomy validation, held-out semantic citation and claim labels,
-and a live paired observer study. The Transformers 4.57.6
-compatibility debt remains documented in G0.
+deterministic authority. **DEFER** the live Jev comparison and
+independent claims until the provider credential and reviewer bundle
+are available. Remaining research gaps include adjudicated mixed
+cohorts and full Inline XBRL taxonomy validation. The Transformers
+4.57.6 compatibility debt remains documented in G0.
 
-The publication checkpoint builds on local commit
-`4287f7091fc390e85e6dbb8c93c62823e65d638c`. Final local verification
-passed 453 tests on Windows with three corpus skips. Linux WSL
-passed 450 tests with six skips on the default profile, then passed
-both dedicated iXBRL tests with the optional extra. Ruff, focused
-mypy, dependency checks, lock validation and documentation link
-checks passed. GitHub Actions was not triggered from the local changes.
+The latest offline verification passed 500 tests on Windows with
+three corpus skips and 499 tests with four skips on Linux WSL with
+the Inline XBRL extra. Ruff and focused mypy passed. GitHub Actions
+has no run for these local commits.

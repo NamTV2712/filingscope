@@ -43,6 +43,17 @@ class SemanticObservation(BaseModel):
 
     relevance: Literal["relevant", "unclear", "irrelevant"]
 
+    def constrain(
+        self, trusted: EvidenceCandidateFeatures, *, observer_id: str, observer_version: str,
+    ) -> EvidenceCandidateFeatures:
+        relevance = {"relevant": 1.0, "unclear": 0.5, "irrelevant": 0.0}[self.relevance]
+        if relevance >= trusted.semantic_relevance.score:
+            return trusted
+        return trusted.model_copy(update={
+            "semantic_relevance": ScoreObservation(score=relevance, observer_id=observer_id,
+                                                    observer_version=observer_version),
+        })
+
 
 class ObserverTransportError(Exception):
     """Provider transport failed or could not normalize the response."""
@@ -88,12 +99,5 @@ class JevCandidateObserver:
         except (ValidationError, OSError, ObserverTransportError):
             return trusted
 
-        relevance = {"relevant": 1.0, "unclear": 0.5, "irrelevant": 0.0}[observation.relevance]
-        if relevance >= trusted.semantic_relevance.score:
-            return trusted
-        return trusted.model_copy(update={
-            "semantic_relevance": ScoreObservation(
-                score=relevance, observer_id=self.observer_id,
-                observer_version=f"{self.config.provider}/{self.config.model_id}:relevance-v1",
-            ),
-        })
+        return observation.constrain(trusted, observer_id=self.observer_id,
+                                     observer_version=f"{self.config.provider}/{self.config.model_id}:relevance-v1")
