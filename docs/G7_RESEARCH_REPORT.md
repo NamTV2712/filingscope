@@ -178,7 +178,7 @@ are available. Remaining research gaps include adjudicated mixed
 cohorts and full Inline XBRL taxonomy validation. The Transformers
 4.57.6 compatibility debt remains documented in G0.
 
-The latest offline verification passed 500 tests on Windows with
-three corpus skips and 499 tests with four skips on Linux WSL with
+The latest offline verification passed 505 tests on Windows with
+three corpus skips and 504 tests with four skips on Linux WSL with
 the Inline XBRL extra. Ruff and focused mypy passed. GitHub Actions
 has no run for these local commits.

@@ -15,6 +15,8 @@ LangGraph on the same case IDs. Record hosted closed-book and
 long-context availability separately. The later Groq observer
 comparison reuses the semantic observation contract on labeled SEC
 pages. [Structured observer comparison](G5_GROQ_OBSERVER.md).
+The [matched OpenRouter protocol](G5_JEV_LIVE_PROTOCOL.md) freezes the
+same candidates for Jev and has been validated offline.
 
 ## Observer and dry run
 

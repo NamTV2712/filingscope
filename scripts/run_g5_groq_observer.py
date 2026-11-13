@@ -7,6 +7,7 @@ import json
 import os
 import time
 from collections import Counter
+from collections.abc import Callable
 from pathlib import Path
 
 import numpy as np
@@ -133,15 +134,20 @@ def _observe(session: requests.Session, payload: dict) -> tuple[SemanticObservat
     return observation, receipt
 
 
-def _compare(plan: list[dict], session: requests.Session, report: dict, output: Path) -> None:
+def _compare(
+    plan: list[dict], session: requests.Session, report: dict, output: Path, *,
+    observe: Callable[[requests.Session, dict], tuple[SemanticObservation | None, dict]] = _observe,
+    observer_id: str = "groq-structured-observer",
+    observer_version: str = f"{MODEL}:relevance-v1",
+) -> None:
     backend = DeterministicDecisionBackend()
     rows = report["observations"]
     for planned in plan:
-        observation, receipt = _observe(session, planned["payload"])
+        observation, receipt = observe(session, planned["payload"])
         baseline = planned["baseline"]
         features = baseline.features
         candidate = baseline if observation is None else backend.decide(observation.constrain(
-            features, observer_id="groq-structured-observer", observer_version=f"{MODEL}:relevance-v1",
+            features, observer_id=observer_id, observer_version=observer_version,
         ))
         rows.append({
             "case_id": planned["case_id"], "source": planned["source"], "split": planned["split"],
@@ -189,7 +195,6 @@ def _summarize(rows: list[dict]) -> dict:
                                         and row["observed"] != CandidateDisposition.REJECT for row in rows),
         "latency_ms_p50": float(np.median(latencies)), "latency_ms_p95": float(np.percentile(latencies, 95)),
         "input_tokens": in_tokens, "output_tokens": out_tokens,
-        "estimated_usd": (in_tokens * PRICE_INPUT + out_tokens * PRICE_OUTPUT) / 1_000_000,
     }
 
 
@@ -207,10 +212,7 @@ def main() -> None:
 
         torch.set_num_threads(6)
         plan, sources = _plan(args.p1_run, args.pages)
-    report = {"status": "DRY_RUN", "model": MODEL, "sources": sources, "observations": [], "plan": [
-        {**{key: value for key, value in row.items() if key not in {"payload", "baseline"}},
-         "baseline": row["baseline"].model_dump(mode="json")} for row in plan
-    ]}
+    report = {"status": "DRY_RUN", "model": MODEL, "sources": sources, "observations": [], "plan": _public_plan(plan)}
     estimated = sum(row["estimated_input_tokens"] for row in plan)
     report["estimated_input_tokens"] = estimated
     report["maximum_output_tokens"] = OUTPUT_CAP * len(plan)
@@ -230,6 +232,14 @@ def main() -> None:
         session.trust_env = False
         session.headers["Authorization"] = f"Bearer {key}"
         _compare(plan, session, report, args.output)
+    summary = report["summary"]
+    summary["estimated_usd"] = (summary["input_tokens"] * PRICE_INPUT + summary["output_tokens"] * PRICE_OUTPUT) / 1_000_000
+    write_json_atomic(args.output, report)
+
+
+def _public_plan(plan: list[dict]) -> list[dict]:
+    return [{**{key: value for key, value in row.items() if key not in {"payload", "baseline"}},
+             "baseline": row["baseline"].model_dump(mode="json")} for row in plan]
 
 
 if __name__ == "__main__":

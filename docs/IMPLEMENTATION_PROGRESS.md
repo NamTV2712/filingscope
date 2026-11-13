@@ -209,7 +209,8 @@ The executable experiments and publication deliverables are recorded.
 G5 is `PARTIALLY_COMPLETE` with live Jev `API_VALIDATION_BLOCKED` pending
 a provider credential. G6 is `PARTIALLY_COMPLETE / PROVISIONAL_NOT_INDEPENDENT`
 pending an eligible reviewer bundle. The current offline suite passes
-500 tests on Windows and 499 on WSL, with three and four corpus skips
-respectively. When the external inputs arrive, follow the
-[Jev protocol](G5_BASELINE_EXPERIMENT.md) and the
+505 tests on Windows and 504 on WSL, with three and four corpus skips
+respectively. The OpenRouter Jev runner now prepares a hash-bound
+18-request plan against the existing Groq receipt. When the external
+inputs arrive, follow the [Jev protocol](G5_JEV_LIVE_PROTOCOL.md) and the
 [reviewer protocol](G6_EVALUATION_READINESS.md).
