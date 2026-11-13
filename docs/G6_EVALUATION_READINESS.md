@@ -94,6 +94,15 @@ are local artifacts. Their SHA-256 values are
 `e732b4267731d2b9014f7e4372610be5aee5915e3ebd77beb5613c80db5a56af`
 and `9d982a02aa0e751b5ce6b5f603ff09865a2c05be23775eb3c16efe111cecb14e`.
 
+The roadmap checkpoint reran the readiness report using the post-G3
+architecture replay. Both arms again released 21/24 with 0/21 errors.
+The Wilson upper bound remains 15.46%. The
+[refreshed provisional report](../.local/g6/roadmap-checkpoint/provisional-report.json)
+has SHA-256 `32f1145b95891a8dacf4c5aa55c24f58b944e77ba89bf76e9832f43f579f0868`.
+The [refreshed reviewer handoff](../.local/g6/roadmap-checkpoint/reviewer-handoff.json)
+matches the G6 primary handoff SHA-256
+`270b025c817121b6bcfa89c5a28162a2b5df373a05af98aebe6a27b6073bb140`.
+
 **KEEP** the freeze-and-predict handoff. **DEFER** independent
 conclusions until a qualifying reviewer bundle arrives. G6 builds
 over `85f7d82d1e108544cac5b961008b63b61d5aec59`. G7 can report the
