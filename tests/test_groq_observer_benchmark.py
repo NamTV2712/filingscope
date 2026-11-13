@@ -1,5 +1,7 @@
 from unittest.mock import Mock
 
+import pytest
+
 from scripts.run_g5_groq_observer import MODEL, _compare, _request
 from src.evaluation.evidence_policy_benchmark import evidence_policy_scenarios
 from src.policy.decision_backend import DeterministicDecisionBackend
@@ -30,3 +32,17 @@ def test_groq_benchmark_preserves_hard_reject_and_falls_back_on_invalid_reply(tm
     assert report["summary"]["provider_errors"] == 1
     assert report["summary"]["observer_false_support"] == 1
     assert report["summary"]["hard_rejections_weakened"] == 0
+
+
+@pytest.mark.parametrize("status", [401, 402, 403])
+def test_observer_benchmark_stops_on_account_errors(tmp_path, status):
+    baseline = DeterministicDecisionBackend().decide(evidence_policy_scenarios()[0].features)
+    planned = {"payload": {}, "case_id": "case", "source": "FILING#p1", "split": "development",
+               "gold_supports_slot": True, "baseline": baseline}
+    session = Mock()
+    session.post.return_value = Mock(status_code=status, headers={})
+    report = {"observations": []}
+    _compare([planned, planned], session, report, tmp_path / "report.json")
+    assert session.post.call_count == 1
+    assert report["halted"] == f"http_{status}" and report["status"] == "INCOMPLETE_PROVIDER_RUN"
+    assert report["observations"][0]["baseline"] == report["observations"][0]["observed"]

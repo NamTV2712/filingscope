@@ -182,13 +182,17 @@ Adaptive and routed each grounded 22/23. The local experiment is archived.
 The Groq GPT-OSS 120B closed-book and long-context runs completed all
 52 requests. Author review found 0/23 exact closed-book and 22/23
 exact with context, including 20/23 with every frozen PDF locator.
-Live Jev remains pending. [Groq benchmark](G5_GROQ_BASELINES.md).
+[Groq benchmark](G5_GROQ_BASELINES.md).
 The offline typed numeric replay reproduced the review counts on
 the original model outputs. [Scorer replay](G5_GROQ_SCORER_REPLAY.md).
 The Groq relevance comparison attempted 18 SEC candidate pages and
 returned 16 valid judgments. It changed zero policy dispositions
 and weakened zero of five hard rejections. Groq remains an evaluation
 control. [Structured observer comparison](G5_GROQ_OBSERVER.md).
+TypeSafe Jev 1.14 returned 18/18 valid observations on the same pages.
+On the 14 shared binary predictions, Jev was correct on 10 and Groq
+on nine. Neither changed a deterministic policy disposition. G5's
+live comparison is measured. [Jev protocol and results](G5_JEV_LIVE_PROTOCOL.md).
 
 ## G6 independent evaluation readiness
 
@@ -205,16 +209,11 @@ frozen arms and exports page rankings for adjudication.
 
 The report binds the G0–G6 evidence, architecture, baseline comparisons,
 risk–coverage points and reproducibility instructions. The README and
-portfolio statements reflect the verified scope. Live provider evaluation
-and independent scoring retain their documented blockers.
+portfolio statements reflect the verified scope. Independent scoring
+retains its documented blocker.
 [Research report](G7_RESEARCH_REPORT.md).
 
 The executable experiments and publication deliverables are recorded.
-G5 is `PARTIALLY_COMPLETE` with live Jev `API_VALIDATION_BLOCKED` pending
-a provider credential. G6 is `PARTIALLY_COMPLETE / PROVISIONAL_NOT_INDEPENDENT`
-pending an eligible reviewer bundle. The current offline suite passes
-505 tests on Windows and 504 on WSL, with three and four corpus skips
-respectively. The OpenRouter Jev runner now prepares a hash-bound
-18-request plan against the existing Groq receipt. When the external
-inputs arrive, follow the [Jev protocol](G5_JEV_LIVE_PROTOCOL.md) and the
+G6 is `PARTIALLY_COMPLETE / PROVISIONAL_NOT_INDEPENDENT` pending an
+eligible reviewer bundle. When it arrives, follow the
 [reviewer protocol](G6_EVALUATION_READINESS.md).

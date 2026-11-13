@@ -161,6 +161,9 @@ def _compare(
         })
         write_json_atomic(output, report)
         print(planned["case_id"], planned["source"], rows[-1]["relevance"] or receipt.get("error"), flush=True)
+        if receipt.get("error") in {"http_401", "http_402", "http_403"}:
+            report["halted"] = receipt["error"]
+            break
     report["summary"] = _summarize(rows)
     report["status"] = "PROVISIONAL_NOT_INDEPENDENT" if not report["summary"]["provider_errors"] else "INCOMPLETE_PROVIDER_RUN"
     report["peak_memory_bytes"] = peak_memory_bytes()

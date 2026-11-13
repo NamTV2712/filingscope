@@ -4,7 +4,9 @@ import pytest
 import requests
 
 from scripts.run_g5_groq_observer import _request
-from scripts.run_g5_jev_observer import ENDPOINT, SERVED_MODEL, _jev_plan, _observe, _paired_summary
+from scripts.run_g5_jev_observer import (
+    ENDPOINT, PRICE_PER_INPUT_TOKEN, SERVED_MODEL, TYPESAFE_ENDPOINT, TYPESAFE_MODEL, _jev_plan, _observe, _paired_summary,
+)
 
 
 def test_jev_request_uses_the_same_evidence_and_omits_gold():
@@ -55,3 +57,17 @@ def test_jev_timeout_and_calibration_denominators():
     assert summary["deterministic_support_correct"] == 0
     assert summary["probability_diagnostic"] == {"cases": 2, "bins": [0, 1, 0, 1, 0], "brier": 0.0625, "ece": 0.25}
     assert summary["reported_usage_count"] == 1
+
+
+def test_typesafe_native_usage_uses_reported_tokens_without_billed_cost():
+    session = Mock()
+    session.post.return_value = Mock(status_code=200, **{"json.return_value": {
+        "model": TYPESAFE_MODEL, "usage": {"input_tokens": 200, "output_tokens": 10},
+        "answers": {"relevance": {"type": "choice", "choice": "irrelevant", "confidence": 0.90,
+                                  "probabilities": {"relevant": 0.02, "irrelevant": 0.90, "unclear": 0.08}}},
+    }})
+    observation, receipt = _observe(session, {}, endpoint=TYPESAFE_ENDPOINT, served_model=TYPESAFE_MODEL)
+    assert session.post.call_args.args == (TYPESAFE_ENDPOINT,)
+    assert observation.relevance == "irrelevant"
+    assert receipt["provider"] == "TypeSafe" and "cost_usd" not in receipt
+    assert receipt["estimated_cost_usd"] == 200 * PRICE_PER_INPUT_TOKEN

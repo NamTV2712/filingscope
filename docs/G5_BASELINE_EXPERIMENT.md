@@ -15,8 +15,8 @@ LangGraph on the same case IDs. Record hosted closed-book and
 long-context availability separately. The later Groq observer
 comparison reuses the semantic observation contract on labeled SEC
 pages. [Structured observer comparison](G5_GROQ_OBSERVER.md).
-The [matched OpenRouter protocol](G5_JEV_LIVE_PROTOCOL.md) freezes the
-same candidates for Jev and has been validated offline.
+The [matched Jev protocol](G5_JEV_LIVE_PROTOCOL.md) freezes the same
+candidates and includes the live TypeSafe results.
 
 ## Observer and dry run
 
@@ -42,9 +42,9 @@ possible false downgrades from noisy observations. The timeout arm
 injected 60 failures and returned deterministic decisions on all of them.
 The timings measure local Python and mock execution. Peak working set was
 78,970,880 B. Provider calls, billed tokens and spend were zero. Brier and
-ECE are inapplicable to these scripted replies. A live provider snapshot,
-real decision accuracy, service errors, calibrated probabilities and live
-latency remain `API_VALIDATION_BLOCKED` under USD 0 authorization.
+ECE are inapplicable to these scripted replies. The offline stage used
+USD 0 authorization. A later matched TypeSafe run measured the live
+snapshot, errors, latency and probabilities. [Live comparison](G5_JEV_LIVE_PROTOCOL.md).
 
 ## Architecture comparison
 
@@ -89,9 +89,8 @@ both conditions on the SEC 2025 pilot.
 Windows offline suite passed 452 tests with 3 missing fixture skips.
 The focused observer checks passed 21 tests. Ruff and focused mypy passed.
 The full two-plane policy is still authoritative. **KEEP** deterministic
-release. **EXPERIMENT** with observers offline. **DEFER** live Jev
-pending provider access and authorization.
-G5 is **PARTIALLY_COMPLETE**.
+release. **EXPERIMENT** with observers offline. The subsequent live
+comparison supported keeping the default deterministic.
 
 ```text
 python -m scripts.run_g5_offline_observers --output .local/g5/observer-replay.json

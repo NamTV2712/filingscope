@@ -6,9 +6,9 @@ FilingScope tests whether bounded financial research plus deterministic
 evidence control improves the quality of released SEC answers.
 The strongest results below come from development-exposed cohorts
 with frozen source snapshots. The independent result remains
-`PROVISIONAL_NOT_INDEPENDENT`, and live Jev remains
-`API_VALIDATION_BLOCKED`. The report preserves each cohort's
-denominators and scope.
+`PROVISIONAL_NOT_INDEPENDENT`. The live TypeSafe Jev comparison uses
+18 development-exposed SEC page candidates. The report preserves
+each cohort's denominators and scope.
 
 ## Implemented architecture
 
@@ -35,10 +35,10 @@ flowchart TD
     G[Grounded writer]
     V[Atomic claim, numeric and citation verification]
     D[Deterministic release]
-    J[Jev offline experiment]
+    J[Jev observer experiment]
     O --> P --> E
     E --> G --> V --> D
-    J -. mock semantic observation .-> O
+    J -. experimental semantic observation .-> O
   end
   Q --> R
   L --> O
@@ -53,7 +53,8 @@ Company Facts where configured. An optional G3 pilot arm passes one
 accession-bound Inline XBRL observation through the same runtime.
 Qdrant/BM25 and cross-encoder experiments use separate runtime
 retrieval modes.
-Jev exercises the existing feature contract with an injected mock.
+Jev exercises the existing feature contract in separate offline and
+live decision benchmarks.
 The Python policy determines candidate acceptance and final release.
 [G0 conformance matrix](G0_BASELINE.md#architecture-conformance-and-implementation-inventory).
 
@@ -93,7 +94,8 @@ and faithfulness on a new real-filing cohort remain unmeasured.
 | Q5/Q6 natural statement | 30/30 grounded exact on answerable cases and 0/30 incorrect releases. 38 tools and 14 embedding calls. |
 | Q7 outage | Adaptive retained healthy-source evidence on 5/10 persistent failures and routed LangGraph retained it on 10/10. Both recovered 10/10 one-time failures. |
 | G4 requirement reuse | Instrumented extractor calls 4 → 2 for FAST and 3 → 2 for RESEARCH. Stable historical outputs matched. [G4 method](G4_AGENT_VERIFICATION.md). |
-| Jev mock | Positive and timeout mocks preserved 60/60 expected policy decisions. Negative mock matched 40/60 with 20 ACCEPT → WEAK downgrades and zero hard false accepts. Live inference remains blocked. |
+| Jev mock | Positive and timeout mocks preserved 60/60 expected policy decisions. Negative mock matched 40/60 with 20 ACCEPT → WEAK downgrades and zero hard false accepts. |
+| TypeSafe Jev live | All 18 requests returned valid results. Jev judged 10/14 correctly on the shared binary subset, versus Groq 9/14 and deterministic 8/14. Policy changed 0/18 decisions and preserved all five hard rejects. Estimated USD 0.000977. [Live comparison](G5_JEV_LIVE_PROTOCOL.md). |
 | Groq structured observer | 16 valid classifications on 18 SEC candidate pages, 11/16 correct support judgments, 5/10 false support judgments and zero changes to policy dispositions. All five hard rejections stayed rejected. [Observer comparison](G5_GROQ_OBSERVER.md). |
 | Hosted model controls | Groq GPT-OSS 120B completed both matched arms. A typed numeric replay matched the author's review, with 0/23 exact closed-book and 22/23 exact with context, including 20/23 with all frozen PDF locators. The original shared scorer gave 0/23 and 1/23. [Groq benchmark](G5_GROQ_BASELINES.md) · [Typed replay](G5_GROQ_SCORER_REPLAY.md). |
 | Matched local model controls | On the 26-case SEC pilot, Adaptive and routed each grounded 22/23 by frozen locator. Local Qwen 7B scored 0/23 exact closed-book and 1/23 grounded long-context under the shared scorer. Author review found 17/23 long-context answers correct in financial identity and 12/23 fully matched to the frozen locators. [G5 local report](G5_LOCAL_MODEL_BASELINES.md). |
@@ -173,13 +175,13 @@ outcomes. These disposition points do not support continuous AURC.
 ## Status
 
 **KEEP** the measured backend changes, reproducible setup and
-deterministic authority. **DEFER** the live Jev comparison and
-independent claims until the provider credential and reviewer bundle
-are available. Remaining research gaps include adjudicated mixed
+deterministic authority. **REJECT** promoting either live observer on
+the measured candidate cohort. **DEFER** independent claims until a
+reviewer bundle is available. Remaining research gaps include adjudicated mixed
 cohorts and full Inline XBRL taxonomy validation. The Transformers
 4.57.6 compatibility debt remains documented in G0.
 
-The latest offline verification passed 505 tests on Windows with
-three corpus skips and 504 tests with four skips on Linux WSL with
+The latest offline verification passed 512 tests on Windows with
+three corpus skips and 511 tests with four skips on Linux WSL with
 the Inline XBRL extra. Ruff and focused mypy passed. GitHub Actions
 has no run for these local commits.

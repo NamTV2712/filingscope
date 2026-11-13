@@ -1,4 +1,4 @@
-"""Prepare or run a matched OpenRouter Jev comparison on public filings."""
+"""Prepare or run a matched Jev comparison on public filings."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import json
 import math
 import os
 import time
+from functools import partial
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -25,6 +26,8 @@ from src.retrieval.canonical_json import canonical_sha256, sha256_file
 
 ENDPOINT = "https://openrouter.ai/api/alpha/decisions"
 SERVED_MODEL = "typesafe/jev-1.14-20261014"
+TYPESAFE_ENDPOINT = "https://api.typesafe.ai/v1/systemone"
+TYPESAFE_MODEL = "jev-1.14.0"
 PRICE_PER_INPUT_TOKEN = 0.042 / 1_000_000
 CRITERIA = {
     "relevant": "The page directly supports the requested issuer, metric, period, unit and reporting scope.",
@@ -54,14 +57,14 @@ class Usage(BaseModel):
 
     input_tokens: int = Field(ge=0)
     output_tokens: int = Field(ge=0)
-    cost: float = Field(ge=0, allow_inf_nan=False)
+    cost: float | None = Field(default=None, ge=0, allow_inf_nan=False)
 
 
-def _jev_plan(groq: list[dict]) -> list[dict]:
+def _jev_plan(groq: list[dict], *, model: str = DEFAULT_JEV_MODEL_ID) -> list[dict]:
     plan = []
     for row in groq:
         payload = {
-            "model": DEFAULT_JEV_MODEL_ID,
+            "model": model,
             "state": json.loads(row["payload"]["messages"][1]["content"]),
             "questions": {"relevance": {
                 "type": "choice", "criteria": CRITERIA,
@@ -74,20 +77,28 @@ def _jev_plan(groq: list[dict]) -> list[dict]:
     return plan
 
 
-def _observe(session: requests.Session, payload: dict) -> tuple[SemanticObservation | None, dict]:
+def _observe(
+    session: requests.Session, payload: dict, *, endpoint: str = ENDPOINT, served_model: str = SERVED_MODEL,
+) -> tuple[SemanticObservation | None, dict]:
     started = time.perf_counter()
     receipt = {"input_tokens": 0, "output_tokens": 0}
     observation = None
     try:
-        response = session.post(ENDPOINT, json=payload, timeout=(10, 45), allow_redirects=False)
+        response = session.post(endpoint, json=payload, timeout=(10, 45), allow_redirects=False)
         if response.status_code != 200:
             receipt["error"] = f"http_{response.status_code}"
         else:
             reply = response.json()
             usage = Usage.model_validate(reply["usage"])
-            receipt.update(input_tokens=usage.input_tokens, output_tokens=usage.output_tokens, cost_usd=usage.cost,
-                           served_model=reply["model"], provider=reply["provider"])
-            if reply["model"] != SERVED_MODEL or reply["provider"] != "TypeSafe":
+            receipt.update(input_tokens=usage.input_tokens, output_tokens=usage.output_tokens, served_model=reply["model"])
+            if endpoint == TYPESAFE_ENDPOINT:
+                receipt.update(provider="TypeSafe", estimated_cost_usd=usage.input_tokens * PRICE_PER_INPUT_TOKEN)
+            else:
+                receipt["provider"] = reply["provider"]
+                if usage.cost is None:
+                    raise ValueError("OpenRouter usage has no cost")
+                receipt["cost_usd"] = usage.cost
+            if reply["model"] != served_model or receipt["provider"] != "TypeSafe":
                 raise ValueError("Unexpected served model or provider")
             choice = Choice.model_validate(reply["answers"]["relevance"])
             observation = SemanticObservation(relevance=choice.choice)
@@ -104,11 +115,13 @@ def _paired_summary(rows: list[dict], groq_rows: list[dict]) -> dict:
     bins: list[list[tuple[float, bool]]] = [[] for _ in range(5)]
     for probability, gold in predictions:
         bins[min(int(probability * len(bins)), len(bins) - 1)].append((probability, gold))
-    paired = [(jev, groq) for jev, groq in zip(rows, groq_rows, strict=True)
+    paired = [(jev, groq) for jev, groq in zip(rows, groq_rows[:len(rows)], strict=True)
               if jev["relevance"] in {"relevant", "irrelevant"} and groq["relevance"] in {"relevant", "irrelevant"}]
     return {
         "cost_usd_reported": sum(row["provider"].get("cost_usd", 0) for row in rows),
         "reported_usage_count": sum("cost_usd" in row["provider"] for row in rows),
+        "cost_usd_estimated": sum(row["provider"].get("estimated_cost_usd", 0) for row in rows),
+        "estimated_usage_count": sum("estimated_cost_usd" in row["provider"] for row in rows),
         "probability_diagnostic": {
             "cases": len(predictions), "bins": [len(items) for items in bins],
             "brier": sum((p - gold) ** 2 for p, gold in predictions) / len(predictions) if predictions else None,
@@ -138,24 +151,28 @@ def main() -> None:
     parser.add_argument("--pages", type=Path, default=P1_PAGE_CACHE)
     parser.add_argument("--groq-receipt", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--provider", choices=("openrouter", "typesafe"), default="openrouter")
     parser.add_argument("--execute", type=Path, metavar="DRY_RUN", help="Execute the exact prepared request plan")
     args = parser.parse_args()
     if args.output.exists():
         parser.error("output must be a fresh path")
+    endpoint, model, served_model, variable = ENDPOINT, DEFAULT_JEV_MODEL_ID, SERVED_MODEL, "OPENROUTER_API_KEY"
+    if args.provider == "typesafe":
+        endpoint, model, served_model, variable = TYPESAFE_ENDPOINT, TYPESAFE_MODEL, TYPESAFE_MODEL, "TYPESAFE_API_KEY"
     key = None
     if args.execute:
-        key = os.getenv("OPENROUTER_API_KEY") or dotenv_values(".env").get("OPENROUTER_API_KEY")
+        key = os.getenv(variable) or dotenv_values(".env").get(variable)
         if not key:
-            parser.error("OPENROUTER_API_KEY is missing")
+            parser.error(f"{variable} is missing")
     with offline_socket_guard():
         torch.set_num_threads(6)
         groq_plan, sources = _plan(args.p1_run, args.pages)
         groq_rows, groq_digest = _read_groq(args.groq_receipt, groq_plan, sources)
-        plan = _jev_plan(groq_plan)
+        plan = _jev_plan(groq_plan, model=model)
     estimated = sum(row["estimated_input_tokens"] for row in plan)
     report = {
-        "status": "DRY_RUN", "endpoint": ENDPOINT, "model": DEFAULT_JEV_MODEL_ID,
-        "expected_served_model": SERVED_MODEL, "sources": sources, "groq_receipt_sha256": groq_digest,
+        "status": "DRY_RUN", "endpoint": endpoint, "model": model,
+        "expected_served_model": served_model, "sources": sources, "groq_receipt_sha256": groq_digest,
         "observations": [], "plan": _public_plan(plan), "estimated_input_tokens_cl100k_base": estimated,
         "price_estimate_usd": estimated * PRICE_PER_INPUT_TOKEN,
     }
@@ -170,8 +187,9 @@ def main() -> None:
     with requests.Session() as session:
         session.trust_env = False
         session.headers["Authorization"] = f"Bearer {key}"
-        _compare(plan, session, report, args.output, observe=_observe, observer_id="jev-candidate-observer",
-                 observer_version=f"openrouter/{SERVED_MODEL}:relevance-v1")
+        observe = partial(_observe, endpoint=endpoint, served_model=served_model)
+        _compare(plan, session, report, args.output, observe=observe, observer_id="jev-candidate-observer",
+                 observer_version=f"{args.provider}/{served_model}:relevance-v1")
     report["matched_comparison"] = _paired_summary(report["observations"], groq_rows)
     write_json_atomic(args.output, report)
 

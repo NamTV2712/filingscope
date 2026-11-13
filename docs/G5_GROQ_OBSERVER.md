@@ -58,9 +58,9 @@ failed requests is unknown. [Groq GPT-OSS 120B rates](https://console.groq.com/d
 ## Decision and reproduction
 
 **KEEP** the deterministic policy. **REJECT** enabling Groq observation
-by default for this path. **DEFER** live Jev because OpenRouter or
-TypeSafe credentials are unavailable. The Groq test uses the same
-observation contract and supplies a separate provider comparison.
+by default for this path. The later TypeSafe run uses the same
+observation contract and the frozen candidate plan.
+[Live Jev comparison](G5_JEV_LIVE_PROTOCOL.md).
 
 The focused benchmark and observer tests passed 21/21. The offline
 suite passed 500 tests with three local fixture skips on Windows and
