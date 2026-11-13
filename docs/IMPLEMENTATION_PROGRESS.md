@@ -174,6 +174,8 @@ The Groq GPT-OSS 120B closed-book and long-context runs completed all
 52 requests. Author review found 0/23 exact closed-book and 22/23
 exact with context, including 20/23 with every frozen PDF locator.
 Live Jev remains pending. [Groq benchmark](G5_GROQ_BASELINES.md).
+The offline typed numeric replay reproduced the review counts on
+the original model outputs. [Scorer replay](G5_GROQ_SCORER_REPLAY.md).
 
 ## G6 independent evaluation readiness
 

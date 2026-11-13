@@ -61,6 +61,11 @@ energy generation and storage row, while the frozen label points to
 the segment discussion. The main comparison missed the NVIDIA half of
 the multi-company question because no NVIDIA page survived truncation.
 
+A subsequent deterministic replay of the raw JSON claims reproduced
+the author's 22/23 exact and 20/23 frozen-locator counts. It checks
+issuer, amount, period, currency and reporting scope for this numeric
+pilot. [Typed scorer replay](G5_GROQ_SCORER_REPLAY.md).
+
 One follow-up request kept an annual statement page for each issuer
 before applying the same budget. It returned both exact values and
 both frozen income-statement locators on author review. This was a
