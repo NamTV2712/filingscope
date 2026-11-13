@@ -80,6 +80,7 @@ and faithfulness on a new real-filing cohort remain unmeasured.
 | --- | --- |
 | SEC iXBRL extraction | 20,723 numeric observations, 18,800 identity keys and 10,285 dimensioned observations. Offline cache replay reproduced the manifest byte for byte. |
 | Structured parser agreement | 7,087/7,087 unique Company Facts pairs agreed. There were 67 multiple-value groups and 8 missing counterparts. The Apple PDF control agreed on 6/6 cells. |
+| Dimensioned iXBRL lookup | Exact typed lookup matched 10/10 PDF cells and rejected 50/50 identity perturbations. [Dimensioned replay](G2_DIMENSIONED_REPLAY.md). |
 | SEC 2025 runtime pilot | PDF only grounded 3/23, and Company Facts only and hybrid each grounded 21/23 by frozen locator. All three released consolidated Tesla revenue for an energy business question. |
 | Segment reporting scope follow-up | All three tracks withheld the consolidated Tesla value after the guard change. The other 25 case outcomes matched. [Paired report](G3_REPORTING_SCOPE.md). |
 | Statement normalization follow-up | PDF-only and hybrid each grounded 22/23 on the same provisional pilot. Company Facts only grounded 21/23 and withheld Walmart's conflicting revenue tags. The two PDF arms resolved Walmart from its income statement. [Paired report](G3_STATEMENT_NORMALIZATION.md). |

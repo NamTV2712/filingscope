@@ -1,9 +1,11 @@
+from dataclasses import asdict
+from decimal import Decimal
 from pathlib import Path
 from zipfile import ZipFile
 
 import pytest
 
-from src.ingestion.inline_xbrl import extract_numeric_facts
+from src.ingestion.inline_xbrl import Dimension, FactIdentity, extract_numeric_facts, resolve_inline_fact
 from src.ingestion.sec_client import FilingMetadata
 
 
@@ -81,3 +83,22 @@ def test_inline_extraction_rejects_wrong_context_cik(archive, tmp_path):
     result = extract_numeric_facts(archive, filing, cache_directory=tmp_path / "cache")
     assert result["facts"] == []
     assert result["skipped"]["wrong_context_entity"] == 2
+
+
+def test_inline_resolution_checks_duplicate_values_and_source_identity():
+    filing = FilingMetadata("AAPL", 320193, "10-K", "0000320193-25-000100", "2025-10-31", "2025-09-27", "sample.htm")
+    identity = FactIdentity(
+        "0000320193", "{us-gaap}Revenues", "2024-09-29", "2025-09-27", ("{iso4217}USD",), (),
+        (Dimension("{ext}Axis", "explicit", "{ext}Member", "segment"),), filing.accession_number, "FILED", "",
+    )
+    row = {"fact_id": identity.fact_id, "identity": asdict(identity), "filed": filing.filing_date,
+           "filing_form": filing.form_type, "report_date": filing.report_date, "source_anchor": "fact",
+           "source_url": filing.filing_url + "#fact", "value": "109158000000"}
+    resolved = resolve_inline_fact([row, row], identity, filing=filing)
+    assert resolved.value == Decimal("109158000000")
+    assert resolved.source_urls == (row["source_url"],)
+    assert resolve_inline_fact([row, {**row, "value": "5"}], identity, filing=filing).reason == "conflicting_observations"
+    assert resolve_inline_fact([{**row, "source_url": filing.filing_url}], identity,
+                               filing=filing).reason == "observation_source_mismatch"
+    forged = {**row, "identity": {**row["identity"], "dimensions": []}}
+    assert resolve_inline_fact([forged], identity, filing=filing).reason == "observation_identity_mismatch"

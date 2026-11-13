@@ -130,6 +130,9 @@ arms confused Tesla segment revenue with consolidated revenue.
 Independently reviewed mixed and narrative cohorts remain open.
 [Runtime pilot](G2_RUNTIME_REPLAY.md) · [G2 report](G2_SEC_DATA.md) ·
 [Frozen SEC manifest](G2_SEC_CORPUS_MANIFEST.json).
+The dimensioned replay resolved 10/10 PDF-transcribed facts and
+withheld 50/50 perturbed identities. It keeps the exact filing anchors.
+[Dimensioned replay](G2_DIMENSIONED_REPLAY.md).
 
 ## G3 financial understanding and scoped retrieval
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import asdict, dataclass
+from collections.abc import Iterable
 from datetime import date
 from decimal import Decimal, InvalidOperation, localcontext
 from pathlib import Path, PurePosixPath
@@ -46,6 +47,47 @@ class FactIdentity:
     @property
     def fact_id(self) -> str:
         return canonical_sha256(asdict(self))
+
+
+@dataclass(frozen=True)
+class InlineFactResolution:
+    reason: str
+    value: Decimal | None = None
+    source_urls: tuple[str, ...] = ()
+
+
+def resolve_inline_fact(
+    rows: Iterable[dict], identity: FactIdentity, *, filing: FilingMetadata,
+) -> InlineFactResolution:
+    """Return one accession-bound observation with the complete requested identity."""
+    if (identity.cik != normalize_cik(filing.cik) or identity.accession != filing.accession_number
+            or identity.revision != ("AMENDMENT" if filing.form_type.endswith("/A") else "FILED")):
+        return InlineFactResolution("filing_identity_mismatch")
+    expected = identity.fact_id
+    values, sources = set(), set()
+    for row in rows:
+        if row.get("fact_id") != expected:
+            continue
+        if (canonical_sha256(row["identity"]) != expected or row.get("filed") != filing.filing_date
+                or row.get("filing_form") != filing.form_type or row.get("report_date") != filing.report_date):
+            return InlineFactResolution("observation_identity_mismatch")
+        try:
+            value = Decimal(row["value"])
+        except (KeyError, InvalidOperation, TypeError):
+            return InlineFactResolution("invalid_observation_value")
+        if not value.is_finite():
+            return InlineFactResolution("invalid_observation_value")
+        anchor = row.get("source_anchor")
+        source = f"{filing.filing_url}#{quote(anchor, safe='')}" if isinstance(anchor, str) and anchor else filing.filing_url
+        if row.get("source_url") != source:
+            return InlineFactResolution("observation_source_mismatch")
+        values.add(value)
+        sources.add(source)
+    if not values:
+        return InlineFactResolution("identity_unavailable")
+    if len(values) != 1:
+        return InlineFactResolution("conflicting_observations")
+    return InlineFactResolution("resolved", values.pop(), tuple(sorted(sources)))
 
 
 def _dimensions(context) -> tuple[Dimension, ...]:
