@@ -32,7 +32,7 @@ CHUNK_JOIN_SEPARATOR = "\n\n"
 
 
 def count_tokens(text: str) -> int:
-    return len(ENCODING.encode(text))
+    return len(ENCODING.encode_ordinary(text))
 
 
 def _split_by_separator(text: str, separator: str) -> list[str]:
@@ -45,7 +45,7 @@ def _recursive_split(text: str, max_tokens: int, separators: list[str]) -> list[
         return [text.strip()]
 
     if not separators:
-        tokens = ENCODING.encode(text)
+        tokens = ENCODING.encode_ordinary(text)
         return [
             ENCODING.decode(tokens[i:i + max_tokens]).strip()
             for i in range(0, len(tokens), max_tokens)

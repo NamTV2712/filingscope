@@ -5,7 +5,7 @@ from decimal import Decimal
 from src.agent.adaptive_retrieval import AdaptiveRetrievalBudget
 
 BENCHMARK_ID = "financebench-e2e-v1"
-PROMPT_VERSION = "financial-evidence-grounded-v1"
+PROMPT_VERSION = "financial-evidence-grounded-v2"
 GENERATOR_MODEL_ID = "openai/gpt-oss-120b"
 GENERATOR_TEMPERATURE = 0
 GENERATOR_MAX_OUTPUT_TOKENS = 1024

@@ -556,6 +556,10 @@ def test_fanout_bounds_concurrency_and_coalesces_evidence_across_six_tasks() -> 
     sources = [record for record in result.ledger_snapshot.evidence_records if not record.metric_id]
     assert len(sources) == 2
     assert all(len(record.task_ids) == 3 for record in sources)
+    spans = result.stage_traces
+    assert sum(span.stage == "parallel_filing_worker" for span in spans) == 6
+    assert sum(span.tool_calls for span in spans) == result.usage.tool_calls
+    assert sum(span.retrieval_calls for span in spans) == result.usage.retrieval_calls
 
 
 def test_fan_in_is_deterministic_when_worker_completion_order_reverses() -> None:

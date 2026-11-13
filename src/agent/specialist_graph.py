@@ -8,6 +8,8 @@ import time
 import uuid
 from collections import defaultdict
 from collections.abc import Callable
+from datetime import UTC, datetime
+from functools import wraps
 from typing import Annotated, Any, Literal, TypedDict
 
 from langgraph.graph import END, START, StateGraph
@@ -19,6 +21,7 @@ from src.agent.complexity_router import (
     ComplexityRouter, ExecutionPath, RouteBudget, RouterExecution, SourceCapability, SourceInventory,
 )
 from src.agent.research_progress import ResearchProgress
+from src.agent.stage_trace import StageFailure, StageRecorder, StageStatus, StageTrace, trace_id
 from src.agent.specialists import (
     EvidenceAnalyst,
     FilingResearchWorker,
@@ -103,6 +106,7 @@ class SpecialistExecution(BaseModel):
     status: SpecialistExecutionStatus
     route: RouterExecution
     graph_trace: tuple[str, ...]
+    stage_traces: tuple[StageTrace, ...] = ()
     specialist_results: tuple[SpecialistTaskResult, ...]
     usage: SpecialistUsage
     evidence_ids: tuple[str, ...]
@@ -223,13 +227,23 @@ class SpecialistResearchGraph:
         ledger: EvidenceLedger | None = None,
         on_progress: Callable[[ResearchProgress], None] | None = None,
         force_research: bool = False,
+        on_stage_trace: Callable[[StageTrace], None] | None = None,
     ) -> SpecialistExecution:
         request_id = request_id or f"request-{uuid.uuid4().hex}"
+        recorder = StageRecorder(request_id)
         if on_progress:
             on_progress(ResearchProgress.UNDERSTANDING_QUESTION)
-        route = route or self.router.route(
-            question, force_research=force_research, source_inventory=self.source_inventory,
-        )
+        routing_started = datetime.now(UTC)
+        try:
+            route = route or self.router.route(
+                question, force_research=force_research, source_inventory=self.source_inventory,
+            )
+        except Exception:
+            recorder.add("routing", routing_started, StageStatus.FAILED, failure_reason=StageFailure.STAGE_ERROR)
+            if on_stage_trace:
+                on_stage_trace(recorder.snapshot()[0])
+            raise
+        recorder.add("routing", routing_started, StageStatus.COMPLETE)
         if route.question != question:
             raise ValueError("router execution belongs to a different question")
         if route.selected_path == ExecutionPath.UNSUPPORTED:
@@ -268,6 +282,7 @@ class SpecialistResearchGraph:
             require_structured_facts=bool(revisions),
             deterministic_lookup=route.source_capability in _DIRECT_LOOKUP,
             on_progress=on_progress,
+            stage_recorder=recorder,
         )
         concurrency = 1
         if route.selected_path == ExecutionPath.RESEARCH and self.retriever_concurrency_safe:
@@ -288,14 +303,17 @@ class SpecialistResearchGraph:
             "filing_pre_results": [],
             "filing_receipts": {},
         }
-        state = self.graph.invoke(
-            initial,
-            context=runtime,
-            config={
-                "recursion_limit": max(2, allowed_steps + 3),
-                "max_concurrency": concurrency,
-            },
-        )
+        try:
+            state = self.graph.invoke(
+                initial,
+                context=runtime,
+                config={"recursion_limit": max(2, allowed_steps + 3), "max_concurrency": concurrency},
+            )
+        finally:
+            stage_traces = recorder.snapshot()
+            if on_stage_trace:
+                for trace in stage_traces:
+                    on_stage_trace(trace)
         runtime.emit_progress(ResearchProgress.FINALIZING_ANSWER)
         steps = len(state.get("trace", ()))
         if steps > allowed_steps:
@@ -330,6 +348,7 @@ class SpecialistResearchGraph:
             status=status,
             route=route,
             graph_trace=tuple(state.get("trace", ())),
+            stage_traces=stage_traces,
             specialist_results=tuple(state.get("specialist_results", ())),
             usage=usage,
             evidence_ids=tuple(sorted(evidence_ids)),
@@ -350,17 +369,15 @@ class SpecialistResearchGraph:
 
     def _build_graph(self):
         graph = StateGraph(_SpecialistGraphState, context_schema=SpecialistRuntime)
-        graph.add_node("supervisor", self._supervisor_node)
-        graph.add_node("filing_worker", self._filing_node)
-        graph.add_node("direct_sources", self._direct_sources_node)
-        graph.add_node("parallel_filing_worker", self._parallel_filing_node)
-        graph.add_node("structured_data_worker", self._structured_node)
-        graph.add_node("table_worker", self._table_node)
-        graph.add_node("evidence_analyst", self._analyst_node)
-        graph.add_node("financial_reasoner", self._reasoner_node)
-        graph.add_node("report_writer", self._writer_node)
-        graph.add_node("claim_verifier", self._verifier_node)
-        graph.add_node("unsupported_path", self._unsupported_node)
+        for stage, node in (
+            ("supervisor", self._supervisor_node), ("filing_worker", self._filing_node),
+            ("direct_sources", self._direct_sources_node), ("parallel_filing_worker", self._parallel_filing_node),
+            ("structured_data_worker", self._structured_node), ("table_worker", self._table_node),
+            ("evidence_analyst", self._analyst_node), ("financial_reasoner", self._reasoner_node),
+            ("report_writer", self._writer_node), ("claim_verifier", self._verifier_node),
+            ("unsupported_path", self._unsupported_node),
+        ):
+            graph.add_node(stage, _trace_node(stage, node))
         graph.add_conditional_edges(
             START,
             self._entry,
@@ -860,6 +877,7 @@ class SpecialistResearchGraph:
             budget.charge(llm=True)
             budget.context_tokens = tokens
             budget.input_tokens = budget.output_tokens = None
+            budget.estimated_cost = None
 
         if self.provider_writer is not None:
             timeout = getattr(self.provider_writer.generator, "timeout_seconds", None) or 0.0
@@ -871,6 +889,7 @@ class SpecialistResearchGraph:
             if generated is not None:
                 budget.input_tokens = generated.prompt_tokens
                 budget.output_tokens = generated.completion_tokens
+                budget.estimated_cost = generated.estimated_cost_usd
                 budget.context_tokens = max(budget.context_tokens, generated.prompt_tokens or 0)
                 if not is_fallback_answer(generated.answer):
                     return generated
@@ -1144,6 +1163,70 @@ def _execution_status(status: str, verification: VerificationResult | None) -> s
     if verification is None:
         return "ABSTAIN"
     return verification.disposition.value
+
+
+def _trace_node(stage: str, node):
+    @wraps(node)
+    def invoke(state, runtime: Runtime[SpecialistRuntime]):
+        context = runtime.context
+        recorder = context.stage_recorder
+        if recorder is None:
+            return node(state, runtime)
+        started = datetime.now(UTC)
+        budget = context.budget_tracker
+        prior_usage = budget.tool_calls, budget.retrieval_calls, budget.llm_calls
+        result = None
+        try:
+            result = node(state, runtime)
+            return result
+        finally:
+            tool_calls, retrieval_calls, llm_calls = (
+                used - prior for used, prior in zip(
+                    (budget.tool_calls, budget.retrieval_calls, budget.llm_calls), prior_usage, strict=True,
+                )
+            )
+            reason = None
+            status = StageStatus.COMPLETE
+            records = ()
+            if result is None:
+                status, reason = StageStatus.FAILED, StageFailure.STAGE_ERROR
+            elif stage == "parallel_filing_worker":
+                receipt, = result["filing_receipts"].values()
+                worker = receipt.task_result
+                records = receipt.ledger_snapshot.evidence_records
+                tool_calls, retrieval_calls, llm_calls = worker.tool_calls, worker.retrieval_calls, worker.llm_calls
+                if worker.status == SpecialistStatus.FAILED or worker.retryable_task_ids:
+                    status, reason = StageStatus.FAILED, StageFailure.WORKER_ERROR
+            else:
+                previous = len(state.get("specialist_results", ()))
+                receipts = result.get("specialist_results", ())[previous:]
+                if stage == "structured_data_worker":
+                    # Parallel filing usage was already recorded in the worker spans.
+                    worker = receipts[-1]
+                    tool_calls, retrieval_calls, llm_calls = worker.tool_calls, worker.retrieval_calls, worker.llm_calls
+                    receipts = (worker,)
+                evidence_ids = {key for receipt in receipts for key in receipt.evidence_ids}
+                records = tuple(context.ledger.evidence(key) for key in sorted(evidence_ids))
+                if stage == "unsupported_path":
+                    status, reason = StageStatus.SKIPPED, StageFailure.UNSUPPORTED_REQUEST
+                elif stage == "claim_verifier" and result["status"] != "VERIFIED":
+                    status = StageStatus.PARTIAL if result["status"] == "PARTIAL" else StageStatus.SKIPPED
+                    reason = StageFailure.RELEASE_WITHHELD
+                elif stage == "report_writer" and llm_calls and result["generation"].model_id.startswith("filingscope-"):
+                    status, reason = StageStatus.PARTIAL, StageFailure.PROVIDER_FALLBACK
+                elif any(receipt.status == SpecialistStatus.FAILED or receipt.retryable_task_ids for receipt in receipts):
+                    status, reason = StageStatus.PARTIAL, StageFailure.WORKER_ERROR
+                elif any(receipt.status in {SpecialistStatus.PARTIAL, SpecialistStatus.UNKNOWN} for receipt in receipts):
+                    status, reason = StageStatus.PARTIAL, StageFailure.EVIDENCE_INCOMPLETE
+            provider_usage = {"input_tokens": budget.input_tokens, "output_tokens": budget.output_tokens,
+                              "estimated_cost": budget.estimated_cost} if llm_calls else {}
+            recorder.add(stage, started, status, failure_reason=reason, tool_calls=tool_calls,
+                         retrieval_calls=retrieval_calls, llm_calls=llm_calls,
+                         source_ids=tuple(sorted({trace_id(record.document_id) for record in records})),
+                         evidence_ids=tuple(sorted({trace_id(record.evidence_id) for record in records})),
+                         **provider_usage)
+
+    return invoke
 
 
 __all__ = [

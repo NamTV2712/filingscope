@@ -14,6 +14,7 @@ from typing import Any
 
 from src.agent.research_progress import ResearchProgress
 from src.agent.specialist_graph import SpecialistResearchGraph
+from src.agent.stage_trace import StageTrace
 from src.generation.grounded_writer import ProviderLimits
 from src.local_research import public_result
 
@@ -30,10 +31,11 @@ MAX_QUESTION_LENGTH = 1000
 
 
 class LocalResearchServer(ThreadingHTTPServer):
-    def __init__(self, port: int, graph: SpecialistResearchGraph):
+    def __init__(self, port: int, graph: SpecialistResearchGraph, *, stage_traces: bool = False):
         super().__init__(("127.0.0.1", port), ResearchHandler)
         self.graph = graph
         self.research_lock = Lock()
+        self.stage_traces = stage_traces
 
     @property
     def url(self) -> str:
@@ -128,7 +130,10 @@ class ResearchHandler(BaseHTTPRequestHandler):
             try:
                 provider = getattr(self.server.graph, "provider_writer", None)
                 prior_calls = provider.usage.attempted_calls if provider else 0
-                execution = self.server.graph.run(question, force_research=mode == "research", on_progress=self._progress)
+                execution = self.server.graph.run(
+                    question, force_research=mode == "research", on_progress=self._progress,
+                    on_stage_trace=self._log_stage if self.server.stage_traces else None,
+                )
                 if provider and provider.usage.attempted_calls != prior_calls:
                     usage = provider.usage
                     LOGGER.info("Provider %s attempts=%d responses=%d observed_input=%d observed_output=%d "
@@ -150,6 +155,10 @@ class ResearchHandler(BaseHTTPRequestHandler):
 
     def _progress(self, stage: ResearchProgress) -> None:
         self._event({"type": "progress", "stage": stage.value})
+
+    @staticmethod
+    def _log_stage(trace: StageTrace) -> None:
+        LOGGER.info("stage_trace %s", trace.model_dump_json())
 
     def _event(self, record: dict[str, Any]) -> None:
         body = json.dumps(record, ensure_ascii=False, allow_nan=False).encode("utf-8")
@@ -176,6 +185,7 @@ def main() -> None:
     parser.add_argument("--max-provider-output-tokens", type=int)
     parser.add_argument("--max-provider-cost-usd", type=Decimal)
     parser.add_argument("--max-correction-passes", type=int, choices=(0, 1), default=1)
+    parser.add_argument("--stage-traces", action="store_true", help="Log typed research-stage metadata to stderr")
     args = parser.parse_args()
     if not 1 <= args.threads <= 16 or not 0 <= args.port <= 65535:
         parser.error("use 1–16 threads and a valid loopback port")
@@ -201,11 +211,13 @@ def main() -> None:
             api_key=key, max_output_tokens=min(GENERATOR_MAX_OUTPUT_TOKENS, provider_limits.max_output_tokens),
             timeout_seconds=10.0,
         )
-        LOGGER.setLevel(logging.INFO)
-        LOGGER.addHandler(logging.StreamHandler())
-        LOGGER.info("Enabled provider groq model=%s", generator.model_id)
     elif any(value is not None for value in budget_options.values()):
         parser.error("provider limits require --provider-run")
+    if args.provider_run or args.stage_traces:
+        LOGGER.setLevel(logging.INFO)
+        LOGGER.addHandler(logging.StreamHandler())
+    if generator is not None:
+        LOGGER.info("Enabled provider groq model=%s", generator.model_id)
 
     import torch
 
@@ -238,7 +250,7 @@ def main() -> None:
         max_correction_passes=args.max_correction_passes,
         ticker_by_company=COMPANY_TICKERS,
     )
-    with LocalResearchServer(args.port, graph) as server:
+    with LocalResearchServer(args.port, graph, stage_traces=args.stage_traces) as server:
         print(f"FilingScope is ready at {server.url}", flush=True)
         try:
             server.serve_forever()

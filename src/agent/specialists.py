@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from src.agent.complexity_router import RouteBudget, requires_statement_source
 from src.agent.research_progress import ResearchProgress
+from src.agent.stage_trace import StageRecorder
 from src.decision.models import (
     CoverageStatus,
     DecisionBudget,
@@ -135,6 +136,7 @@ class _RuntimeBudget:
         self.context_tokens = 0
         self.input_tokens: int | None = 0
         self.output_tokens: int | None = 0
+        self.estimated_cost: Decimal | None = Decimal(0)
 
     @property
     def elapsed_seconds(self) -> float:
@@ -206,6 +208,7 @@ class SpecialistRuntime:
     require_structured_facts: bool = False
     deterministic_lookup: bool = False
     on_progress: Callable[[ResearchProgress], None] | None = None
+    stage_recorder: StageRecorder | None = None
     source_chunks: dict[str, dict[str, Any]] = field(default_factory=dict)
     xbrl_chunk_ids: set[str] = field(default_factory=set)
     inspected_statement_pages: dict[tuple[str, int], bool | None] = field(default_factory=dict)

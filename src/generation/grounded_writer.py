@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
@@ -21,6 +22,9 @@ from src.generation.answer_generator import (
 from src.ingestion.company_facts import RevisionKind, RevisionPolicy
 from src.ledger.models import DerivedCalculation, EvidenceRecord
 from src.verification.response_policy import INSUFFICIENT_EVIDENCE_ANSWER
+
+
+_SOURCE_LABEL = re.compile(r"[A-Za-z0-9_.-]{1,100}")
 
 
 @dataclass(frozen=True)
@@ -66,23 +70,34 @@ class GroundedReportInput:
         ))
 
     def provider_chunks(self) -> list[dict[str, Any]]:
-        """Render numeric observations from accepted facts and preserve citation positions."""
+        """Serialize approved assertions without copying arbitrary filing text."""
         result = []
         for source in self.sources:
             record = source.records[0]
-            lines = [f"Filing: {record.document_id}; source ID: {record.evidence_id}"]
+            locator = record.document_id if _SOURCE_LABEL.fullmatch(record.document_id) else "filing"
+            lines = []
             if record.xbrl_provenance:
                 lines.append(f"Accession: {record.xbrl_provenance.accession}")
             for fact in source.facts:
                 if fact.value:
                     lines.append(fact_sentence(self.requirements, fact).rstrip("."))
-            if any(fact.value_kind == "topic" for fact in source.facts):
-                text = source.chunk.get("text", "")
-                if isinstance(text, str):
-                    lines.append(f"<filing_excerpt>\n{text}\n</filing_excerpt>")
-            result.append({"doc_name": record.document_id, "page_number": source.chunk.get("page_number"),
+                elif fact.metric_id == "industry" and fact.value_kind == "topic":
+                    lines.extend(_industry_sentences(self.requirements, fact, source))
+            result.append({"doc_name": locator, "page_number": source.chunk.get("page_number"),
                            "text": "\n".join(lines)})
         return result
+
+
+def _industry_sentences(requirements: QuestionRequirements, fact: EvidenceFact, source: ApprovedSource) -> tuple[str, ...]:
+    entity = next(item for item in requirements.entities if item.entity_id == fact.entity_id)
+    text = source.chunk.get("text", "")
+    if not isinstance(text, str):
+        return ()
+    result = []
+    for industry, positive in sorted(filing_industry_relations(text, (entity.canonical_name,))):
+        relation = "operates in" if positive else "does not operate in"
+        result.append(f"{entity.canonical_name.rstrip('.')} {relation} the {industry} industry.")
+    return tuple(result)
 
 
 def fact_sentence(requirements: QuestionRequirements, fact: EvidenceFact, revision: RevisionKind | None = None) -> str:
@@ -138,18 +153,15 @@ class DeterministicWriter:
             numbers = report.source_numbers
             sentences = []
             for finding in report.coverage.findings:
-                industries: dict[tuple[str, str, bool], set[int]] = {}
+                industries: dict[str, int] = {}
                 for fact in finding.facts:
                     if fact.evidence_id not in sources:
                         continue
                     source = sources[fact.evidence_id]
                     if fact.metric_id == "industry" and fact.value_kind == "topic":
-                        entity = next(item for item in report.requirements.entities if item.entity_id == fact.entity_id)
-                        aliases = (entity.canonical_name,)
-                        text = source.chunk.get("text", "")
-                        if isinstance(text, str):
-                            for industry, positive in filing_industry_relations(text, aliases):
-                                industries.setdefault((entity.canonical_name.rstrip("."), industry, positive), set()).add(numbers[fact.evidence_id])
+                        for statement in _industry_sentences(report.requirements, fact, source):
+                            number = numbers[fact.evidence_id]
+                            industries[statement] = min(number, industries.get(statement, number))
                         continue
                     if not fact.value:
                         continue
@@ -158,9 +170,8 @@ class DeterministicWriter:
                     sentences.append(f"{fact_sentence(report.requirements, fact, revision)} [Source {numbers[fact.evidence_id]}]")
                     break
                 if len(industries) == 1:
-                    (company, industry, positive), citations = next(iter(industries.items()))
-                    relation = "operates in" if positive else "does not operate in"
-                    sentences.append(f"{company} {relation} the {industry} industry. [Source {min(citations)}]")
+                    statement, number = next(iter(industries.items()))
+                    sentences.append(f"{statement} [Source {number}]")
             answer = " ".join(sentences)
         if not answer:
             return no_answer()
@@ -219,6 +230,8 @@ class OptionalProviderWriter:
         if not report.sufficient or report.arithmetic or report.calculations or report.revision_policy or report.deterministic_lookup:
             return None
         chunks = report.provider_chunks()
+        if not any(chunk["text"] for chunk in chunks):
+            return None
         question = report.requirements.question
         prompt_tokens = estimate_prompt_tokens(build_generation_messages(question, chunks))
         if prompt_tokens > min(max_context_tokens, GENERATOR_MAX_INPUT_TOKENS) or not can_attempt():

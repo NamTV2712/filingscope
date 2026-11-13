@@ -222,12 +222,18 @@ class AtomicClaimVerifier(ClaimLevelVerifier):
                 if not isinstance(chunk_id, str) or not chunk_id:
                     continue
                 text = str(chunk.get("text", ""))
+                if "approved_facts" in chunk and not any(
+                    isinstance(fact, EvidenceFact) and fact.entity_id == entity_id and fact.metric_id in draft.metric_ids
+                    and (not draft.periods or any(period_matches(period, fact.period) for period in draft.periods))
+                    for fact in chunk["approved_facts"]
+                ):
+                    continue
                 if relation is not None:
                     for industry, positive in filing_industry_relations(text, aliases):
                         if industry == relation[0]:
                             target = supports if positive == relation[1] else refutes
                             target.add(chunk_id)
-                elif explicit_topic and any(_words(statement) and _words(statement) == _words(sentence)
+                elif "approved_facts" not in chunk and explicit_topic and any(_words(statement) and _words(statement) == _words(sentence)
                                             for sentence in _split_clauses(text)):
                     supports.add(chunk_id)
         if supports and refutes:
