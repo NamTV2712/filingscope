@@ -7,7 +7,9 @@ from typing import Any
 
 import numpy as np
 
-from src.decision.filing_disclosures import filing_industry_relations
+from src.decision.filing_disclosures import (
+    filing_industry_relations, filing_segment_disclosures, is_segment_list_question, segment_kind_matches,
+)
 from src.ingestion.period_identity import PeriodKind
 from src.retrieval.financial_statement_ranker import STATEMENT_CANDIDATE_POOL, FinancialStatementRanker
 from src.retrieval.pdf_page_cache import FrozenPdfPages
@@ -82,10 +84,10 @@ class FrozenDenseRetriever:
             scores = self.vectors[positions] @ query_vector
         ranker = self.statement_ranker if document_ids else None
         wanted = ranker.requirements(query) if ranker is not None else frozenset()
-        industry_lookup = ranker is not None and any(
-            metric.metric_id == "industry" for metric in ranker.extractor.extract(query).metrics
-        )
-        pool_size = max(top_k, STATEMENT_CANDIDATE_POOL) if wanted or industry_lookup else top_k
+        topics = {metric.metric_id for metric in ranker.extractor.extract(query).metrics} if ranker is not None else set()
+        industry_lookup = "industry" in topics
+        segment_lookup = topics == {"business_segments"} and is_segment_list_question(query)
+        pool_size = max(top_k, STATEMENT_CANDIDATE_POOL) if wanted or industry_lookup or segment_lookup else top_k
         local_order = [int(position) for position in np.argsort(-scores, kind="stable")[:pool_size]
                        if np.isfinite(scores[position])]
         order = local_order if positions is None else [int(positions[position]) for position in local_order]
@@ -98,14 +100,18 @@ class FrozenDenseRetriever:
                      "dense_score": float(dense_scores[position]), "retrieval_method": "statement_slot_rank"}
                     for rank, position in enumerate(ranked[:top_k])
                 ]
-        if industry_lookup:
+        if ranker is not None and (industry_lookup or segment_lookup):
             def explicit_disclosure(position: int) -> bool:
                 chunk = self.chunks[position]
                 entity = ranker.extractor.catalog.metadata_entity_id(
                     chunk.get("ticker"), chunk.get("company"), chunk.get("doc_name"), chunk.get("document_id"),
                 )
                 aliases = ranker.extractor.catalog.aliases_for(entity) if entity else ()
-                return bool(aliases and filing_industry_relations(chunk["text"], aliases))
+                if not aliases:
+                    return False
+                if segment_lookup:
+                    return any(segment_kind_matches(query, kind) for kind, _ in filing_segment_disclosures(chunk["text"], aliases))
+                return bool(filing_industry_relations(chunk["text"], aliases))
 
             order = sorted(order, key=lambda position: not explicit_disclosure(position))
         return [

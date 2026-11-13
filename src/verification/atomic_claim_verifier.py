@@ -7,7 +7,10 @@ from collections.abc import Iterable
 from typing import Any
 
 from src.decision.company_catalog import CompanyCatalog
-from src.decision.filing_disclosures import filing_industry_relations, industry_relation
+from src.decision.filing_disclosures import (
+    filing_industry_relations, filing_segment_disclosures, industry_relation, is_segment_list_question, segment_disclosure,
+    segment_form_matches, segment_kind_matches, segment_period_matches, segment_signature,
+)
 from src.decision.models import EvidenceFact, MetricRequirement, QuestionRequirements
 from src.decision.period_value_parser import extract_period_value_mentions, period_matches
 from src.decision.policy import EvidenceDecisionLayer
@@ -134,6 +137,8 @@ class AtomicClaimVerifier(ClaimLevelVerifier):
         statement = _text(draft.statement)
         asserted_scope = layer.extractor.extract(statement)
         explicit_metrics = asserted_scope.metrics
+        if draft.metric_ids == ("business_segments",) and not draft.values and not draft.has_unparsed_numeric_value:
+            return self._segment_assessment(draft, question_requirements, catalog, cited_chunks, evidence_ids)
         requested_segment = any(metric.metric_id == ENERGY_METRIC for metric in question_requirements.metrics)
         asserted_segment = any(metric.metric_id == ENERGY_METRIC for metric in explicit_metrics)
         cited_segment = any(chunk.get("section") == ENERGY_SECTION for chunk in cited_chunks)
@@ -219,6 +224,58 @@ class AtomicClaimVerifier(ClaimLevelVerifier):
             return None
         return matches[0]
 
+    @staticmethod
+    def _segment_assessment(
+        draft: ClaimDraft, requirements: QuestionRequirements, catalog: CompanyCatalog,
+        chunks: list[dict[str, Any]], evidence_ids: tuple[str, ...],
+    ) -> ClaimAssessment:
+        question = requirements.question
+        matches = [item for item in requirements.evidence if item.metric_id == "business_segments"
+                   and (item.entity_id,) == draft.entity_ids]
+        supports: set[str] = set()
+        refutes: set[str] = set()
+        if len(matches) == 1 and is_segment_list_question(question):
+            requirement = matches[0]
+            entity_id = requirement.entity_id
+            aliases = catalog.aliases_for(entity_id)
+            claim = segment_disclosure(_text(draft.statement), aliases)
+            if claim is not None and segment_kind_matches(question, claim[0]):
+                kind, names = claim
+                signature = segment_signature(names)
+                for chunk in chunks:
+                    chunk_id = chunk.get("chunk_id")
+                    issuer = catalog.metadata_entity_id(
+                        chunk.get("ticker"), chunk.get("company"), chunk.get("doc_name"), chunk.get("document_id"),
+                    )
+                    if (issuer != entity_id or not isinstance(chunk_id, str) or not segment_form_matches(
+                        question, chunk.get("doc_type"), chunk.get("filing_type"),
+                    )):
+                        continue
+                    if not any(
+                        isinstance(fact, EvidenceFact) and fact.entity_id == entity_id
+                        and fact.metric_id == requirement.metric_id and fact.evidence_id == chunk_id
+                        and fact.value_kind == "topic" and segment_period_matches(requirement.period, fact.period)
+                        for fact in chunk.get("approved_facts", ())
+                    ):
+                        continue
+                    for observed_kind, observed_names in filing_segment_disclosures(str(chunk.get("text", "")), aliases):
+                        if observed_kind == kind:
+                            target = supports if segment_signature(observed_names) == signature else refutes
+                            target.add(chunk_id)
+        if supports and refutes:
+            status, reason = ClaimStatus.UNVERIFIABLE, "cited_sources_conflict"
+        elif refutes:
+            status, reason = ClaimStatus.CONTRADICTED, "cited_statement_refutes_claim"
+        elif supports:
+            status, reason = ClaimStatus.SUPPORTED, "cited_statement_entails_claim"
+        else:
+            status, reason = ClaimStatus.UNSUPPORTED, "cited_statement_support_missing"
+        return ClaimAssessment(
+            claim_id=draft.claim_id, statement=draft.statement, status=status, citation_status=CitationStatus.VALID,
+            citations=draft.citations, evidence_ids=evidence_ids,
+            supporting_evidence_ids=tuple(sorted(supports)) if status == ClaimStatus.SUPPORTED else (), reason_codes=(reason,),
+        )
+
     def _qualitative_assessment(
         self, draft: ClaimDraft, layer: EvidenceDecisionLayer, catalog: CompanyCatalog,
         chunks: list[dict[str, Any]], evidence_ids: tuple[str, ...],
@@ -251,8 +308,8 @@ class AtomicClaimVerifier(ClaimLevelVerifier):
                         if industry == relation[0]:
                             target = supports if positive == relation[1] else refutes
                             target.add(chunk_id)
-                elif "approved_facts" not in chunk and explicit_topic and any(_words(statement) and _words(statement) == _words(sentence)
-                                            for sentence in _split_clauses(text)):
+                elif (draft.metric_ids != ("business_segments",) and "approved_facts" not in chunk and explicit_topic
+                      and any(_words(statement) and _words(statement) == _words(sentence) for sentence in _split_clauses(text))):
                     supports.add(chunk_id)
         if supports and refutes:
             status, reason = ClaimStatus.UNVERIFIABLE, "cited_sources_conflict"

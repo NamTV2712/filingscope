@@ -175,10 +175,14 @@ from 4 to 2 on FAST and 3 to 2 on RESEARCH. The historical graph,
 retrieval and writer replays kept their grounded, release and fault
 outcomes. Windows passed 451 tests with 3 fixture skips.
 [G4 report](G4_AGENT_VERIFICATION.md).
+The scoped segment-list path recovered 3/6 narrative answers in both PDF
+arms. All three lists and citations matched the disclosed names and pages
+in author review. The frozen literal score stayed 0/6. All 104 numeric
+outcomes matched the previous replay. [Segment report](G4_SEGMENT_DISCLOSURES.md).
 
 ## G5 observer and architecture comparison
 
-G5 is **PARTIALLY_COMPLETE**. Offline policy comparisons found zero
+G5's matched offline and live comparisons are recorded. Offline policy comparisons found zero
 critical false accepts. Negative mock observations downgraded 20/60
 decisions. The 26-case SEC pilot now has local Qwen 7B closed-book and
 long-context comparisons alongside Dense, Adaptive and routed LangGraph.

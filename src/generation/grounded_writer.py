@@ -13,7 +13,9 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from configs.end_to_end import GENERATOR_MAX_INPUT_TOKENS, GENERATOR_MAX_OUTPUT_TOKENS, GENERATOR_MODEL_ID
-from src.decision.filing_disclosures import filing_industry_relations
+from src.decision.filing_disclosures import (
+    filing_industry_relations, filing_segment_disclosures, segment_kind_matches, segment_signature,
+)
 from src.decision.models import EvidenceCoverage, EvidenceFact, QuestionRequirements
 from src.generation.answer_generator import (
     AnswerGenerationResult, AnswerGenerator, GroqAnswerGenerator, build_generation_messages, estimate_max_cost_usd,
@@ -82,22 +84,36 @@ class GroundedReportInput:
                 if fact.value:
                     lines.append(fact_sentence(self.requirements, fact).rstrip("."))
                 elif fact.metric_id == "industry" and fact.value_kind == "topic":
-                    lines.extend(_industry_sentences(self.requirements, fact, source))
+                    lines.extend(_topic_sentences(self.requirements, fact, source).values())
             result.append({"doc_name": locator, "page_number": source.chunk.get("page_number"),
                            "text": "\n".join(lines)})
         return result
 
 
-def _industry_sentences(requirements: QuestionRequirements, fact: EvidenceFact, source: ApprovedSource) -> tuple[str, ...]:
+def _topic_sentences(
+    requirements: QuestionRequirements, fact: EvidenceFact, source: ApprovedSource,
+) -> dict[object, str]:
     entity = next(item for item in requirements.entities if item.entity_id == fact.entity_id)
     text = source.chunk.get("text", "")
     if not isinstance(text, str):
-        return ()
-    result = []
-    for industry, positive in sorted(filing_industry_relations(text, (entity.canonical_name,))):
-        relation = "operates in" if positive else "does not operate in"
-        result.append(f"{entity.canonical_name.rstrip('.')} {relation} the {industry} industry.")
-    return tuple(result)
+        return {}
+    company = entity.canonical_name.rstrip('.')
+    if fact.metric_id == "industry":
+        return {
+            (industry, positive): f"{company} {'operates in' if positive else 'does not operate in'} the {industry} industry."
+            for industry, positive in sorted(filing_industry_relations(text, (entity.canonical_name,)))
+        }
+    if fact.metric_id != "business_segments":
+        return {}
+    result: dict[object, str] = {}
+    for kind, names in sorted(filing_segment_disclosures(text, (entity.canonical_name, entity.matched_alias))):
+        if not segment_kind_matches(requirements.question, kind):
+            continue
+        count = "two" if len(names) == 2 else "three"
+        quoted = [f'"{name}"' for name in names]
+        listing = f"{', '.join(quoted[:-1])} and {quoted[-1]}"
+        result[(kind, segment_signature(names))] = f"{company} reports {count} {kind} segments: {listing}."
+    return result
 
 
 def fact_sentence(requirements: QuestionRequirements, fact: EvidenceFact, revision: RevisionKind | None = None) -> str:
@@ -153,15 +169,16 @@ class DeterministicWriter:
             numbers = report.source_numbers
             sentences = []
             for finding in report.coverage.findings:
-                industries: dict[str, int] = {}
+                topics: dict[object, tuple[str, int]] = {}
                 for fact in finding.facts:
                     if fact.evidence_id not in sources:
                         continue
                     source = sources[fact.evidence_id]
-                    if fact.metric_id == "industry" and fact.value_kind == "topic":
-                        for statement in _industry_sentences(report.requirements, fact, source):
+                    if fact.value_kind == "topic":
+                        for key, statement in _topic_sentences(report.requirements, fact, source).items():
                             number = numbers[fact.evidence_id]
-                            industries[statement] = min(number, industries.get(statement, number))
+                            if key not in topics or number < topics[key][1]:
+                                topics[key] = statement, number
                         continue
                     if not fact.value:
                         continue
@@ -169,8 +186,8 @@ class DeterministicWriter:
                     revision = provenance.revision_kind if provenance else None
                     sentences.append(f"{fact_sentence(report.requirements, fact, revision)} [Source {numbers[fact.evidence_id]}]")
                     break
-                if len(industries) == 1:
-                    statement, number = next(iter(industries.items()))
+                if len(topics) == 1:
+                    statement, number = next(iter(topics.values()))
                     sentences.append(f"{statement} [Source {number}]")
             answer = " ".join(sentences)
         if not answer:
@@ -227,7 +244,8 @@ class OptionalProviderWriter:
 
     def write(self, report: GroundedReportInput, *, max_context_tokens: int,
               can_attempt: Callable[[], bool], start_attempt: Callable[[int], None]) -> AnswerGenerationResult | None:
-        if not report.sufficient or report.arithmetic or report.calculations or report.revision_policy or report.deterministic_lookup:
+        if (not report.sufficient or report.arithmetic or report.calculations or report.revision_policy
+                or report.deterministic_lookup or any(metric.metric_id == "business_segments" for metric in report.requirements.metrics)):
             return None
         chunks = report.provider_chunks()
         if not any(chunk["text"] for chunk in chunks):
