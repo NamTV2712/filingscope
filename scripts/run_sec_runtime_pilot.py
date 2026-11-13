@@ -15,9 +15,11 @@ from configs.financebench import P1_EMBEDDING_REVISION
 from configs.multi_agent_ablation import AblationCase, GoldClaim
 from configs.offline_guard import offline_socket_guard
 from configs.sec_runtime_pilot import CASES, PDFS, SEC_MANIFEST_SHA256, STATUS, PilotCase, StatementCell
-from scripts.run_multi_agent_ablation import _PolicyLayer, _RecordingRetriever, _specialist_observation
+from scripts.run_multi_agent_ablation import _PolicyLayer, _RecordingRetriever, _solo, _specialist_observation
+from scripts.run_specialist_architectures import _adaptive
 from src.agent.complexity_router import ComplexityRouter
 from src.agent.specialist_graph import SpecialistResearchGraph
+from src.decision.policy import EvidenceDecisionLayer
 from src.evaluation.benchmark_io import peak_memory_bytes, write_json_atomic
 from src.evaluation.company_facts_replay import CompanyFactsReplay
 from src.evaluation.multi_agent_ablation import AblationObservation, evaluate_observation, summarize_ablation
@@ -143,7 +145,38 @@ def _run_track(
                             for category in sorted({case.category for case in cases})}}
 
 
-def _run(pdf_dir: Path, cache_dir: Path, manifest_path: Path, output: Path, threads: int) -> None:
+def _run_architecture_controls(
+    cases: tuple[AblationCase, ...], router: ComplexityRouter, index: FrozenDenseRetriever,
+    sec: CompanyFactsReplay, ticker_by_company: dict[str, str],
+) -> dict:
+    recorder = _RecordingRetriever(index)
+    dense_policy = EvidenceDecisionLayer(extractor=router.extractor)
+    graph = SpecialistResearchGraph(router=router, retriever=recorder, sec_client=sec,
+                                    ticker_by_company=ticker_by_company)
+    rows_by_arm = {"dense_a0": [], "adaptive": []}
+    for name, rows in rows_by_arm.items():
+        for case in cases:
+            recorder.reset()
+            started = time.perf_counter()
+            if name == "dense_a0":
+                observed = _solo("A0", case.question, recorder, dense_policy, None)
+                details = {}
+            else:
+                route = router.route(case.question, force_research=True, source_inventory=graph.source_inventory)
+                observed, details = _adaptive(case.question, route, graph, recorder, sec, f"{name}-{case.case_id}")
+            if observed.llm_calls:
+                raise RuntimeError(f"{name} used a hosted generator")
+            row = evaluate_observation(case, observed, latency_ms=(time.perf_counter() - started) * 1_000,
+                                       require_complete_claims=True, require_verified_release=name != "dense_a0")
+            rows.append({**row, **details, "citation_sources": observed.citation_sources,
+                         "retrieved_sources": sorted(observed.retrieved_sources)})
+    return {name: {"overall": summarize_ablation(rows), "per_case": rows} for name, rows in rows_by_arm.items()}
+
+
+def _run(
+    pdf_dir: Path, cache_dir: Path, manifest_path: Path, output: Path, threads: int, *,
+    architecture_controls: bool = False,
+) -> None:
     import numpy as np
     import torch
 
@@ -226,6 +259,9 @@ def _run(pdf_dir: Path, cache_dir: Path, manifest_path: Path, output: Path, thre
         "vectors_sha256": sha256_file(vector_path), "threads": threads, "setup_ms": round(setup_ms, 3),
         "peak_memory_bytes": peak_memory_bytes(),
     }
+    if architecture_controls:
+        report["architecture_controls"] = _run_architecture_controls(cases, router, index, sec, ticker_by_company)
+        report["peak_memory_bytes"] = peak_memory_bytes()
     write_json_atomic(output / "report.json", report)
 
 
@@ -236,10 +272,12 @@ def main() -> None:
     parser.add_argument("--manifest", type=Path, default=Path("docs/G2_SEC_CORPUS_MANIFEST.json"))
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--threads", type=int, choices=range(1, 17), default=6)
+    parser.add_argument("--architecture-controls", action="store_true")
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=False)
     with offline_socket_guard():
-        _run(args.pdfs, args.cache, args.manifest, args.output, args.threads)
+        _run(args.pdfs, args.cache, args.manifest, args.output, args.threads,
+             architecture_controls=args.architecture_controls)
 
 
 if __name__ == "__main__":

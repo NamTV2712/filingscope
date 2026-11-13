@@ -64,6 +64,7 @@ def _source_key_set(citations: Sequence[int], sources: Sequence[str | None]) -> 
 
 def evaluate_observation(
     case: AblationCase, run: AblationObservation, *, latency_ms: float, require_complete_claims: bool = False,
+    require_verified_release: bool = True,
 ) -> dict[str, Any]:
     answered = bool(run.answer.strip()) and not is_fallback_answer(run.answer)
     clauses = [part.strip() for part in _CLAUSE.split(run.answer) if part.strip()] if answered else []
@@ -110,7 +111,9 @@ def evaluate_observation(
     expected_values = numeric_claims + sum(len(numeric_fact_signatures(claim.statement)) for claim in case.claims if claim.statement)
     exact = answered and claimed_values == expected_values and len(matched) == len(case.claims) if case.claims else not answered
     if require_complete_claims:
-        exact = exact and len(clauses) == len(case.claims) and (not answered or run.disposition == "VERIFIED")
+        exact = exact and len(clauses) == len(case.claims) and (
+            not answered or not require_verified_release or run.disposition == "VERIFIED"
+        )
     numeric_exact = exact if numeric_claims == len(case.claims) and case.claims else None
     grounded_exact = exact and grounded_claims == len(case.claims)
     planned = set(run.planned_requirements)

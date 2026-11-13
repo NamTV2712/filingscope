@@ -68,8 +68,10 @@ retained healthy sources on 10/10 versus 5/10 for the adaptive arm.
 Natural statement runtime retained 30/30 grounded answers in G4.
 G5 B6 revalidated 21/21 grounded answers with zero incorrect releases.
 
-Closed-book and long-context model inference remain
-`API_VALIDATION_BLOCKED`. The dry run sized all 24 question-only
+Hosted closed-book and long-context model inference remain
+`API_VALIDATION_BLOCKED`. A follow-up measured both conditions locally
+on the SEC 2025 pilot. [Local comparison](G5_LOCAL_MODEL_BASELINES.md).
+The hosted dry run sized all 24 question-only
 prompts at 6,788 total input tokens. Eighteen requests had document
 locators that allowed a full-text prompt estimate. Six fit a
 100,000-token input budget. Twelve exceeded it, with a maximum

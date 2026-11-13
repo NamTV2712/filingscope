@@ -162,10 +162,12 @@ outcomes. Windows passed 451 tests with 3 fixture skips.
 
 G5 is **PARTIALLY_COMPLETE**. Offline policy comparisons found zero
 critical false accepts. Negative mock observations downgraded 20/60
-decisions. M13 was replayed with Dense and the full policy. Closed-book,
-long-context and live Jev inference remain `API_VALIDATION_BLOCKED`
-under USD 0 authorization. Windows passed 452 tests with 3 skips.
-[G5 report](G5_BASELINE_EXPERIMENT.md).
+decisions. The 26-case SEC pilot now has local Qwen 7B closed-book and
+long-context comparisons alongside Dense, Adaptive and routed LangGraph.
+Adaptive and routed each grounded 22/23. Hosted comparisons and live
+Jev inference remain `API_VALIDATION_BLOCKED` under USD 0 authorization.
+[G5 report](G5_BASELINE_EXPERIMENT.md) ·
+[Matched local baseline report](G5_LOCAL_MODEL_BASELINES.md).
 
 ## G6 independent evaluation readiness
 

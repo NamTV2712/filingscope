@@ -91,6 +91,7 @@ and faithfulness on a new real-filing cohort remain unmeasured.
 | G4 requirement reuse | Instrumented extractor calls 4 → 2 for FAST and 3 → 2 for RESEARCH. Stable historical outputs matched. [G4 method](G4_AGENT_VERIFICATION.md). |
 | Jev mock | Positive and timeout mocks preserved 60/60 expected policy decisions. Negative mock matched 40/60 with 20 ACCEPT → WEAK downgrades and zero hard false accepts. Live inference remains blocked. |
 | Hosted model controls | Closed-book and long-context prompt budgets calculated. Accuracy, latency and model charges are unmeasured under the USD 0 authorization. [G5 report](G5_BASELINE_EXPERIMENT.md). |
+| Matched local model controls | On the 26-case SEC pilot, Adaptive and routed each grounded 22/23 by frozen locator. Local Qwen 7B scored 0/23 exact closed-book and 1/23 grounded long-context under the shared scorer. Author review found 17/23 long-context answers correct in financial identity and 12/23 fully matched to the frozen locators. [G5 local report](G5_LOCAL_MODEL_BASELINES.md). |
 
 ### Accuracy, latency and cost
 
