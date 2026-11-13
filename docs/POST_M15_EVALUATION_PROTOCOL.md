@@ -44,6 +44,69 @@ artifacts remain under ignored paths. [FinanceBench dataset card](https://huggin
    cohort. If final results are used to guide any change, retire that cohort
    from independent evaluation and draw a fresh one for the next final test.
 
+### Reviewer handoff and execution
+
+Keep the bundle in an ignored local directory, for example
+`data/independent-final/reviewer-bundle`. The reviewer records the hashes
+outside that directory and holds `labels.jsonl` until prediction output is
+complete and its hash recorded. The offline runner validates the supplied
+crosswalk and freeze. Reviewer independence, completeness of the crosswalk
+and source adjudication still depend on the review process.
+
+| File | Contents |
+| --- | --- |
+| `freeze.json` | Reviewer, clean Git commit, filing window, forms, category quotas, dataset license, adjudication and success criteria, selection/bootstrap seeds, CPU thread budget, exact Python and installed package versions, and SHA-256 for `exposed.jsonl`, `corpus.json`, `questions.jsonl`, and `labels.jsonl`. |
+| `exposed.jsonl` | One record per prior cohort, including P1/P5, M13 and Q2–Q7. Each records the cohort name, all exposed `issuer_ciks`, `document_ids` and latest filing date as `through`. |
+| `corpus.json` | Index identity and corpus fingerprint, hashes of the index and embedding manifests, chunks, extracted pages and SEC manifest, and inventory of documents with CIK, filed date, form, accession, SEC URL and SHA-256 of the local PDF rendition. |
+| `questions.jsonl` | Case ID, question, category and issuer CIKs. Categories are `lookup`, `revision`, `quarter_ytd`, `hard_negative`, `multi_company`, `multi_period`, `narrative`, and `unanswerable`. |
+| `labels.jsonl` | Case ID, reviewer names, adjudication, intended route, and claims. A numeric claim records one `value`, explicit matching `terms` and `periods`, `provenance`, and `source_slots`. For narrative use an exact `statement` in place of `value`. Each source slot lists acceptable alternatives such as `document#p0` or `sec:0000123456-25-000001`. Empty claims mark an unanswerable case. |
+| `index/`, `pages.jsonl`, `filings/`, `sec/` | Existing frozen index format (`index_manifest.json`, `embedding_manifest.json`, `corpus_chunks.jsonl`, `embedded_chunks.jsonl`), extracted physical pages, `<document_id>.pdf` renditions and local Company Facts snapshots. The chunks carry CIK, company and canonical SEC `source_url`. |
+
+All hashes use `sha256:<lowercase hex>`. The Python models in
+[`independent_final.py`](../src/evaluation/independent_final.py) define the
+exact field names and formats. For example, run
+`python -c "from src.evaluation.independent_final import Freeze; print(Freeze.model_json_schema())"`
+to obtain the schema for `freeze.json`. Use the pinned P1 Nomic model
+revision to index the fresh, label-free document corpus. `sec/manifest.json`
+uses the existing Company Facts replay schema and may have an empty issuer
+map if structured snapshots are absent. Record this source limitation in
+the freeze. Before freeze, plan categories and sample sizes against the
+requested risk precision. The runner enforces supplied category quotas
+and a later date window. It does not attest that a source reviewer was
+independent or that a document's legal terms permit redistribution.
+Freeze and predict with the same environment, including the optional
+`psutil` package if used. The runner's `_dependencies()` reports the
+exact package-name-to-version map for the freeze.
+
+```powershell
+$bundle = 'data/independent-final/reviewer-bundle'
+$predictions = 'data/independent-final/predictions.json'
+$env:HF_HUB_OFFLINE = '1'
+$env:TRANSFORMERS_OFFLINE = '1'
+python -m scripts.run_independent_final preflight --bundle $bundle --freeze-sha256 $freezeHash
+uv run --offline --with psutil==7.2.2 python -m scripts.run_independent_final predict `
+  --bundle $bundle --freeze-sha256 $freezeHash --output $predictions
+# The reviewer records the printed prediction hash, then releases labels.jsonl.
+python -m scripts.run_independent_final score --bundle $bundle --freeze-sha256 $freezeHash `
+  --predictions $predictions --predictions-sha256 $predictionHash --output data/independent-final/report.json
+```
+
+Prediction executes the Q7 bounded adaptive control and the routed specialist
+graph on the same snapshots. The score report contains paired grouped
+grounded exactness, per-category outcomes and descriptive Wilson intervals
+for unsupported release. Numeric exactness uses fully numeric requests.
+The frozen prediction report records resource and version measurements.
+The supplied freeze and prediction hashes must come from the recorded
+handoff, rather than from files modified after inspecting the answers.
+
+The handoff code was tested with a small synthetic index and a held-back
+fixture label file. The historical Q8 replay was also rerun. All four
+architectures reproduced case-level grounded outcomes, citations and tool
+counts, including the two fault-isolation comparisons. This does not produce
+an independent accuracy result. The local regression artifact
+`final-handoff-regression.json` has SHA-256
+`92a8175e6f75f9e33245ee4a22aaf0a95b061faad1cec56de5f02bbcc185dede`.
+
 For each evaluation, report the number of queries and eligible claims, answer
 coverage, exact numerical and grounded outcomes, false abstention,
 unsupported releases per released answer, and citation validity. Use paired

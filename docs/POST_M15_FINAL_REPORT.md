@@ -106,7 +106,7 @@ và không chứa câu hỏi gốc trong nhật ký.
 | Q5/Q6 development, 13 câu | Q5 tự nhiên → Q8 | 9/13 → 13/13. Bốn câu phục hồi đều thuộc 3M. |
 | Q5/Q6 validation, 20 câu | Q5 tự nhiên → Q8 | 17/17 giữ nguyên. Từ chối đúng 3/3, công bố thiếu nguồn 0/17. |
 | Q7 provisional, 12 câu so sánh | Thích ứng → LangGraph định tuyến | 12/12 ở cả hai. Mỗi nhóm development 4/4 và validation 8/8. |
-| Final độc lập | Bộ câu hỏi do reviewer giữ kín | Chưa có dữ liệu đủ điều kiện để chạy. |
+| Final độc lập | Bộ câu hỏi do reviewer giữ kín | Chưa có dữ liệu đủ điều kiện để chạy. [Quy trình bàn giao và chấm offline](POST_M15_EVALUATION_PROTOCOL.md#reviewer-handoff-and-execution). |
 
 M13 ghép cặp có 20 cải thiện và 0 suy giảm, chênh lệch +95,24 điểm phần
 trăm với bootstrap mô tả 88–100 điểm trên chín nhóm theo nhãn doanh nghiệp

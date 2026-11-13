@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import sys
 from pathlib import Path
 from typing import Any
@@ -28,3 +29,16 @@ def peak_memory_bytes() -> int | None:
     import resource
 
     return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * (1 if sys.platform == "darwin" else 1024)
+
+
+def wilson_rate(numerator: int, denominator: int) -> dict:
+    value, interval = None, None
+    if denominator:
+        value = numerator / denominator
+        z = 1.959963984540054
+        center = value + z**2 / (2 * denominator)
+        radius = z * math.sqrt((value * (1 - value) + z**2 / (4 * denominator)) / denominator)
+        scale = 1 + z**2 / denominator
+        interval = [0 if numerator == 0 else (center - radius) / scale,
+                    1 if numerator == denominator else (center + radius) / scale]
+    return {"numerator": numerator, "denominator": denominator, "value": value, "wilson_95": interval}

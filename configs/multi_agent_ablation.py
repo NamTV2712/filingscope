@@ -12,6 +12,7 @@ class GoldClaim:
     terms: tuple[str, ...]
     source_slots: tuple[tuple[str, ...], ...]
     periods: tuple[str, ...] = ()
+    statement: str | None = None
 
 
 @dataclass(frozen=True)

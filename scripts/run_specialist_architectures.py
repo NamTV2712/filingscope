@@ -204,11 +204,16 @@ def _adaptive(question, route, graph, retriever, sec, request_id):
 
 
 def replay(case, architecture, graph, direct, retriever, sec, policy, *, serial=False, evaluator=evaluate_observation):
-    question = case.question
+    observation, elapsed, details = observe(case.question, case.case_id, architecture, graph, direct, retriever, sec, policy,
+                                            serial=serial)
+    return {**evaluator(case, observation, latency_ms=elapsed), **details, "citation_sources": observation.citation_sources}
+
+
+def observe(question, case_id, architecture, graph, direct, retriever, sec, policy, *, serial=False):
     retriever.reset()
     started = time.perf_counter()
     prior_sec = sec.request_count
-    request_id = f"q7-{architecture}-{case.case_id}"
+    request_id = f"q7-{architecture}-{case_id}"
     details = {}
     if architecture == "B_adaptive":
         route = graph.router.route(question, force_research=True, source_inventory=graph.source_inventory)
@@ -239,7 +244,7 @@ def replay(case, architecture, graph, direct, retriever, sec, policy, *, serial=
                                           or any(item.key == "recovery" for item in r.observations)),
                        "wasted_tool_calls": sum(r.tool_calls for r in receipts if not r.evidence_ids),
                        "resolved_slots": _resolved_slots(result.coverage)}
-    return {**evaluator(case, observation, latency_ms=elapsed), **details, "citation_sources": observation.citation_sources}
+    return observation, elapsed, details
 
 
 def evaluate_narrative(case, observation, *, latency_ms):

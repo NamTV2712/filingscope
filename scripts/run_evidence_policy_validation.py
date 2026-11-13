@@ -17,7 +17,7 @@ from scripts.run_completion_evaluation import risk_coverage_points
 from scripts.run_hard_negative_retrieval import DEFAULT_RUN
 from src.agent.complexity_router import ComplexityRouter, CorpusMap
 from src.decision.models import CoverageStatus, DecisionAction, DecisionBudget
-from src.evaluation.benchmark_io import write_json_atomic
+from src.evaluation.benchmark_io import wilson_rate, write_json_atomic
 from src.evaluation.m13_failure_replay import expected_slots
 from src.evaluation.multi_agent_ablation import AblationObservation, evaluate_observation, paired_grounded_exact
 from src.evaluation.oracle_interventions import DiagnosticGraph
@@ -106,19 +106,6 @@ def replay(case: PolicyCase, router, chunks, pages) -> dict:
     return row
 
 
-def _rate(numerator: int, denominator: int) -> dict:
-    value, interval = None, None
-    if denominator:
-        value = numerator / denominator
-        z = 1.959963984540054
-        center = value + z**2 / (2 * denominator)
-        radius = z * math.sqrt((value * (1 - value) + z**2 / (4 * denominator)) / denominator)
-        scale = 1 + z**2 / denominator
-        interval = [0 if numerator == 0 else (center - radius) / scale,
-                    1 if numerator == denominator else (center + radius) / scale]
-    return {'numerator': numerator, 'denominator': denominator, 'value': value, 'wilson_95': interval}
-
-
 def summarize(rows: list[dict]) -> dict:
     answerable = [row for row in rows if row['answerable']]
     released = [row for row in rows if row['answered']]
@@ -130,15 +117,15 @@ def summarize(rows: list[dict]) -> dict:
                 confusion[decision][prefix + ('p' if check['observed'] else 'n')] += 1
     points = risk_coverage_points(rows)
     for point in points:
-        point['coverage_interval'] = _rate(point['released'], point['case_count'])['wilson_95']
-        point['risk_interval'] = _rate(point['errors'], point['released'])['wilson_95']
+        point['coverage_interval'] = wilson_rate(point['released'], point['case_count'])['wilson_95']
+        point['risk_interval'] = wilson_rate(point['errors'], point['released'])['wilson_95']
     return {
-        'coverage': _rate(len(released), len(rows)),
-        'grounded_exact_answerable': _rate(sum(row['grounded_exact'] for row in answerable), len(answerable)),
-        'false_abstention': _rate(sum(not row['answered'] for row in answerable), len(answerable)),
-        'false_acceptance': _rate(sum(not row['answerable'] for row in released), len(rows) - len(answerable)),
-        'unsupported_release_risk': _rate(sum(row['unsupported_released_claims'] > 0 for row in released), len(released)),
-        'release_precision': _rate(sum(row['grounded_exact'] for row in released), len(released)),
+        'coverage': wilson_rate(len(released), len(rows)),
+        'grounded_exact_answerable': wilson_rate(sum(row['grounded_exact'] for row in answerable), len(answerable)),
+        'false_abstention': wilson_rate(sum(not row['answered'] for row in answerable), len(answerable)),
+        'false_acceptance': wilson_rate(sum(not row['answerable'] for row in released), len(rows) - len(answerable)),
+        'unsupported_release_risk': wilson_rate(sum(row['unsupported_released_claims'] > 0 for row in released), len(released)),
+        'release_precision': wilson_rate(sum(row['grounded_exact'] for row in released), len(released)),
         'decision_counts': dict(confusion), 'risk_coverage': points,
         'tools': sum(row['tool_calls'] for row in rows),
         'retrieval_calls': sum(row['retrieval_calls'] for row in rows),

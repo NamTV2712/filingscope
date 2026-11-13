@@ -62,7 +62,9 @@ def _source_key_set(citations: Sequence[int], sources: Sequence[str | None]) -> 
     return {source for number in citations if number <= len(sources) and (source := sources[number - 1]) is not None}
 
 
-def evaluate_observation(case: AblationCase, run: AblationObservation, *, latency_ms: float) -> dict[str, Any]:
+def evaluate_observation(
+    case: AblationCase, run: AblationObservation, *, latency_ms: float, require_complete_claims: bool = False,
+) -> dict[str, Any]:
     answered = bool(run.answer.strip()) and not is_fallback_answer(run.answer)
     clauses = [part.strip() for part in _CLAUSE.split(run.answer) if part.strip()] if answered else []
     parsed = [
@@ -76,14 +78,17 @@ def evaluate_observation(case: AblationCase, run: AblationObservation, *, latenc
     grounded_claims = supported_citations = 0
     claim_checks = []
     for claim in case.claims:
-        gold_value = numeric_fact_signatures(claim.value)
-        if len(gold_value) != 1 or not claim.source_slots:
+        narrative = _normalized(claim.statement) if claim.statement is not None else None
+        gold_value = numeric_fact_signatures(claim.value) if narrative is None else []
+        if (narrative is None and len(gold_value) != 1) or narrative == "" or not claim.source_slots:
             raise ValueError(f"Invalid labeled claim in {case.case_id}")
         terms = tuple(_normalized(term) for term in (*claim.terms, *claim.periods))
-        target = gold_value[0][:4]
+        target = gold_value[0][:4] if gold_value else None
         match = next((
             index for index, (statement, values, _) in enumerate(parsed)
-            if index not in matched and target in values
+            if index not in matched
+            and (target in values if narrative is None else _normalized(_CITATION.sub("", clauses[index])) == narrative)
+            and (not require_complete_claims or narrative is not None or values == [target])
             and all(re.search(rf"\b{re.escape(term)}\b", statement) for term in terms)
         ), None)
         grounded = False
@@ -101,16 +106,20 @@ def evaluate_observation(case: AblationCase, run: AblationObservation, *, latenc
             grounded_claims += int(grounded)
         claim_checks.append({"value": claim.value, "matched": match is not None, "grounded": grounded})
 
-    numeric_exact = answered and claimed_values == len(matched) == len(case.claims)
-    exact = bool(numeric_exact) if case.claims else not answered
+    numeric_claims = sum(claim.statement is None for claim in case.claims)
+    expected_values = numeric_claims + sum(len(numeric_fact_signatures(claim.statement)) for claim in case.claims if claim.statement)
+    exact = answered and claimed_values == expected_values and len(matched) == len(case.claims) if case.claims else not answered
+    if require_complete_claims:
+        exact = exact and len(clauses) == len(case.claims) and (not answered or run.disposition == "VERIFIED")
+    numeric_exact = exact if numeric_claims == len(case.claims) and case.claims else None
     grounded_exact = exact and grounded_claims == len(case.claims)
     planned = set(run.planned_requirements)
     requested = set(run.requested_requirements)
     return {
         "case_id": case.case_id, "split": case.split, "category": case.category,
         "answerable": bool(case.claims), "answered": answered, "exact": exact,
-        "grounded_exact": grounded_exact, "numeric_exact": numeric_exact if case.claims else None,
-        "unsupported_released_claims": max(claimed_values, len(clauses)) - grounded_claims,
+        "grounded_exact": grounded_exact, "numeric_exact": numeric_exact,
+        "unsupported_released_claims": (len(clauses) if require_complete_claims else max(claimed_values, len(clauses))) - grounded_claims,
         "claim_checks": claim_checks, "matched_claims": len(matched), "grounded_claims": grounded_claims,
         "expected_claims": len(case.claims), "claimed_values": claimed_values,
         "supported_citations": supported_citations, "citations": sum(len(citations) for _, _, citations in parsed),
@@ -192,6 +201,7 @@ def summarize_ablation(rows: Sequence[dict[str, Any]]) -> dict[str, Any]:
     if not rows:
         return {"case_count": 0}
     answerable = [row for row in rows if row["answerable"]]
+    numeric = [row for row in answerable if row["numeric_exact"] is not None]
     unanswerable = [row for row in rows if not row["answerable"]]
     answered = [row for row in rows if row["answered"]]
     expected_claims = sum(row["expected_claims"] for row in rows)
@@ -207,7 +217,7 @@ def summarize_ablation(rows: Sequence[dict[str, Any]]) -> dict[str, Any]:
         "coverage": ratio(len(answered), len(rows)), "answer_accuracy": ratio(sum(row["exact"] for row in rows), len(rows)),
         "grounded_exact_answers": sum(row["grounded_exact"] for row in answerable),
         "grounded_answer_accuracy": ratio(sum(row["grounded_exact"] for row in answerable), len(answerable)),
-        "numeric_exact_accuracy": ratio(sum(row["numeric_exact"] for row in answerable), len(answerable)),
+        "numeric_exact_accuracy": ratio(sum(row["numeric_exact"] for row in numeric), len(numeric)),
         "claim_support": ratio(sum(row["grounded_claims"] for row in rows), expected_claims),
         "citation_support": ratio(sum(row["supported_citations"] for row in rows), citations),
         "unsupported_answer_rate": ratio(sum(row["unsupported_released_claims"] > 0 for row in answered), len(answered)),
