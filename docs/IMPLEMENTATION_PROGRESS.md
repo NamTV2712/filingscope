@@ -144,3 +144,12 @@ from 4 to 2 on FAST and 3 to 2 on RESEARCH. The historical graph,
 retrieval and writer replays kept their grounded, release and fault
 outcomes. Windows passed 451 tests with 3 fixture skips.
 [G4 report](G4_AGENT_VERIFICATION.md).
+
+## G5 observer and architecture comparison
+
+G5 is **PARTIALLY_COMPLETE**. Offline policy comparisons found zero
+critical false accepts. Negative mock observations downgraded 20/60
+decisions. M13 was replayed with Dense and the full policy. Closed-book,
+long-context and live Jev inference remain `API_VALIDATION_BLOCKED`
+under USD 0 authorization. Windows passed 452 tests with 3 skips.
+[G5 report](G5_BASELINE_EXPERIMENT.md).
