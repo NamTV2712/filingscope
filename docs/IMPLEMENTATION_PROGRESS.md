@@ -124,8 +124,11 @@ reproduced byte for byte. There were 7,087 exact unique-value Company
 Facts pairs and 6/6 exact PDF controls. Pilot/development/validation
 contain 32/100/72 provisional lookups with disjoint issuer groups.
 Historical architecture, retrieval and writer results reproduced.
-Full document/hybrid QA and independently adjudicated mixed cohorts
-remain open. [G2 report](G2_SEC_DATA.md) ·
+A 26-question runtime pilot measured 3/23 grounded exact with PDF
+only and 21/23 with either Company Facts only or hybrid. All three
+arms confused Tesla segment revenue with consolidated revenue.
+Independently reviewed mixed and narrative cohorts remain open.
+[Runtime pilot](G2_RUNTIME_REPLAY.md) · [G2 report](G2_SEC_DATA.md) ·
 [Frozen SEC manifest](G2_SEC_CORPUS_MANIFEST.json).
 
 ## G3 financial understanding and scoped retrieval

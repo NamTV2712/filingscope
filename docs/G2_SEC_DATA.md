@@ -120,13 +120,13 @@ require `REVIEWER_HELD` labels. This milestone has no external
 
 The validator checks disjoint case IDs, CIKs, accessions, revision
 families, fact IDs and evidence URLs across these three cohorts.
-The new cohorts contain single-issuer lookups. They do not yet measure
-multi-issuer, narrative, unanswerable or restatement questions.
-Document-only has the six-cell PDF check. Full document-only QA,
-hybrid QA, and narrative/non-XBRL tracks remain unmeasured.
-Page-level context precision, claim faithfulness and citation
-support require explicit labels for those tracks. Matching financial
-observations is not an independent comparison of RAG systems.
+The auto-XBRL cohorts contain single-issuer lookups. A subsequent
+26-case pilot compares document-only, Company Facts-only and hybrid
+QA with PDF-transcribed labels. It covers quarterly/YTD, multi-period,
+multi-issuer, revision and unanswerable controls. All three configurations
+released consolidated Tesla revenue in response to a segment question.
+Independently reviewed narrative evaluation, page relevance and strict
+atomic claim/citation adjudication remain open. [Runtime pilot](G2_RUNTIME_REPLAY.md).
 
 ## Regression and resources
 

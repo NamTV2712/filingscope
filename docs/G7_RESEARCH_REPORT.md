@@ -63,6 +63,7 @@ The Python policy determines candidate acceptance and final release.
 | Public historical | FinanceBench open sample, 150 queries, and M12's 24-case hard-negative replay | Earlier retrieval and hosted-generation controls on frozen P1. Historical P5 had weak answer coverage. [P5 report](BENCHMARK_RESULTS.md). |
 | Development-exposed | M13, Q3/Q5/Q7 and Q8 controls | Paired runtime, source isolation and verifier regression. The repeated use of these cohorts limits inference. |
 | SEC 2025 provisional | 17 filings, eight issuers, 32/100/72 auto-XBRL pilot/development/validation lookups | Source-aligned parser and structured lookup tests. The cohort split excludes issuer/accession/fact/revision-family overlap within these groups. [G2 report](G2_SEC_DATA.md). |
+| SEC 2025 runtime pilot | 26 PDF-transcribed questions from five filings and four issuers | Identical source-track questions and frozen citation locators. Issuers overlap with earlier cohorts. [Runtime pilot](G2_RUNTIME_REPLAY.md). |
 | Public applicability | Pinned FinAgent v1.1.1, 133 questions | 35 cases matched issuer/form, and 10 matched an excerpt in one frozen SEC filing. No full answer benchmark. [Benchmark matrix](G2_SEC_DATA.md#benchmark-compatibility). |
 | Independent final | Reviewer-held cohort pending | No independent performance or release-risk estimate. [G6 handoff](G6_EVALUATION_READINESS.md). |
 
@@ -79,6 +80,7 @@ and faithfulness on a new real-filing cohort remain unmeasured.
 | --- | --- |
 | SEC iXBRL extraction | 20,723 numeric observations, 18,800 identity keys and 10,285 dimensioned observations. Offline cache replay reproduced the manifest byte for byte. |
 | Structured parser agreement | 7,087/7,087 unique Company Facts pairs agreed. There were 67 multiple-value groups and 8 missing counterparts. The Apple PDF control agreed on 6/6 cells. |
+| SEC 2025 runtime pilot | PDF only grounded 3/23, and Company Facts only and hybrid each grounded 21/23 by frozen locator. All three released consolidated Tesla revenue for an energy business question. |
 | Dense retrieval | M12 Recall@10 56.25%, MRR@10 0.3529 and nDCG@5 0.3757. Q5 page locator micro precision 21/291 and required-slot recall 21/37. |
 | Scoped Dense cost | Matching top-10 IDs on 30 paired requests. Rank p50 4.25 → 1.16 ms with cached embeddings. [G3 method](G3_FINANCIAL_RETRIEVAL.md). |
 | M13 routed | 21/21 grounded exact on answerable cases, 21/24 coverage, 0/21 incorrect releases and 3/3 correct abstentions. |
