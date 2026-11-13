@@ -115,6 +115,9 @@ preserved deterministic decisions in 65 policy scenarios. Windows passed
 437 tests with 3 skips and Linux WSL passed 436 with 4 skips. All seven
 historical regression reports matched on stable outputs.
 [G1 report, metric definitions and commands](G1_EVALUATION.md).
+The [real-filing claim review](G1_SEC_CLAIM_REVIEW.md) applies the G1
+scorer to both frozen document-only pilot runs and reports the scope
+error separately from support for the original statement.
 
 ## G2 SEC data and benchmark cohorts
 

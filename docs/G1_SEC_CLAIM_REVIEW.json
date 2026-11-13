@@ -1,0 +1,1010 @@
+{
+  "arms": {
+    "current": {
+      "judgments": [
+        {
+          "answer_exact": true,
+          "answerable": true,
+          "case_id": "apple_revenue",
+          "claims": [
+            {
+              "citations": [
+                {
+                  "citation_id": "Source 1",
+                  "supports_claim": true
+                }
+              ],
+              "claim_id": "claim-1",
+              "supported_by_citation_set": true,
+              "supported_by_context": true
+            }
+          ],
+          "numeric_applicable": true,
+          "numeric_checks": {
+            "calculation": null,
+            "company": true,
+            "currency": true,
+            "metric": true,
+            "period": true,
+            "reporting_basis": true,
+            "scale": true,
+            "values": true
+          },
+          "released": true
+        },
+        {
+          "answer_exact": true,
+          "answerable": true,
+          "case_id": "apple_operating",
+          "claims": [
+            {
+              "citations": [
+                {
+                  "citation_id": "Source 1",
+                  "supports_claim": true
+                }
+              ],
+              "claim_id": "claim-1",
+              "supported_by_citation_set": true,
+              "supported_by_context": true
+            }
+          ],
+          "numeric_applicable": true,
+          "numeric_checks": {
+            "calculation": null,
+            "company": true,
+            "currency": true,
+            "metric": true,
+            "period": true,
+            "reporting_basis": true,
+            "scale": true,
+            "values": true
+          },
+          "released": true
+        },
+        {
+          "answer_exact": true,
+          "answerable": true,
+          "case_id": "apple_net",
+          "claims": [
+            {
+              "citations": [
+                {
+                  "citation_id": "Source 1",
+                  "supports_claim": true
+                }
+              ],
+              "claim_id": "claim-1",
+              "supported_by_citation_set": true,
+              "supported_by_context": true
+            }
+          ],
+          "numeric_applicable": true,
+          "numeric_checks": {
+            "calculation": null,
+            "company": true,
+            "currency": true,
+            "metric": true,
+            "period": true,
+            "reporting_basis": true,
+            "scale": true,
+            "values": true
+          },
+          "released": true
+        },
+        {
+          "answer_exact": true,
+          "answerable": true,
+          "case_id": "apple_assets",
+          "claims": [
+            {
+              "citations": [
+                {
+                  "citation_id": "Source 1",
+                  "supports_claim": true
+                }
+              ],
+              "claim_id": "claim-1",
+              "supported_by_citation_set": true,
+              "supported_by_context": true
+            }
+          ],
+          "numeric_applicable": true,
+          "numeric_checks": {
+            "calculation": null,
+            "company": true,
+            "currency": true,
+            "metric": true,
+            "period": true,
+            "reporting_basis": true,
+            "scale": true,
+            "values": true
+          },
+          "released": true
+        },
+        {
+          "answer_exact": true,
+          "answerable": true,
+          "case_id": "apple_quarter_revenue",
+          "claims": [
+            {
+              "citations": [
+                {
+                  "citation_id": "Source 1",
+                  "supports_claim": true
+                }
+              ],
+              "claim_id": "claim-1",
+              "supported_by_citation_set": true,
+              "supported_by_context": true
+            }
+          ],
+          "numeric_applicable": true,
+          "numeric_checks": {
+            "calculation": null,
+            "company": true,
+            "currency": true,
+            "metric": true,
+            "period": true,
+            "reporting_basis": true,
+            "scale": true,
+            "values": true
+          },
+          "released": true
+        },
+        {
+          "answer_exact": true,
+          "answerable": true,
+          "case_id": "apple_ytd_revenue",
+          "claims": [
+            {
+              "citations": [
+                {
+                  "citation_id": "Source 1",
+                  "supports_claim": true
+                }
+              ],
+              "claim_id": "claim-1",
+              "supported_by_citation_set": true,
+              "supported_by_context": true
+            }
+          ],
+          "numeric_applicable": true,
+          "numeric_checks": {
+            "calculation": null,
+            "company": true,
+            "currency": true,
+            "metric": true,
+            "period": true,
+            "reporting_basis": true,
+            "scale": true,
+            "values": true
+          },
+          "released": true
+        },
+        {
+          "answer_exact": true,
+          "answerable": true,
+          "case_id": "apple_quarter_operating",
+          "claims": [
+            {
+              "citations": [
+                {
+                  "citation_id": "Source 1",
+                  "supports_claim": true
+                }
+              ],
+              "claim_id": "claim-1",
+              "supported_by_citation_set": true,
+              "supported_by_context": true
+            }
+          ],
+          "numeric_applicable": true,
+          "numeric_checks": {
+            "calculation": null,
+            "company": true,
+            "currency": true,
+            "metric": true,
+            "period": true,
+            "reporting_basis": true,
+            "scale": true,
+            "values": true
+          },
+          "released": true
+        },
+        {
+          "answer_exact": true,
+          "answerable": true,
+          "case_id": "apple_ytd_operating",
+          "claims": [
+            {
+              "citations": [
+                {
+                  "citation_id": "Source 1",
+                  "supports_claim": true
+                }
+              ],
+              "claim_id": "claim-1",
+              "supported_by_citation_set": true,
+              "supported_by_context": true
+            }
+          ],
+          "numeric_applicable": true,
+          "numeric_checks": {
+            "calculation": null,
+            "company": true,
+            "currency": true,
+            "metric": true,
+            "period": true,
+            "reporting_basis": true,
+            "scale": true,
+            "values": true
+          },
+          "released": true
+        },
+        {
+          "answer_exact": true,
+          "answerable": true,
+          "case_id": "apple_quarter_assets",
+          "claims": [
+            {
+              "citations": [
+                {
+                  "citation_id": "Source 1",
+                  "supports_claim": true
+                }
+              ],
+              "claim_id": "claim-1",
+              "supported_by_citation_set": true,
+              "supported_by_context": true
+            }
+          ],
+          "numeric_applicable": true,
+          "numeric_checks": {
+            "calculation": null,
+            "company": true,
+            "currency": true,
+            "metric": true,
+            "period": true,
+            "reporting_basis": true,
+            "scale": true,
+            "values": true
+          },
+          "released": true
+        },
+        {
+          "answer_exact": true,
+          "answerable": true,
+          "case_id": "nvidia_revenue",
+          "claims": [
+            {
+              "citations": [
+                {
+                  "citation_id": "Source 1",
+                  "supports_claim": true
+                }
+              ],
+              "claim_id": "claim-1",
+              "supported_by_citation_set": true,
+              "supported_by_context": true
+            }
+          ],
+          "numeric_applicable": true,
+          "numeric_checks": {
+            "calculation": null,
+            "company": true,
+            "currency": true,
+            "metric": true,
+            "period": true,
+            "reporting_basis": true,
+            "scale": true,
+            "values": true
+          },
+          "released": true
+        },
+        {
+          "answer_exact": true,
+          "answerable": true,
+          "case_id": "nvidia_operating",
+          "claims": [
+            {
+              "citations": [
+                {
+                  "citation_id": "Source 1",
+                  "supports_claim": true
+                }
+              ],
+              "claim_id": "claim-1",
+              "supported_by_citation_set": true,
+              "supported_by_context": true
+            }
+          ],
+          "numeric_applicable": true,
+          "numeric_checks": {
+            "calculation": null,
+            "company": true,
+            "currency": true,
+            "metric": true,
+            "period": true,
+            "reporting_basis": true,
+            "scale": true,
+            "values": true
+          },
+          "released": true
+        },
+        {
+          "answer_exact": true,
+          "answerable": true,
+          "case_id": "nvidia_net",
+          "claims": [
+            {
+              "citations": [
+                {
+                  "citation_id": "Source 1",
+                  "supports_claim": true
+                }
+              ],
+              "claim_id": "claim-1",
+              "supported_by_citation_set": true,
+              "supported_by_context": true
+            }
+          ],
+          "numeric_applicable": true,
+          "numeric_checks": {
+            "calculation": null,
+            "company": true,
+            "currency": true,
+            "metric": true,
+            "period": true,
+            "reporting_basis": true,
+            "scale": true,
+            "values": true
+          },
+          "released": true
+        },
+        {
+          "answer_exact": true,
+          "answerable": true,
+          "case_id": "nvidia_assets",
+          "claims": [
+            {
+              "citations": [
+                {
+                  "citation_id": "Source 1",
+                  "supports_claim": true
+                }
+              ],
+              "claim_id": "claim-1",
+              "supported_by_citation_set": true,
+              "supported_by_context": true
+            }
+          ],
+          "numeric_applicable": true,
+          "numeric_checks": {
+            "calculation": null,
+            "company": true,
+            "currency": true,
+            "metric": true,
+            "period": true,
+            "reporting_basis": true,
+            "scale": true,
+            "values": true
+          },
+          "released": true
+        },
+        {
+          "answer_exact": true,
+          "answerable": true,
+          "case_id": "tesla_revenue",
+          "claims": [
+            {
+              "citations": [
+                {
+                  "citation_id": "Source 1",
+                  "supports_claim": true
+                }
+              ],
+              "claim_id": "claim-1",
+              "supported_by_citation_set": true,
+              "supported_by_context": true
+            }
+          ],
+          "numeric_applicable": true,
+          "numeric_checks": {
+            "calculation": null,
+            "company": true,
+            "currency": true,
+            "metric": true,
+            "period": true,
+            "reporting_basis": true,
+            "scale": true,
+            "values": true
+          },
+          "released": true
+        },
+        {
+          "answer_exact": true,
+          "answerable": true,
+          "case_id": "tesla_operating",
+          "claims": [
+            {
+              "citations": [
+                {
+                  "citation_id": "Source 1",
+                  "supports_claim": true
+                }
+              ],
+              "claim_id": "claim-1",
+              "supported_by_citation_set": true,
+              "supported_by_context": true
+            }
+          ],
+          "numeric_applicable": true,
+          "numeric_checks": {
+            "calculation": null,
+            "company": true,
+            "currency": true,
+            "metric": true,
+            "period": true,
+            "reporting_basis": true,
+            "scale": true,
+            "values": true
+          },
+          "released": true
+        },
+        {
+          "answer_exact": true,
+          "answerable": true,
+          "case_id": "tesla_assets",
+          "claims": [
+            {
+              "citations": [
+                {
+                  "citation_id": "Source 1",
+                  "supports_claim": true
+                }
+              ],
+              "claim_id": "claim-1",
+              "supported_by_citation_set": true,
+              "supported_by_context": true
+            }
+          ],
+          "numeric_applicable": true,
+          "numeric_checks": {
+            "calculation": null,
+            "company": true,
+            "currency": true,
+            "metric": true,
+            "period": true,
+            "reporting_basis": true,
+            "scale": true,
+            "values": true
+          },
+          "released": true
+        },
+        {
+          "answerable": true,
+          "case_id": "tesla_energy",
+          "numeric_applicable": true,
+          "released": false
+        },
+        {
+          "answer_exact": true,
+          "answerable": true,
+          "case_id": "walmart_revenue",
+          "claims": [
+            {
+              "citations": [
+                {
+                  "citation_id": "Source 1",
+                  "supports_claim": true
+                }
+              ],
+              "claim_id": "claim-1",
+              "supported_by_citation_set": true,
+              "supported_by_context": true
+            }
+          ],
+          "numeric_applicable": true,
+          "numeric_checks": {
+            "calculation": null,
+            "company": true,
+            "currency": true,
+            "metric": true,
+            "period": true,
+            "reporting_basis": true,
+            "scale": true,
+            "values": true
+          },
+          "released": true
+        },
+        {
+          "answer_exact": true,
+          "answerable": true,
+          "case_id": "walmart_operating",
+          "claims": [
+            {
+              "citations": [
+                {
+                  "citation_id": "Source 1",
+                  "supports_claim": true
+                }
+              ],
+              "claim_id": "claim-1",
+              "supported_by_citation_set": true,
+              "supported_by_context": true
+            }
+          ],
+          "numeric_applicable": true,
+          "numeric_checks": {
+            "calculation": null,
+            "company": true,
+            "currency": true,
+            "metric": true,
+            "period": true,
+            "reporting_basis": true,
+            "scale": true,
+            "values": true
+          },
+          "released": true
+        },
+        {
+          "answer_exact": true,
+          "answerable": true,
+          "case_id": "walmart_assets",
+          "claims": [
+            {
+              "citations": [
+                {
+                  "citation_id": "Source 1",
+                  "supports_claim": true
+                }
+              ],
+              "claim_id": "claim-1",
+              "supported_by_citation_set": true,
+              "supported_by_context": true
+            }
+          ],
+          "numeric_applicable": true,
+          "numeric_checks": {
+            "calculation": null,
+            "company": true,
+            "currency": true,
+            "metric": true,
+            "period": true,
+            "reporting_basis": true,
+            "scale": true,
+            "values": true
+          },
+          "released": true
+        },
+        {
+          "answer_exact": true,
+          "answerable": true,
+          "case_id": "apple_revenue_two_years",
+          "claims": [
+            {
+              "citations": [
+                {
+                  "citation_id": "Source 1",
+                  "supports_claim": true
+                }
+              ],
+              "claim_id": "claim-1",
+              "supported_by_citation_set": true,
+              "supported_by_context": true
+            },
+            {
+              "citations": [
+                {
+                  "citation_id": "Source 1",
+                  "supports_claim": true
+                }
+              ],
+              "claim_id": "claim-2",
+              "supported_by_citation_set": true,
+              "supported_by_context": true
+            }
+          ],
+          "numeric_applicable": true,
+          "numeric_checks": {
+            "calculation": null,
+            "company": true,
+            "currency": true,
+            "metric": true,
+            "period": true,
+            "reporting_basis": true,
+            "scale": true,
+            "values": true
+          },
+          "released": true
+        },
+        {
+          "answer_exact": true,
+          "answerable": true,
+          "case_id": "nvidia_revenue_two_years",
+          "claims": [
+            {
+              "citations": [
+                {
+                  "citation_id": "Source 1",
+                  "supports_claim": true
+                }
+              ],
+              "claim_id": "claim-1",
+              "supported_by_citation_set": true,
+              "supported_by_context": true
+            },
+            {
+              "citations": [
+                {
+                  "citation_id": "Source 1",
+                  "supports_claim": true
+                }
+              ],
+              "claim_id": "claim-2",
+              "supported_by_citation_set": true,
+              "supported_by_context": true
+            }
+          ],
+          "numeric_applicable": true,
+          "numeric_checks": {
+            "calculation": null,
+            "company": true,
+            "currency": true,
+            "metric": true,
+            "period": true,
+            "reporting_basis": true,
+            "scale": true,
+            "values": true
+          },
+          "released": true
+        },
+        {
+          "answer_exact": true,
+          "answerable": true,
+          "case_id": "apple_nvidia_revenue",
+          "claims": [
+            {
+              "citations": [
+                {
+                  "citation_id": "Source 1",
+                  "supports_claim": true
+                }
+              ],
+              "claim_id": "claim-1",
+              "supported_by_citation_set": true,
+              "supported_by_context": true
+            },
+            {
+              "citations": [
+                {
+                  "citation_id": "Source 2",
+                  "supports_claim": true
+                }
+              ],
+              "claim_id": "claim-2",
+              "supported_by_citation_set": true,
+              "supported_by_context": true
+            }
+          ],
+          "numeric_applicable": true,
+          "numeric_checks": {
+            "calculation": null,
+            "company": true,
+            "currency": true,
+            "metric": true,
+            "period": true,
+            "reporting_basis": true,
+            "scale": true,
+            "values": true
+          },
+          "released": true
+        },
+        {
+          "answerable": false,
+          "case_id": "apple_eur_revenue",
+          "numeric_applicable": false,
+          "released": false
+        },
+        {
+          "answerable": false,
+          "case_id": "nvidia_future_revenue",
+          "numeric_applicable": false,
+          "released": false
+        },
+        {
+          "answerable": false,
+          "case_id": "tesla_restated_revenue",
+          "numeric_applicable": false,
+          "released": false
+        }
+      ],
+      "report_sha256": "sha256:98875e961c2cdba21393df962db5a2e9e06af1bf093fe763d0c5e70649cb33e6"
+    },
+    "original": {
+      "judgments": [
+        {
+          "answerable": true,
+          "case_id": "apple_revenue",
+          "numeric_applicable": true,
+          "released": false
+        },
+        {
+          "answerable": true,
+          "case_id": "apple_operating",
+          "numeric_applicable": true,
+          "released": false
+        },
+        {
+          "answer_exact": true,
+          "answerable": true,
+          "case_id": "apple_net",
+          "claims": [
+            {
+              "citations": [
+                {
+                  "citation_id": "Source 1",
+                  "supports_claim": true
+                }
+              ],
+              "claim_id": "claim-1",
+              "supported_by_citation_set": true,
+              "supported_by_context": true
+            }
+          ],
+          "numeric_applicable": true,
+          "numeric_checks": {
+            "calculation": null,
+            "company": true,
+            "currency": true,
+            "metric": true,
+            "period": true,
+            "reporting_basis": true,
+            "scale": true,
+            "values": true
+          },
+          "released": true
+        },
+        {
+          "answerable": true,
+          "case_id": "apple_assets",
+          "numeric_applicable": true,
+          "released": false
+        },
+        {
+          "answerable": true,
+          "case_id": "apple_quarter_revenue",
+          "numeric_applicable": true,
+          "released": false
+        },
+        {
+          "answerable": true,
+          "case_id": "apple_ytd_revenue",
+          "numeric_applicable": true,
+          "released": false
+        },
+        {
+          "answerable": true,
+          "case_id": "apple_quarter_operating",
+          "numeric_applicable": true,
+          "released": false
+        },
+        {
+          "answerable": true,
+          "case_id": "apple_ytd_operating",
+          "numeric_applicable": true,
+          "released": false
+        },
+        {
+          "answerable": true,
+          "case_id": "apple_quarter_assets",
+          "numeric_applicable": true,
+          "released": false
+        },
+        {
+          "answerable": true,
+          "case_id": "nvidia_revenue",
+          "numeric_applicable": true,
+          "released": false
+        },
+        {
+          "answerable": true,
+          "case_id": "nvidia_operating",
+          "numeric_applicable": true,
+          "released": false
+        },
+        {
+          "answerable": true,
+          "case_id": "nvidia_net",
+          "numeric_applicable": true,
+          "released": false
+        },
+        {
+          "answerable": true,
+          "case_id": "nvidia_assets",
+          "numeric_applicable": true,
+          "released": false
+        },
+        {
+          "answer_exact": true,
+          "answerable": true,
+          "case_id": "tesla_revenue",
+          "claims": [
+            {
+              "citations": [
+                {
+                  "citation_id": "Source 1",
+                  "supports_claim": true
+                }
+              ],
+              "claim_id": "claim-1",
+              "supported_by_citation_set": true,
+              "supported_by_context": true
+            }
+          ],
+          "numeric_applicable": true,
+          "numeric_checks": {
+            "calculation": null,
+            "company": true,
+            "currency": true,
+            "metric": true,
+            "period": true,
+            "reporting_basis": true,
+            "scale": true,
+            "values": true
+          },
+          "released": true
+        },
+        {
+          "answer_exact": true,
+          "answerable": true,
+          "case_id": "tesla_operating",
+          "claims": [
+            {
+              "citations": [
+                {
+                  "citation_id": "Source 1",
+                  "supports_claim": true
+                }
+              ],
+              "claim_id": "claim-1",
+              "supported_by_citation_set": true,
+              "supported_by_context": true
+            }
+          ],
+          "numeric_applicable": true,
+          "numeric_checks": {
+            "calculation": null,
+            "company": true,
+            "currency": true,
+            "metric": true,
+            "period": true,
+            "reporting_basis": true,
+            "scale": true,
+            "values": true
+          },
+          "released": true
+        },
+        {
+          "answer_exact": true,
+          "answerable": true,
+          "case_id": "tesla_assets",
+          "claims": [
+            {
+              "citations": [
+                {
+                  "citation_id": "Source 1",
+                  "supports_claim": true
+                }
+              ],
+              "claim_id": "claim-1",
+              "supported_by_citation_set": true,
+              "supported_by_context": true
+            }
+          ],
+          "numeric_applicable": true,
+          "numeric_checks": {
+            "calculation": null,
+            "company": true,
+            "currency": true,
+            "metric": true,
+            "period": true,
+            "reporting_basis": true,
+            "scale": true,
+            "values": true
+          },
+          "released": true
+        },
+        {
+          "answer_exact": false,
+          "answerable": true,
+          "case_id": "tesla_energy",
+          "claims": [
+            {
+              "citations": [
+                {
+                  "citation_id": "Source 1",
+                  "supports_claim": true
+                }
+              ],
+              "claim_id": "claim-1",
+              "supported_by_citation_set": true,
+              "supported_by_context": true
+            }
+          ],
+          "numeric_applicable": true,
+          "numeric_checks": {
+            "calculation": null,
+            "company": true,
+            "currency": true,
+            "metric": true,
+            "period": true,
+            "reporting_basis": false,
+            "scale": true,
+            "values": false
+          },
+          "released": true
+        },
+        {
+          "answerable": true,
+          "case_id": "walmart_revenue",
+          "numeric_applicable": true,
+          "released": false
+        },
+        {
+          "answerable": true,
+          "case_id": "walmart_operating",
+          "numeric_applicable": true,
+          "released": false
+        },
+        {
+          "answerable": true,
+          "case_id": "walmart_assets",
+          "numeric_applicable": true,
+          "released": false
+        },
+        {
+          "answerable": true,
+          "case_id": "apple_revenue_two_years",
+          "numeric_applicable": true,
+          "released": false
+        },
+        {
+          "answerable": true,
+          "case_id": "nvidia_revenue_two_years",
+          "numeric_applicable": true,
+          "released": false
+        },
+        {
+          "answerable": true,
+          "case_id": "apple_nvidia_revenue",
+          "numeric_applicable": true,
+          "released": false
+        },
+        {
+          "answerable": false,
+          "case_id": "apple_eur_revenue",
+          "numeric_applicable": false,
+          "released": false
+        },
+        {
+          "answerable": false,
+          "case_id": "nvidia_future_revenue",
+          "numeric_applicable": false,
+          "released": false
+        },
+        {
+          "answerable": false,
+          "case_id": "tesla_restated_revenue",
+          "numeric_applicable": false,
+          "released": false
+        }
+      ],
+      "report_sha256": "sha256:242424adda9ee0f0c8b261a5f9eab42eac0987eff7eb79e5a3d2b8a179d19f43"
+    }
+  },
+  "classification": "AUTHOR_REVIEWED_DEVELOPMENT_EXPOSED",
+  "pages_sha256": "sha256:f4ffa093f7b0f325eda948e82288050207d03e814abded4e1a903fe2bd5341b5",
+  "reference_sha256": "sha256:44f0c295511c23bff75a3b65ab76f8a9f467a9da2d07249b92bae6714b2b8f53"
+}

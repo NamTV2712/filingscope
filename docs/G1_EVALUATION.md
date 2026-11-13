@@ -95,7 +95,9 @@ claim coverage and citation-locator overlap have their original labels.
 Complete numeric checks and semantic claim/citation adjudication remain
 prerequisites for strict real-cohort scores. The initial semantic
 annotations are synthetic controls reviewed against the fixture
-specification. A human-reviewed real-filing subset is still needed.
+specification. A later [author-reviewed SEC pilot](G1_SEC_CLAIM_REVIEW.md)
+applies the scorer to frozen real-filing releases. Independent
+semantic judgments remain pending.
 Other diagnostics, including rank-weighted context precision, reference
 claim recall and AURC, remain deferred pending suitable judgments or
 continuous scores. G1 reports false/correct abstention and retains the
