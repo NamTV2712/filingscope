@@ -12,8 +12,9 @@ across 17 filings. Routed LangGraph reproduced 21/21 grounded answers on the
 answerable M13 development-exposed cases. Its 0/21 incorrect releases have a
 descriptive Wilson 95% upper bound of 15.46%.
 
-Live Jev and hosted closed-book/long-context comparisons are blocked under the
-USD 0 API budget. Independent final evaluation awaits a reviewer-held cohort.
+The Groq GPT-OSS 120B comparison measured closed-book and filing-context
+answers on a 26-question development pilot. Live Jev remains pending.
+Independent final evaluation awaits a reviewer-held cohort.
 The [research report](docs/G7_RESEARCH_REPORT.md) covers the implemented
 architecture, results, limitations and reproduction commands.
 

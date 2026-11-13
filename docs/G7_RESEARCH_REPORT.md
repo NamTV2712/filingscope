@@ -6,8 +6,8 @@ FilingScope tests whether bounded financial research plus deterministic
 evidence control improves the quality of released SEC answers.
 The strongest results below come from development-exposed cohorts
 with frozen source snapshots. The independent result remains
-`PROVISIONAL_NOT_INDEPENDENT`, and hosted Jev and LLM comparisons
-remain `API_VALIDATION_BLOCKED`. The report preserves each cohort's
+`PROVISIONAL_NOT_INDEPENDENT`, and live Jev remains
+`API_VALIDATION_BLOCKED`. The report preserves each cohort's
 denominators and scope.
 
 ## Implemented architecture
@@ -90,7 +90,7 @@ and faithfulness on a new real-filing cohort remain unmeasured.
 | Q7 outage | Adaptive retained healthy-source evidence on 5/10 persistent failures and routed LangGraph retained it on 10/10. Both recovered 10/10 one-time failures. |
 | G4 requirement reuse | Instrumented extractor calls 4 → 2 for FAST and 3 → 2 for RESEARCH. Stable historical outputs matched. [G4 method](G4_AGENT_VERIFICATION.md). |
 | Jev mock | Positive and timeout mocks preserved 60/60 expected policy decisions. Negative mock matched 40/60 with 20 ACCEPT → WEAK downgrades and zero hard false accepts. Live inference remains blocked. |
-| Hosted model controls | Closed-book and long-context prompt budgets calculated. Accuracy, latency and model charges are unmeasured under the USD 0 authorization. [G5 report](G5_BASELINE_EXPERIMENT.md). |
+| Hosted model controls | Groq GPT-OSS 120B completed both matched arms. Author review counted 0/23 exact closed-book and 22/23 exact with context, including 20/23 with all frozen PDF locators. The strict automated score was 0/23 and 1/23. [Groq benchmark](G5_GROQ_BASELINES.md). |
 | Matched local model controls | On the 26-case SEC pilot, Adaptive and routed each grounded 22/23 by frozen locator. Local Qwen 7B scored 0/23 exact closed-book and 1/23 grounded long-context under the shared scorer. Author review found 17/23 long-context answers correct in financial identity and 12/23 fully matched to the frozen locators. [G5 local report](G5_LOCAL_MODEL_BASELINES.md). |
 
 ### Accuracy, latency and cost

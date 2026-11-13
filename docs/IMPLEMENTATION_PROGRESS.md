@@ -164,13 +164,13 @@ G5 is **PARTIALLY_COMPLETE**. Offline policy comparisons found zero
 critical false accepts. Negative mock observations downgraded 20/60
 decisions. The 26-case SEC pilot now has local Qwen 7B closed-book and
 long-context comparisons alongside Dense, Adaptive and routed LangGraph.
-Adaptive and routed each grounded 22/23. Hosted comparisons and live
-Jev inference remain `API_VALIDATION_BLOCKED` under USD 0 authorization.
+Adaptive and routed each grounded 22/23. The local experiment is archived.
 [G5 report](G5_BASELINE_EXPERIMENT.md) ·
 [Matched local baseline report](G5_LOCAL_MODEL_BASELINES.md).
-The preferred hosted baseline is Groq GPT-OSS 120B. Model access and
-the 52-request dry run are verified. The organization's billing tier
-is pending. [Groq baseline plan](G5_GROQ_BASELINES.md).
+The Groq GPT-OSS 120B closed-book and long-context runs completed all
+52 requests. Author review found 0/23 exact closed-book and 22/23
+exact with context, including 20/23 with every frozen PDF locator.
+Live Jev remains pending. [Groq benchmark](G5_GROQ_BASELINES.md).
 
 ## G6 independent evaluation readiness
 

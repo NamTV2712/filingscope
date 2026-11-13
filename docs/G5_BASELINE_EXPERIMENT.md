@@ -68,25 +68,25 @@ retained healthy sources on 10/10 versus 5/10 for the adaptive arm.
 Natural statement runtime retained 30/30 grounded answers in G4.
 G5 B6 revalidated 21/21 grounded answers with zero incorrect releases.
 
-Hosted closed-book and long-context model inference remain
-`API_VALIDATION_BLOCKED`. A follow-up measured both conditions locally
-on the SEC 2025 pilot. [Local comparison](G5_LOCAL_MODEL_BASELINES.md).
-The hosted dry run sized all 24 question-only
+The original hosted dry run sized all 24 question-only
 prompts at 6,788 total input tokens. Eighteen requests had document
 locators that allowed a full-text prompt estimate. Six fit a
 100,000-token input budget. Twelve exceeded it, with a maximum
 714,190 tokens. Those estimates use oracle document identities for
 sizing. A live comparison will need predeclared source selection,
 truncation, model revision and a common case set. No quality result
-or provider cost is inferred from the dry run.
+or provider cost is inferred from the dry run. Follow-ups measured
+both conditions on the SEC 2025 pilot.
+[Groq benchmark](G5_GROQ_BASELINES.md) ·
+[Archived local comparison](G5_LOCAL_MODEL_BASELINES.md).
 
 ## Verification and decision
 
 Windows offline suite passed 452 tests with 3 missing fixture skips.
 The focused observer checks passed 21 tests. Ruff and focused mypy passed.
 The full two-plane policy is still authoritative. **KEEP** deterministic
-release. **EXPERIMENT** with observers offline. **DEFER** live Jev and
-hosted closed-book and long-context comparisons pending authorization.
+release. **EXPERIMENT** with observers offline. **DEFER** live Jev
+pending provider access and authorization.
 G5 is **PARTIALLY_COMPLETE**.
 
 ```text
