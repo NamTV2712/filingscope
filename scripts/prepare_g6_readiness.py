@@ -14,6 +14,7 @@ from src.evaluation.independent_final import ARMS, CATEGORIES, Corpus, Freeze, L
 from src.evaluation.independent_primary import ReviewedPredictions
 from src.evaluation.m13_failure_replay import expected_slots
 from src.evaluation.multi_agent_ablation import paired_grounded_exact
+from src.evaluation.prediction_receipt import PredictionReceipt
 from src.retrieval.canonical_json import sha256_file
 
 CRITERIA = {"minimum_coverage": 0.5, "maximum_incorrect_release_point": 0.05,
@@ -78,6 +79,7 @@ def main() -> None:
             "target_category_counts": dict.fromkeys(sorted(CATEGORIES), 20),
             "reviewer_threshold_proposal": CRITERIA,
             "freeze_release_risk_proposal": FREEZE_RELEASE_RISK,
+            "freeze_require_committed_prediction_receipt_proposal": True,
             "required_external_inputs": [
                 "Complete exposed issuer/document crosswalk, including G2 and external benchmark exposure",
                 "Later filing inventory, PDF renditions, frozen index and Company Facts snapshots",
@@ -85,7 +87,7 @@ def main() -> None:
                 "Post-prediction numeric, retrieval and atomic claim/citation judgments for G1 primary metrics",
             ],
             "schemas": {model.__name__: model.model_json_schema()
-                        for model in (Freeze, Membership, Corpus, Question, Label, ReviewedPredictions)},
+                        for model in (Freeze, Membership, Corpus, Question, Label, ReviewedPredictions, PredictionReceipt)},
         })
     print(f"Historical readiness replay: {report['case_count']} cases, {report['status']}")
 

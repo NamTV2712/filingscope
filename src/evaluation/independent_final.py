@@ -21,6 +21,7 @@ from src.evaluation.multi_agent_ablation import (
 
 
 Hash = Annotated[str, StringConstraints(pattern=r"^sha256:[a-f0-9]{64}$")]
+GitSha = Annotated[str, StringConstraints(pattern=r"^[a-f0-9]{40}$")]
 Identifier = Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$")]
 Cik = Annotated[int, Field(gt=0, le=9_999_999_999)]
 Nonempty = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
@@ -39,7 +40,7 @@ class ReleaseRiskCriteria(_Record):
 
 class Freeze(_Record):
     reviewer: Nonempty
-    git_sha: Annotated[str, StringConstraints(pattern=r"^[a-f0-9]{40}$")]
+    git_sha: GitSha
     selection_seed: int
     bootstrap_seed: int
     filing_from: date
@@ -50,6 +51,7 @@ class Freeze(_Record):
     adjudication: Nonempty
     success_criteria: Nonempty
     release_risk_criteria: ReleaseRiskCriteria | None = None
+    require_committed_prediction_receipt: bool = Field(default=False, strict=True)
     exposed_membership_sha256: Hash
     corpus_sha256: Hash
     questions_sha256: Hash

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from dataclasses import asdict
 from datetime import date
 
@@ -14,6 +15,7 @@ from src.evaluation.independent_final import (
 )
 from src.evaluation.independent_primary import ReviewedPredictions, score_reviewed_predictions
 from src.evaluation.multi_agent_ablation import AblationObservation
+from src.evaluation.prediction_receipt import PredictionReceipt
 from src.retrieval.canonical_json import canonical_sha256, sha256_file
 from src.retrieval.frozen_artifacts import corpus_fingerprint
 
@@ -96,6 +98,76 @@ def test_blind_preflight_leaves_labels_unopened(bundle, monkeypatch):
     (root / "questions.jsonl").write_text("tampered", encoding="utf-8")
     with pytest.raises(ValueError, match="questions.jsonl"):
         run_independent_final.main()
+
+
+def test_score_verifies_committed_receipt_before_reading_labels(bundle, monkeypatch):
+    bundle_root, freeze, _, _, questions, _ = bundle
+    repo = bundle_root / "repo"
+    repo.mkdir()
+    monkeypatch.chdir(repo)
+
+    def git(*args):
+        return subprocess.check_output(["git", *args], encoding="utf-8").strip()
+
+    git("init", "--quiet")
+    git("config", "user.name", "Fixture")
+    git("config", "user.email", "fixture@example.com")
+    (repo / ".gitignore").write_text("data/\n", encoding="utf-8")
+    git("add", ".gitignore")
+    git("commit", "-qm", "Freeze runtime")
+    frozen_git = git("rev-parse", "HEAD")
+    freeze = freeze.model_copy(update={"git_sha": frozen_git, "require_committed_prediction_receipt": True})
+    freeze_path = bundle_root / "freeze.json"
+    freeze_path.write_text(freeze.model_dump_json(), encoding="utf-8")
+    freeze_hash = sha256_file(freeze_path)
+    predictions = bundle_root / "predictions.json"
+    predictions.write_text(json.dumps({"git_sha": frozen_git, "freeze_sha256": freeze_hash,
+                                       "python": freeze.python_version, "dependencies": freeze.dependencies,
+                                       "predictions": _predictions(questions)}), encoding="utf-8")
+    prediction_hash = sha256_file(predictions)
+    receipt = PredictionReceipt(git_sha=frozen_git, freeze_sha256=freeze_hash, predictions_sha256=prediction_hash)
+    labels = bundle_root / "labels.jsonl"
+    held = bundle_root / "held.jsonl"
+    labels.rename(held)
+    common = ["--bundle", str(bundle_root), "--freeze-sha256", freeze_hash,
+              "--predictions", str(predictions), "--predictions-sha256", prediction_hash]
+    monkeypatch.setattr("sys.argv", ["runner", "receipt", *common])
+    assert run_independent_final.main() == 0
+    git("add", receipt.git_path)
+    git("commit", "-qm", "Record prediction hash before label release")
+    receipt_commit = git("rev-parse", "HEAD")
+    score_args = ["runner", "score", *common, "--output", "data/scored.json"]
+    git("checkout", "--quiet", "--detach", frozen_git)
+    monkeypatch.setattr("sys.argv", score_args)
+    with pytest.raises(SystemExit, match="2"):
+        run_independent_final.main()
+
+    (repo / receipt.git_path).parent.mkdir(exist_ok=True)
+    (repo / receipt.git_path).write_text(receipt.model_dump_json(), encoding="utf-8")
+    (repo / "unrelated.txt").write_text("changed code", encoding="utf-8")
+    git("add", receipt.git_path, "unrelated.txt")
+    git("commit", "-qm", "Receipt with an unrelated change")
+    monkeypatch.setattr("sys.argv", [*score_args, "--prediction-receipt-commit", git("rev-parse", "HEAD")])
+    with pytest.raises(ValueError, match="must add only the hash receipt"):
+        run_independent_final.main()
+
+    git("checkout", "--quiet", "--detach", frozen_git)
+    wrong = receipt.model_copy(update={"predictions_sha256": CHECKSUM})
+    (repo / receipt.git_path).parent.mkdir(exist_ok=True)
+    (repo / receipt.git_path).write_text(wrong.model_dump_json(), encoding="utf-8")
+    git("add", receipt.git_path)
+    git("commit", "-qm", "Receipt for different prediction bytes")
+    monkeypatch.setattr("sys.argv", [*score_args, "--prediction-receipt-commit", git("rev-parse", "HEAD")])
+    with pytest.raises(ValueError, match="differs from the supplied hashes"):
+        run_independent_final.main()
+
+    git("checkout", "--quiet", "--detach", receipt_commit)
+    held.rename(labels)
+    monkeypatch.setattr("sys.argv", [*score_args, "--prediction-receipt-commit", receipt_commit])
+    assert run_independent_final.main() == 0
+    scored = json.loads((repo / "data/scored.json").read_bytes())
+    assert scored["prediction_receipt_commit"] == receipt_commit and scored["predictions_sha256"] == prediction_hash
+    assert scored["arms"]["C_routed"]["overall"]["grounded_exact_answers"] == 7
 
 
 def test_final_scoring_requires_complete_supported_numeric_and_narrative_claims(bundle):

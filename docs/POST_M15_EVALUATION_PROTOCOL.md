@@ -86,10 +86,14 @@ $env:TRANSFORMERS_OFFLINE = '1'
 python -m scripts.run_independent_final preflight --bundle $bundle --freeze-sha256 $freezeHash
 uv run --offline --with psutil==7.2.2 python -m scripts.run_independent_final predict `
   --bundle $bundle --freeze-sha256 $freezeHash --output $predictions
-# The reviewer records the printed prediction hash, then releases labels.jsonl.
+# For a freeze requiring the committed receipt, follow the linked procedure before releasing labels.
 python -m scripts.run_independent_final score --bundle $bundle --freeze-sha256 $freezeHash `
   --predictions $predictions --predictions-sha256 $predictionHash --output data/independent-final/report.json
 ```
+
+When the freeze requires a Git receipt, record its commit before the
+reviewer releases labels and include `--prediction-receipt-commit` when
+scoring. [Receipt workflow](G6_PREDICTION_RECEIPT.md).
 
 Prediction executes the Q7 bounded adaptive control and the routed specialist
 graph on the same snapshots. The score report contains paired grouped

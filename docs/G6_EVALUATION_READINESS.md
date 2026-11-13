@@ -19,6 +19,8 @@ The [frozen release-risk criterion](G6_RELEASE_RISK_GATE.md) provides
 machine-readable coverage and risk thresholds for adjudicated scoring.
 The [draft exposure inventory](G6_EXPOSURE_INVENTORY.md) provides 68
 CIKs and 91 local document IDs for reviewer verification.
+The [committed prediction receipt](G6_PREDICTION_RECEIPT.md) gives
+reviewers a Git-verifiable prediction hash before label release.
 
 ## Handoff and verification
 

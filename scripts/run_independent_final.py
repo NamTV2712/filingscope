@@ -19,6 +19,9 @@ from src.evaluation.independent_final import (
     ARMS, Corpus, Freeze, Label, Membership, Question, check_membership, read_pinned, read_rows, score_cohort,
 )
 from src.evaluation.independent_primary import ReviewedPredictions, score_reviewed_predictions
+from src.evaluation.prediction_receipt import (
+    PredictionReceipt, read_frozen_predictions, validate_prediction_membership, verify_prediction_commit,
+)
 from src.retrieval.canonical_json import sha256_file
 
 
@@ -104,19 +107,24 @@ def _predict(bundle: Path, freeze: Freeze, corpus: Corpus, questions: list[Quest
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("mode", choices=("preflight", "predict", "score"))
+    parser.add_argument("mode", choices=("preflight", "predict", "receipt", "score"))
     parser.add_argument("--bundle", type=Path, required=True)
     parser.add_argument("--freeze-sha256", required=True, help="Reviewer-supplied sha256:<hex> before opening the question file")
     parser.add_argument("--predictions", type=Path)
     parser.add_argument("--predictions-sha256", help="Prediction hash recorded before label release")
+    parser.add_argument("--prediction-receipt-commit", help="Reviewer-recorded Git commit containing the prediction receipt")
     parser.add_argument("--adjudications", type=Path, help="Reviewer-supplied post-prediction G1 judgments")
     parser.add_argument("--adjudications-sha256", help="Reviewer-recorded hash for the judgment file")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
     if args.mode in ("predict", "score") and args.output is None:
         parser.error("--output is required for predict and score")
-    if args.mode == "score" and (args.predictions is None or not args.predictions_sha256):
-        parser.error("--predictions and --predictions-sha256 are required for score")
+    if args.mode in ("receipt", "score") and (args.predictions is None or not args.predictions_sha256):
+        parser.error("--predictions and --predictions-sha256 are required for receipt and score")
+    if args.prediction_receipt_commit and args.mode != "score":
+        parser.error("--prediction-receipt-commit is supported in score mode only")
+    if args.mode == "receipt" and args.output is not None:
+        parser.error("Receipt mode derives the output path from the freeze hash")
     if args.adjudications or args.adjudications_sha256:
         if args.mode != "score" or not (args.adjudications and args.adjudications_sha256):
             parser.error("Both adjudication arguments are supported in score mode only")
@@ -129,8 +137,11 @@ def main() -> int:
     with offline_socket_guard():
         bundle = args.bundle
         freeze = Freeze.model_validate_json(read_pinned(bundle / "freeze.json", args.freeze_sha256))
-        if _git("rev-parse", "HEAD") != freeze.git_sha or _git("status", "--porcelain"):
+        head = _git("rev-parse", "HEAD")
+        if head not in {freeze.git_sha, args.prediction_receipt_commit} or _git("status", "--porcelain"):
             parser.error("Check out the exact frozen revision with a clean worktree")
+        if args.mode == "score" and freeze.require_committed_prediction_receipt and not args.prediction_receipt_commit:
+            parser.error("This freeze requires --prediction-receipt-commit before labels can be read")
         corpus = Corpus.model_validate_json(read_pinned(bundle / "corpus.json", freeze.corpus_sha256))
         exposed = read_rows(bundle / "exposed.jsonl", freeze.exposed_membership_sha256, Membership)
         questions = read_rows(bundle / "questions.jsonl", freeze.questions_sha256, Question)
@@ -143,11 +154,22 @@ def main() -> int:
                 raise ValueError("Python or installed dependency versions differ from the reviewer freeze")
             report = _predict(bundle, freeze, corpus, questions)
         else:
-            predictions = json.loads(read_pinned(args.predictions, args.predictions_sha256))
-            if predictions["git_sha"] != freeze.git_sha or predictions["freeze_sha256"] != args.freeze_sha256:
-                raise ValueError("Prediction provenance differs from the reviewer freeze")
-            if predictions["python"] != freeze.python_version or predictions["dependencies"] != freeze.dependencies:
-                raise ValueError("Prediction dependency provenance differs from the reviewer freeze")
+            receipt = PredictionReceipt(git_sha=freeze.git_sha, freeze_sha256=args.freeze_sha256,
+                                        predictions_sha256=args.predictions_sha256)
+            predictions = read_frozen_predictions(args.predictions, freeze, receipt)
+            validate_prediction_membership(predictions, {row.case_id for row in questions})
+            if args.mode == "receipt":
+                root = Path(_git("rev-parse", "--show-toplevel"))
+                destination = root / receipt.git_path
+                if destination.parent.resolve() != destination.parent:
+                    raise ValueError("The receipt directory must be inside the frozen worktree")
+                destination.parent.mkdir(exist_ok=True)
+                with destination.open("x", encoding="utf-8", newline="\n") as stream:
+                    stream.write(receipt.model_dump_json(indent=2) + "\n")
+                print(receipt.git_path)
+                return 0
+            if args.prediction_receipt_commit:
+                verify_prediction_commit(root, args.prediction_receipt_commit, receipt)
             labels = read_rows(bundle / "labels.jsonl", freeze.labels_sha256, Label)
             report = score_cohort(freeze, corpus, questions, labels, predictions["predictions"])
             if args.adjudications:
@@ -160,6 +182,8 @@ def main() -> int:
                 )
                 report["adjudications_sha256"] = args.adjudications_sha256
             report["predictions_sha256"] = args.predictions_sha256
+            if args.prediction_receipt_commit:
+                report["prediction_receipt_commit"] = args.prediction_receipt_commit
             report["runtime"] = {key: value for key, value in predictions.items() if key != "predictions"}
         report["freeze_sha256"] = args.freeze_sha256
         report["corpus"] = corpus.model_dump(mode="json")
