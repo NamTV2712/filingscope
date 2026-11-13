@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="700" height="345" viewBox="0 0 700 345" role="img" aria-labelledby="title desc">
+  <title id="title">Historical M13 release-risk operating points</title>
+  <desc id="desc">Dense A0 released 14 of 24 answers, all incorrect or unsupported. Adaptive and routed LangGraph both released 21 of 24, with zero errors and a Wilson 95 percent upper bound of 15.46 percent. The withhold-all threshold has undefined risk.</desc>
+  <rect width="700" height="345" fill="white"/>
+  <g font-family="system-ui, sans-serif" fill="#152333">
+    <text x="82" y="31" font-size="17" font-weight="700">Historical M13 release-risk operating points</text>
+    <g stroke="#dce4ec">
+      <path d="M82 55H652 M82 107H652 M82 159H652 M82 211H652"/>
+    </g>
+    <path d="M82 55V263H652" stroke="#405568" fill="none"/>
+    <g font-size="11" text-anchor="end">
+      <text x="74" y="59">100%</text><text x="74" y="111">75%</text>
+      <text x="74" y="163">50%</text><text x="74" y="215">25%</text>
+      <text x="74" y="267">0%</text>
+    </g>
+    <g font-size="11" text-anchor="middle">
+      <text x="82" y="280">0%</text><text x="225" y="280">25%</text>
+      <text x="367" y="280">50%</text><text x="510" y="280">75%</text>
+      <text x="652" y="280">100%</text>
+    </g>
+    <text x="367" y="303" text-anchor="middle" font-size="13">Answer coverage</text>
+    <text x="19" y="159" transform="rotate(-90 19 159)" text-anchor="middle" font-size="13">Incorrect release risk</text>
+    <circle cx="414.5" cy="55" r="5" fill="#9e3d29"/>
+    <text x="428" y="69" font-size="12">Dense A0 · 14/14 errors</text>
+    <path d="M580.75 230.84V263 M574 230.84H587.5" stroke="#06665c" stroke-width="2"/>
+    <circle cx="580.75" cy="263" r="5" fill="#06665c"/>
+    <text x="567" y="218" text-anchor="end" font-size="12">Adaptive and routed · 0/21 errors</text>
+    <text x="567" y="234" text-anchor="end" font-size="11">Wilson 95% upper bound 15.46%</text>
+    <text x="82" y="326" font-size="11" fill="#405568">Development-exposed cohort. Withhold-all risk is undefined.</text>
+  </g>
+</svg>

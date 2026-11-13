@@ -5,39 +5,17 @@ questions with traceable evidence. It extends a working SEC filing retrieval
 system with explicit evidence sufficiency, targeted retrieval, and claim-level
 verification, then measures each addition against a reproducible benchmark.
 
-The migrated baseline and P0–P4 evidence components are implemented. P5 now
-adds a provider-backed A0–A5 FinanceBench end-to-end evaluation and an honest
-failure report. Its results are weak: answer coverage is low, held-out numeric
-exact accuracy is zero, and evidence-aware variants often abstain. That result
-is preserved as a baseline for the research roadmap rather than presented as a
-quality success. See [`docs/BENCHMARK_RESULTS.md`](docs/BENCHMARK_RESULTS.md).
-M3 adds a deterministic candidate Evidence Policy Engine and a separate
-60-case synthetic decision benchmark. Its results validate fixed policy
-behavior only; they are not financial-document accuracy or calibration
-results. See
-[`docs/EVIDENCE_POLICY_EVALUATION.md`](docs/EVIDENCE_POLICY_EVALUATION.md).
+The local backend uses a bounded FAST/RESEARCH router, LangGraph specialists,
+an evidence ledger, and deterministic claim, numeric and citation verification.
+The offline SEC Inline XBRL pipeline reproduced 20,723 numeric observations
+across 17 filings. Routed LangGraph reproduced 21/21 grounded answers on the
+answerable M13 development-exposed cases. Its 0/21 incorrect releases have a
+descriptive Wilson 95% upper bound of 15.46%.
 
-M4 adds a metadata-only runtime Corpus Map and a bounded corpus-aware query
-planner. On the fixed 150-case BM25 comparison it improved Recall@10 by 4.34
-points overall and 2.22 points held-out, while increasing retrieval p95 to
-1,051 ms. This remains a standalone research component: dense retrieval is
-still the baseline, and no answer-quality gain was measured. See
-[`docs/CORPUS_AWARE_PLANNING.md`](docs/CORPUS_AWARE_PLANNING.md).
-
-The next work follows the research milestones in
-[`docs/RESEARCH_AGENDA.md`](docs/RESEARCH_AGENDA.md). M5 now adds a finite
-LangGraph router with FAST, RESEARCH, and UNSUPPORTED paths and explicit route
-budgets. Its hand-authored 56-case behavior fixture passes, while the unlabeled
-150-question FinanceBench pass shows 104 requests remain unsupported under the
-current metric/period vocabulary. M7 adds a bounded specialist graph over the
-existing retriever, a narrow official SEC Company Facts client, P2 sufficiency,
-Decimal calculations, the M6 ledger, and P4 claim verification. Its hermetic
-fixtures validate flow and budget contracts, not real-world answer accuracy;
-it is not connected to P5. The target design separates a Research Plane from
-an Evidence Control Plane that decides evidence acceptance, sufficiency,
-verification, and answer release. A local evidence-first interface is a later
-milestone. See [`docs/SPECIALIST_RESEARCH_GRAPH.md`](docs/SPECIALIST_RESEARCH_GRAPH.md).
-**No cloud deployment is planned.**
+Live Jev and hosted closed-book/long-context comparisons are blocked under the
+USD 0 API budget. Independent final evaluation awaits a reviewer-held cohort.
+The [research report](docs/G7_RESEARCH_REPORT.md) covers the implemented
+architecture, results, limitations and reproduction commands.
 
 ## P0 retrieval baseline
 
@@ -56,7 +34,7 @@ include the source project's provider, generation, agent, API, or frontend
 systems. See the [source audit](docs/SOURCE_CODE_AUDIT.md) and
 [reuse matrix](docs/SOURCE_REUSE_MATRIX.md) for exact file-level provenance.
 
-## Architecture
+## Retrieval foundation
 
 ```text
 SEC EDGAR 10-K HTML
@@ -279,7 +257,10 @@ metric, leakage, and reproduction details.
 | M12 | Financial hard-negative retrieval | Complete. [24-case provenance benchmark](docs/HARD_NEGATIVE_RETRIEVAL.md) |
 | M13 | Controlled solo and specialist ablation | Complete. [24-case results](docs/ABLATION_STUDY.md) |
 | M14 | Parent context, ColBERT, and filing-graph retrieval experiments | Complete. [Fixed-pool results](docs/ADVANCED_RETRIEVAL.md) |
-| M15 | Local evidence-first research UX | Planned; no deployment |
+| M15 | Local evidence-first research UX | Implemented on loopback. [Local workspace](docs/LOCAL_RESEARCH.md) |
+| G0–G1 | Reproducible baseline, eight primary metrics and offline Jev scaffold | Verified. [Progress](docs/IMPLEMENTATION_PROGRESS.md#g0-engineering-baseline) |
+| G2–G4 | SEC iXBRL data, scoped Dense and requirement reuse | Parser and runtime comparisons verified. Mixed G2 cohorts remain provisional. [Progress](docs/IMPLEMENTATION_PROGRESS.md#g2-sec-data-and-benchmark-cohorts) |
+| G5–G7 | Baseline comparison, independent handoff and research report | Offline evidence documented. Live API validation and independent scoring pending. [Research report](docs/G7_RESEARCH_REPORT.md) |
 
 No answer quality or end-to-end agent performance claims are made by the
 retrieval-only FinanceBench benchmark.
@@ -298,9 +279,9 @@ retrieval-only FinanceBench benchmark.
 - P3's synthetic retrieval evaluation does not estimate FinanceBench multi-hop
   performance. Its elapsed-time budget is cooperative around synchronous
   retrieval calls.
-- A persistent evidence ledger, SEC XBRL path, router/ledger integration into
-  the answer path, retrieval/generation execution inside the research graph,
-  production request API, and local research UI are not implemented yet.
+- The ledger is in memory. The iXBRL pipeline is offline research tooling.
+  The local interface uses the existing Company Facts and filing retrieval
+  paths. The 2025+ lookup cohorts are provisional.
 - The current A0–A5 path is an offline evaluation pipeline, not a deployed
   application. Its strict evidence checks expose useful failure modes but do
   not yet produce useful coverage on much of the held-out sample.

@@ -161,3 +161,11 @@ reviewer handoff and historical risk report were generated. The routed
 M13 replay had 0/21 incorrect releases and a Wilson 95% upper bound of
 15.46%. The 5% risk claim is inconclusive. Independent prediction and
 scoring await an eligible reviewer bundle. [G6 report](G6_EVALUATION_READINESS.md).
+
+## G7 research report
+
+The report binds the G0–G6 evidence, architecture, baseline comparisons,
+risk–coverage points and reproducibility instructions. The README and
+portfolio statements reflect the verified scope. Live provider evaluation
+and independent scoring retain their documented blockers.
+[Research report](G7_RESEARCH_REPORT.md).
