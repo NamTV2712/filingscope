@@ -168,6 +168,9 @@ Adaptive and routed each grounded 22/23. Hosted comparisons and live
 Jev inference remain `API_VALIDATION_BLOCKED` under USD 0 authorization.
 [G5 report](G5_BASELINE_EXPERIMENT.md) ·
 [Matched local baseline report](G5_LOCAL_MODEL_BASELINES.md).
+The preferred hosted baseline is Groq GPT-OSS 120B. Model access and
+the 52-request dry run are verified. The organization's billing tier
+is pending. [Groq baseline plan](G5_GROQ_BASELINES.md).
 
 ## G6 independent evaluation readiness
 

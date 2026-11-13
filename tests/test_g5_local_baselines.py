@@ -4,6 +4,7 @@ import json
 
 from configs.multi_agent_ablation import AblationCase, GoldClaim
 from scripts import run_g5_local_baselines as baselines
+from scripts.run_g5_groq_baselines import MODEL as GROQ_MODEL, OUTPUT_CAP, _request
 from src.agent.complexity_router import ExecutionPath
 
 
@@ -53,3 +54,13 @@ def test_invalid_model_output_counts_as_failure():
     row = baselines._run_case(model, _case(), (), source_required=False)
     assert row["response_error"] == "invalid_json_or_claim"
     assert row["answered"] and not row["exact"] and not row["grounded_exact"]
+
+
+def test_groq_request_uses_strict_claim_schema_and_bounded_reasoning():
+    payload = _request([{"role": "user", "content": "A frozen question"}])
+    assert payload["model"] == GROQ_MODEL == "openai/gpt-oss-120b"
+    assert payload["max_completion_tokens"] == OUTPUT_CAP
+    assert payload["reasoning_effort"] == "low" and payload["include_reasoning"] is False
+    schema = payload["response_format"]["json_schema"]
+    assert schema["strict"] and schema["schema"]["additionalProperties"] is False
+    assert schema["schema"]["$defs"]["Claim"]["required"] == ["statement", "source"]

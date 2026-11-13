@@ -127,18 +127,20 @@ class LocalModel:
 
 def _context(
     model: LocalModel, question: str, pages: tuple[Page, ...], *, source_required: bool,
+    input_budget: int | None = None,
 ) -> tuple[tuple[Page, ...], int, int]:
+    budget = INPUT_BUDGET if input_budget is None else input_budget
     def count(selected: tuple[Page, ...]) -> int:
         return model.input_tokens(_messages(question, selected, source_required=source_required))
 
     total = count(pages)
-    if total <= INPUT_BUDGET:
+    if total <= budget:
         return pages, total, total
     ordered = tuple(sorted(pages, key=lambda page: not page.statement))
     low, high = 0, len(ordered)
     while low < high:
         middle = (low + high + 1) // 2
-        if count(ordered[:middle]) <= INPUT_BUDGET:
+        if count(ordered[:middle]) <= budget:
             low = middle
         else:
             high = middle - 1
