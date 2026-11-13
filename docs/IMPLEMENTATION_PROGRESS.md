@@ -153,3 +153,11 @@ decisions. M13 was replayed with Dense and the full policy. Closed-book,
 long-context and live Jev inference remain `API_VALIDATION_BLOCKED`
 under USD 0 authorization. Windows passed 452 tests with 3 skips.
 [G5 report](G5_BASELINE_EXPERIMENT.md).
+
+## G6 independent evaluation readiness
+
+G6 is **PARTIALLY_COMPLETE / PROVISIONAL_NOT_INDEPENDENT**. The label-free
+reviewer handoff and historical risk report were generated. The routed
+M13 replay had 0/21 incorrect releases and a Wilson 95% upper bound of
+15.46%. The 5% risk claim is inconclusive. Independent prediction and
+scoring await an eligible reviewer bundle. [G6 report](G6_EVALUATION_READINESS.md).
