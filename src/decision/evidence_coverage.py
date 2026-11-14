@@ -28,8 +28,12 @@ from src.decision.period_value_parser import (
     extract_period_value_pairs,
     period_matches,
 )
-from src.decision.requirement_extractor import permits_energy_segment_lookup, requires_nonstandard_reporting_basis
-from src.ingestion.company_facts import matches_requested_revision, requested_revision_policies
+from src.decision.requirement_extractor import (
+    mask_cost_of_revenue, permits_energy_segment_lookup, requires_nonstandard_reporting_basis,
+)
+from src.ingestion.company_facts import (
+    CONSOLIDATED_METRIC_CONCEPTS, matches_requested_revision, requested_revision_policies,
+)
 from src.ingestion.period_identity import PeriodScope, intervals_agree, quarter_ytd_pair_matches
 from src.ingestion.segment_revenue import ENERGY_ENTITY, ENERGY_METRIC, ENERGY_PERIOD, is_energy_evidence
 from src.retrieval.structured_lookup import structured_lookup
@@ -143,6 +147,11 @@ def _normalized_facts(
         return None
     if not isinstance(values, tuple):
         return ()
+    concepts = CONSOLIDATED_METRIC_CONCEPTS.get(metric.metric_id)
+    if concepts is not None and (
+        chunk.get("source_type") != "XBRL_FACT" or chunk.get("financial_concept") not in concepts
+    ):
+        return ()
     source_url = chunk.get("source_url") or chunk.get("source_repository_url") or chunk.get("filing_url")
     return tuple(
         fact for fact in values
@@ -214,6 +223,12 @@ def _facts_from_chunk(
     )
     observations: list[PeriodValuePair] = []
     if metric.quantitative:
+        if metric.metric_id in CONSOLIDATED_METRIC_CONCEPTS:
+            # These mappings authorize accession-bound structured facts.
+            # Unscoped text can contain differently based expense components.
+            return ()
+        if metric.metric_id == "revenue":
+            text = mask_cost_of_revenue(text)
         # Reuse the migrated exact SEC table-row matcher for canonical total
         # rows. It only sees this retrieved chunk, never the complete corpus.
         ticker = chunk.get("ticker")
@@ -332,7 +347,7 @@ class EvidenceCoverageAnalyzer:
         period_seen: dict[str, bool] = defaultdict(bool)
         number_seen: dict[str, bool] = defaultdict(bool)
         source_conflict_ids: dict[str, set[str]] = defaultdict(set)
-        nonstandard_basis = requires_nonstandard_reporting_basis(requirements.question)
+        nonstandard_basis = requires_nonstandard_reporting_basis(requirements.question, requirements.metrics)
         revisions = requested_revision_policies(requirements.question)
         interval = requirements.reporting_interval
         quarter_ytd = requirements.quarter_ytd

@@ -19,18 +19,22 @@ from src.ingestion.period_identity import PeriodMention, period_mentions
 
 _YEAR_RE = re.compile(r"(?<!\d)(?:19|20)\d{2}(?!\d)")
 _CURRENCY_TOKEN = "|".join((*sorted(MONETARY_CURRENCIES), r"\$", "€", "£"))
+_AMOUNT_BODY = (
+    rf"(?P<currency_prefix>[-−(][ \t]*(?=(?:{_CURRENCY_TOKEN})[ \t]*\d))?"
+    rf"(?P<currency>{_CURRENCY_TOKEN})?\s*"
+    r"(?P<number>\(?[-−]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?\)?)"
+)
+_CLOSE_CURRENCY_PAREN = r"(?(currency_prefix)[ \t]*\)?)"
 _VALUE_RE = re.compile(
-    rf"(?<![\w.])(?P<currency>{_CURRENCY_TOKEN})?\s*"
-    r"(?P<number>\(?-?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?\)?)"
+    rf"(?<![\w.]){_AMOUNT_BODY}"
     r"\s*(?P<percent>%|percent\b)?\s*"
-    r"(?P<scale>(?:billion|million|thousand|bn|mm|m)\b)?",
+    rf"(?P<scale>(?:billion|million|thousand|bn|mm|m)\b)?{_CLOSE_CURRENCY_PAREN}",
     re.I,
 )
 _STRICT_NUMBER_RE = re.compile(
-    rf"^(?P<currency>{_CURRENCY_TOKEN})?\s*"
-    r"(?P<number>\(?-?\d{1,3}(?:,\d{3})*(?:\.\d+)?\)?|\(?-?\d+(?:\.\d+)?\)?)"
+    rf"^{_AMOUNT_BODY}"
     r"\s*(?P<percent>%|percent)?\s*"
-    r"(?P<scale>billion|million|thousand|bn|mm|m)?$",
+    rf"(?P<scale>billion|million|thousand|bn|mm|m)?{_CLOSE_CURRENCY_PAREN}$",
     re.I,
 )
 _CURRENCY = {"$": "USD", "€": "EUR", "£": "GBP"}
@@ -120,7 +124,11 @@ def _parse_value(raw: str, context: str = "") -> PeriodValuePair | None:
     match = _STRICT_NUMBER_RE.fullmatch(raw.strip())
     if match is None:
         return None
-    numeric = match.group("number").replace(",", "").replace("(", "-").replace(")", "")
+    numeric = match["number"].replace(",", "").replace("(", "-").replace(")", "").replace("−", "-")
+    if prefix := match["currency_prefix"]:
+        if prefix.startswith("(") and ")" not in match[0]:
+            return None
+        numeric = f"-{numeric}"
     try:
         amount = Decimal(numeric)
     except InvalidOperation:

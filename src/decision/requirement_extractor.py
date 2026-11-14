@@ -13,7 +13,7 @@ from src.decision.models import (
     OperationRequirement,
     QuestionRequirements,
 )
-from src.ingestion.company_facts import requested_currencies
+from src.ingestion.company_facts import CONSOLIDATED_METRIC_CONCEPTS, requested_currencies
 from src.ingestion.period_identity import PeriodScope, period_mentions, requested_quarter_ytd, requested_reporting_interval
 from src.ingestion.segment_revenue import ENERGY_ALIASES, ENERGY_FILING, ENERGY_LABEL, ENERGY_METRIC
 
@@ -30,6 +30,36 @@ _METRIC_DEFINITIONS: tuple[MetricRequirement, ...] = (
         "net income", "net earnings",
     )),
     MetricRequirement(metric_id="gross_profit", display_name="gross profit", aliases=("gross profit",)),
+    MetricRequirement(metric_id="cost_of_revenue", display_name="cost of revenue", aliases=(
+        "cost of revenue", "cost of revenues",
+    )),
+    MetricRequirement(metric_id="income_tax_expense", display_name="income tax expense", aliases=(
+        "income tax expense", "provision for income taxes",
+    )),
+    MetricRequirement(
+        metric_id="continuing_operations_pretax_income",
+        display_name="income from continuing operations before income taxes",
+        aliases=(
+            "income from continuing operations before income taxes",
+            "income (loss) from continuing operations before income taxes",
+        ),
+    ),
+    MetricRequirement(metric_id="research_and_development_expense", display_name="research and development expense", aliases=(
+        "research and development expense", "research and development expenses", "r&d expense", "r&d expenses",
+    )),
+    MetricRequirement(
+        metric_id="selling_general_administrative_expense",
+        display_name="selling, general and administrative expense",
+        aliases=("selling, general and administrative expense", "selling, general and administrative expenses",
+                 "selling general and administrative expense", "selling general and administrative expenses",
+                 "sg&a expense", "sg&a expenses"),
+    ),
+    MetricRequirement(metric_id="investing_cash_flow", display_name="net cash from investing activities", aliases=(
+        "net cash from investing activities", "net cash provided by (used in) investing activities",
+    )),
+    MetricRequirement(metric_id="financing_cash_flow", display_name="net cash from financing activities", aliases=(
+        "net cash from financing activities", "net cash provided by (used in) financing activities",
+    )),
     MetricRequirement(metric_id="capital_expenditures", display_name="capital expenditures", aliases=(
         "capital expenditures", "capital expenditure", "capex",
     )),
@@ -86,6 +116,17 @@ _NONSTANDARD_BASIS = re.compile(
     r"adjusted\s+(?:revenue|net income|operating income|margin|eps|earnings|profit))\b",
     re.I,
 )
+_COST_OF_REVENUE = re.compile(r"\bcost of (?:revenues?|sales)\b", re.I)
+_COMPONENT_SCOPE = re.compile(
+    r"\b(?:excluding|adjusted|discontinued operations|domestic|foreign|federal|state|deferred|subsidiar(?:y|ies))\b"
+    r"|\b(?:products?|services?) cost of revenues?\b",
+    re.I,
+)
+_CURRENT_TAX_COMPONENT = re.compile(
+    r"\b(?:current|cash)\s+(?:income tax expense|provision for income taxes)\b"
+    r"|\b(?:income tax expense|provision for income taxes)\s*\((?:current|cash)\)",
+    re.I,
+)
 _SEGMENT_BASIS = re.compile(
     r"\b(?:energy generation and storage|(?:business |reportable )?segments?)\b",
     re.I,
@@ -119,8 +160,17 @@ def _periods(question: str) -> tuple[str, ...]:
     return tuple(dict.fromkeys(item.label for item in period_mentions(question)))
 
 
-def requires_nonstandard_reporting_basis(question: str) -> bool:
-    return bool(_NONSTANDARD_BASIS.search(question) or _SEGMENT_BASIS.search(question))
+def requires_nonstandard_reporting_basis(question: str, metrics: tuple[MetricRequirement, ...] = ()) -> bool:
+    if _NONSTANDARD_BASIS.search(question) or _SEGMENT_BASIS.search(question):
+        return True
+    return any(metric.metric_id in CONSOLIDATED_METRIC_CONCEPTS for metric in metrics) and bool(
+        _COMPONENT_SCOPE.search(question) or _CURRENT_TAX_COMPONENT.search(question)
+    )
+
+
+def mask_cost_of_revenue(text: str) -> str:
+    """Keep offsets stable when resolving embedded issuer and revenue aliases."""
+    return _COST_OF_REVENUE.sub(lambda match: " " * len(match[0]), text)
 
 
 def permits_energy_segment_lookup(question: str, *, assertion: bool = False) -> bool:
@@ -139,6 +189,7 @@ def permits_energy_segment_lookup(question: str, *, assertion: bool = False) -> 
 
 def _metrics(question: str) -> tuple[MetricRequirement, ...]:
     folded = question.casefold().replace("’", "'")
+    revenue_text = mask_cost_of_revenue(folded)
     found: dict[str, tuple[int, int]] = {}
     aliases = sorted(
         [
@@ -150,7 +201,7 @@ def _metrics(question: str) -> tuple[MetricRequirement, ...]:
     )
     for alias, metric in aliases:
         pattern = re.compile(rf"(?<![\w]){re.escape(alias)}(?![\w])", re.I)
-        match = pattern.search(folded)
+        match = pattern.search(revenue_text if metric.metric_id == "revenue" else folded)
         if match is None:
             continue
         current = found.get(metric.metric_id)
@@ -199,7 +250,9 @@ class EvidenceRequirementExtractor:
                 unsupported_reasons=("empty_question",),
             )
 
-        matches = self.catalog.identify(question)
+        # COST is also an issuer ticker. Preserve explicit issuer mentions
+        # outside the recognized financial line item.
+        matches = self.catalog.identify(mask_cost_of_revenue(question))
         entities = tuple(
             EvidenceEntity(
                 entity_id=match.entity_id,

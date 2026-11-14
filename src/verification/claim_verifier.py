@@ -14,8 +14,9 @@ from src.decision.period_value_parser import (
     extract_period_value_mentions,
     period_matches,
 )
-from src.ingestion.period_identity import intervals_agree
 from src.decision.policy import EvidenceDecisionLayer
+from src.decision.requirement_extractor import mask_cost_of_revenue
+from src.ingestion.period_identity import intervals_agree
 from src.verification.models import (
     CalculationOperand,
     CalculationOperation,
@@ -402,12 +403,17 @@ class ClaimLevelVerifier:
             statement,
         )
         metric_hits: list[tuple[int, int, str]] = []
+        text_without_cost = mask_cost_of_revenue(statement)
         for metric in metrics:
-            metric_hits.extend((start, end, metric.metric_id) for start, end, _ in _find_spans(statement, metric.aliases))
+            metric_text = text_without_cost if metric.metric_id == "revenue" else statement
+            metric_hits.extend((start, end, metric.metric_id) for start, end, _ in _find_spans(metric_text, metric.aliases))
         entity_hits: list[tuple[int, int, str]] = []
         possible_entity_ids = list(dict.fromkeys((*claim_entities, *question_entities)))
         for entity_id in possible_entity_ids:
-            entity_hits.extend((start, end, entity_id) for start, end, _ in _find_spans(statement, catalog.aliases_for(entity_id)))
+            entity_hits.extend(
+                (start, end, entity_id)
+                for start, end, _ in _find_spans(text_without_cost, catalog.aliases_for(entity_id))
+            )
         # Preserve compact amounts for verification and mask a resolved company subject.
         subject_candidates = [hit for hit in entity_hits if any(char.isdigit() for char in statement[hit[0]:hit[1]])]
         if subject_candidates:

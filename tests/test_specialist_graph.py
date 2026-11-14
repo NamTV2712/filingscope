@@ -133,6 +133,42 @@ def test_quarter_ytd_date_question_requires_both_values_in_one_accession(cumulat
         assert result.verification.disposition == ResponseDisposition.ABSTAIN
 
 
+@pytest.mark.parametrize(("metric", "tag", "quarter", "ytd"), [
+    ("cost of revenue", "CostOfRevenue", 890_000_000, 3_100_000_000),
+    ("net cash from financing activities", "NetCashProvidedByUsedInFinancingActivities", -44_000_000, -2_630_000_000),
+])
+def test_new_quarter_ytd_metrics_preserve_filing_concept_and_signed_amounts(
+    metric: str, tag: str, quarter: int, ytd: int,
+) -> None:
+    sec = FakeSECCompanyFacts()
+    accession = "0000320193-25-000073"
+    common = {"end": "2025-06-28", "accn": accession, "filed": "2025-08-01", "form": "10-Q", "fy": 2025, "fp": "Q3"}
+    sec.facts[320193]["facts"]["us-gaap"][tag] = {
+        "label": metric, "units": {"USD": [
+            {**common, "start": "2025-03-30", "val": quarter},
+            {**common, "start": "2024-09-29", "val": ytd},
+        ]},
+    }
+    graph = SpecialistResearchGraph(sec_client=sec)
+    question = f"What was Apple's {metric} in USD for the standalone quarter and fiscal year to date ended 2025-06-28 in 10-Q {accession}?"
+    result = graph.run(question)
+    assert sec.request_count == 1
+    assert result.verification is not None
+    assert result.verification.disposition == ResponseDisposition.VERIFIED
+    assert f"USD {quarter:,} for Q3 FY2025" in result.answer
+    assert f"USD {ytd:,} for Q3 YTD FY2025" in result.answer
+    evidence = result.ledger_snapshot.evidence_records
+    assert len(evidence) == 2
+    assert {item.financial_concept for item in evidence} == {f"us-gaap:{tag}"}
+    assert all(item.xbrl_provenance and item.xbrl_provenance.accession == accession for item in evidence)
+
+    retriever = FakeRetriever([_annual_chunk()])
+    unavailable = SpecialistResearchGraph(retriever=retriever).run(question)
+    assert unavailable.status == "UNSUPPORTED"
+    assert unavailable.route.decision.reason_codes == ("required_structured_financial_source_unavailable",)
+    assert not retriever.calls
+
+
 def test_specialist_releases_only_rechecked_claims_and_keeps_draft_audit() -> None:
     class DraftGenerator:
         def generate(self, question, chunks):

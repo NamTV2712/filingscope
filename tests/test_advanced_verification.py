@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import date
+
 import pytest
 
 from src.decision.models import EvidenceFact
@@ -45,6 +47,36 @@ def test_explicit_interval_checks_the_claim_and_its_accession():
 def test_ambiguous_or_invalid_intervals_do_not_fall_back_to_fiscal_years(dates):
     req = EvidenceDecisionLayer().extractor.extract(f"What was Apple's revenue from {dates}?")
     assert not req.supported and not req.evidence
+
+
+def test_consolidated_income_tax_cannot_support_a_component_or_use_a_different_tag():
+    question = "What was Apple's income tax expense in FY2024?"
+    chunk = _financial_chunk(chunk_id="apple-tax")
+    chunk.update(source_type="XBRL_FACT", financial_concept="us-gaap:IncomeTaxExpenseBenefit", normalized_facts=(
+        EvidenceFact(
+            evidence_id="apple-tax", entity_id="AAPL", metric_id="income_tax_expense", period="FY2024",
+            period_identity=PeriodIdentity.from_label("FY2024", kind=PeriodKind.DURATION,
+                                                      start=date(2023, 10, 1), end=date(2024, 9, 28)),
+            value="USD 4 billion", numeric_value="4", currency="USD", scale="billion", value_kind="amount",
+            document_id=chunk["doc_name"], page_number=chunk["page_number"], source_url=chunk.get("source_url"),
+        ),
+    ))
+    answer = "Apple reported income tax expense of USD 4 billion for FY2024. [Source 1]"
+    verifier = AtomicClaimVerifier()
+    assert verifier.verify(question, answer, [chunk]).disposition == ResponseDisposition.VERIFIED
+
+    for negative_amount in ("-$4 billion", "−$4 billion", "($4 billion)"):
+        wrong_sign = answer.replace("USD 4 billion", negative_amount)
+        assert verifier.verify(question, wrong_sign, [chunk]).disposition == ResponseDisposition.REJECTED
+
+    for qualifier in ("current", "deferred"):
+        qualified_answer = answer.replace("income tax expense", f"{qualifier} income tax expense")
+        assert verifier.verify(question, qualified_answer, [chunk]).disposition != ResponseDisposition.VERIFIED
+        qualified_question = question.replace("income tax expense", f"{qualifier} income tax expense")
+        assert not EvidenceDecisionLayer().assess(qualified_question, [chunk]).sufficient
+
+    other_tag = {**chunk, "financial_concept": "us-gaap:CurrentIncomeTaxExpenseBenefit"}
+    assert verifier.verify(question, answer, [other_tag]).disposition != ResponseDisposition.VERIFIED
 
 
 @pytest.mark.parametrize("case", advanced_verification_cases(), ids=lambda case: case.case_id)

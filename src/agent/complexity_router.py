@@ -15,7 +15,7 @@ from src.decision.models import QuestionRequirements
 from src.decision.requirement_extractor import (
     EvidenceRequirementExtractor, permits_energy_segment_lookup, requires_nonstandard_reporting_basis,
 )
-from src.ingestion.company_facts import METRIC_CONCEPTS, requested_revision_policies
+from src.ingestion.company_facts import CONSOLIDATED_METRIC_CONCEPTS, METRIC_CONCEPTS, requested_revision_policies
 from src.ingestion.segment_revenue import ENERGY_ENTITY, ENERGY_METRIC, ENERGY_PERIOD
 from src.research.corpus_map import CorpusMap
 from src.research.planner import (
@@ -70,7 +70,8 @@ def requires_statement_source(question: str) -> bool:
 
 
 _SPECIAL_BASIS_RE = re.compile(
-    r"\b(?:segment|continuing operations|discontinued operations|excluding|in the notes|restatement)\b",
+    r"\b(?:segment|continuing operations(?! before income taxes\b)|discontinued operations|"
+    r"excluding|in the notes|restatement)\b",
     re.I,
 )
 _XBRL_PERIOD_RE = re.compile(r"(?:Q[1-4] (?:YTD )?)?FY(?:19|20)\d{2}")
@@ -248,7 +249,9 @@ class ComplexityRouter:
     def classify(self, question: str) -> ComplexityDecision:
         return self._classify(question, self.extractor.extract(question))
 
-    def _classify(self, question: str, requirements: QuestionRequirements) -> ComplexityDecision:
+    def _classify(
+        self, question: str, requirements: QuestionRequirements, source_inventory: SourceInventory | None = None,
+    ) -> ComplexityDecision:
         entities = len(requirements.entities)
         metrics = len(requirements.metrics)
         periods = len(requirements.periods)
@@ -282,6 +285,12 @@ class ComplexityRouter:
             complexity = ComplexityClass.UNSUPPORTED
             path = ExecutionPath.UNSUPPORTED
             reason_codes.append("mixed_filing_revision_request")
+        elif (source_inventory is not None and requirements.metrics
+              and all(metric.metric_id in CONSOLIDATED_METRIC_CONCEPTS for metric in requirements.metrics)
+              and not source_inventory.xbrl_entities.intersection(requirements.companies)):
+            complexity = ComplexityClass.UNSUPPORTED
+            path = ExecutionPath.UNSUPPORTED
+            reason_codes.append("required_structured_financial_source_unavailable")
         elif revisions:
             complexity = ComplexityClass.MULTI_HOP
             path = ExecutionPath.RESEARCH
@@ -424,7 +433,7 @@ class ComplexityRouter:
     def _classify_node(self, state: _RouterGraphState) -> dict[str, Any]:
         question = state["question"]
         requirements = self.extractor.extract(question)
-        decision = self._classify(question, requirements)
+        decision = self._classify(question, requirements, state.get("source_inventory"))
         if state.get("force_research") and decision.path == ExecutionPath.FAST:
             decision = decision.model_copy(update={
                 "path": ExecutionPath.RESEARCH,
@@ -502,7 +511,7 @@ class ComplexityRouter:
                     and permits_energy_segment_lookup(question)):
                 return SourceCapability.DIRECT_XBRL
         if requirements.quarter_ytd is not None and len(plan.tasks) == 2:
-            if requires_nonstandard_reporting_basis(question):
+            if requires_nonstandard_reporting_basis(question, requirements.metrics):
                 return SourceCapability.TEXT_RAG
             slot = requirements.evidence[0]
             if slot.entity_id in inventory.xbrl_entities and slot.metric_id in METRIC_CONCEPTS:
@@ -516,7 +525,8 @@ class ComplexityRouter:
             len(requirements.evidence) != 1 or not requirements.evidence[0].quantitative
             or requirements.evidence[0].period is None and requirements.reporting_interval is None
             or any(item.operation != "lookup" for item in requirements.operations)
-            or _SPECIAL_BASIS_RE.search(question) or requires_nonstandard_reporting_basis(question)
+            or _SPECIAL_BASIS_RE.search(question)
+            or requires_nonstandard_reporting_basis(question, requirements.metrics)
         ):
             return SourceCapability.TEXT_RAG
         slot = requirements.evidence[0]

@@ -14,8 +14,10 @@ from src.decision.filing_disclosures import (
 from src.decision.models import CoverageStatus, EvidenceFact, MetricRequirement, QuestionRequirements
 from src.decision.period_value_parser import extract_period_value_mentions, period_matches
 from src.decision.policy import EvidenceDecisionLayer
-from src.decision.requirement_extractor import permits_energy_segment_lookup
-from src.ingestion.company_facts import matches_requested_revision, requested_revision_policies
+from src.decision.requirement_extractor import permits_energy_segment_lookup, requires_nonstandard_reporting_basis
+from src.ingestion.company_facts import (
+    CONSOLIDATED_METRIC_CONCEPTS, matches_requested_revision, requested_revision_policies,
+)
 from src.ingestion.segment_revenue import ENERGY_ENTITY, ENERGY_METRIC, ENERGY_PERIOD, ENERGY_SECTION, is_energy_evidence
 from src.verification.claim_verifier import ClaimLevelVerifier, _BRACKET_RE, _FALLBACK_RE, _GROWTH_RE, _split_clauses
 from src.verification.models import (
@@ -157,6 +159,8 @@ class AtomicClaimVerifier(ClaimLevelVerifier):
         if draft.values and (
             _UNVERIFIED_QUALIFIER.search(statement) or len(draft.values) != 1 or len(draft.entity_ids) != 1
             or len(explicit_metrics) != 1
+            or (explicit_metrics[0].metric_id in CONSOLIDATED_METRIC_CONCEPTS
+                and requires_nonstandard_reporting_basis(statement, explicit_metrics))
             or (draft.operation is None and (len(draft.periods) > 1 or _GROWTH_RE.search(statement)))
         ):
             return ClaimAssessment(

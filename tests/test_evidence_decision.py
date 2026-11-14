@@ -97,6 +97,25 @@ def test_requirement_extraction_builds_entity_metric_period_slots() -> None:
     }
 
 
+def test_cost_of_revenue_does_not_identify_costco_or_revenue() -> None:
+    extractor = EvidenceRequirementExtractor()
+    nvidia = extractor.extract("What was NVIDIA's cost of revenue in FY2025?")
+    assert nvidia.companies == ("NVDA",)
+    assert [metric.metric_id for metric in nvidia.metrics] == ["cost_of_revenue"]
+
+    costco = extractor.extract("What were COST's revenue and cost of revenue in FY2025?")
+    assert costco.companies == ("COST",)
+    assert [metric.metric_id for metric in costco.metrics] == ["revenue", "cost_of_revenue"]
+
+    layer = EvidenceDecisionLayer()
+    chunk = {**_table_chunk(chunk_id="expense", ticker="NVDA", company="NVIDIA"), "filing_page_checked": True,
+             "text": "NVIDIA's cost of revenue was USD 50 billion for FY2025."}
+    for metric in ("revenue", "cost of revenue"):
+        decision = layer.decide(f"What was NVIDIA's {metric} in FY2025?", [chunk],
+                                budget=DecisionBudget(remaining_retrieval_attempts=0))
+        assert decision.action == DecisionAction.ABSTAIN
+
+
 def test_company_catalog_merges_canonical_names_with_source_aliases() -> None:
     catalog = CompanyCatalog.from_document_rows(
         [{"company": "Apple Inc.", "doc_name": "AAPL_2024_annualreport"}]

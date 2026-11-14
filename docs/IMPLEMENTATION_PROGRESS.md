@@ -1,6 +1,6 @@
 # Implementation progress
 
-Updated: 2026-11-13<br>
+Updated: 2026-11-14<br>
 Branch: `main`<br>
 Remote: `origin` (`https://github.com/NamTV2712/filingscope.git`)<br>
 Deployment: none; explicitly out of scope
@@ -161,6 +161,13 @@ Date-bound quarter/YTD requests now recover 9/26 exact pairs in
 Company Facts-only and hybrid. Confirmed numeric cases reached 54/187
 in both arms with zero incorrect releases on this cohort.
 [Quarter/YTD replay](G3_QUARTER_YTD.md).
+Seven exact consolidated metric mappings raised Company Facts-only and
+hybrid to 26/26 quarter/YTD pairs and 97/187 confirmed numeric cases.
+Both structured arms confirmed all new releases and preserved 8/8
+missing-unit abstentions. Document-only stayed at 26/187. The 122 PDF-pilot
+outputs and historical architecture outcomes matched. Windows passed 550
+tests with three skips and WSL passed 549 with four.
+[Financial metric mappings](G3_FINANCIAL_METRIC_MAPPINGS.md).
 
 G3 retains Dense and the current statement ranker. Scoped scoring
 matched all 30 top-ten rankings while reducing paired rank p50

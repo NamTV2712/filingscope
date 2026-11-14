@@ -24,6 +24,19 @@ _PERIODIC_FORMS = _ANNUAL_FORMS | {"10-Q"}
 _ACCESSION = re.compile(r"[0-9]{10}-[0-9]{2}-[0-9]{6}")
 _PERIOD = re.compile(r"(?:(Q[1-4]) (YTD )?)?FY((?:19|20)[0-9]{2})")
 
+# Each entry binds a reported consolidated measure to one US-GAAP tag.
+CONSOLIDATED_METRIC_CONCEPTS: dict[str, tuple[str, ...]] = {
+    "cost_of_revenue": ("us-gaap:CostOfRevenue",),
+    "income_tax_expense": ("us-gaap:IncomeTaxExpenseBenefit",),
+    "continuing_operations_pretax_income": (
+        "us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest",
+    ),
+    "research_and_development_expense": ("us-gaap:ResearchAndDevelopmentExpense",),
+    "selling_general_administrative_expense": ("us-gaap:SellingGeneralAndAdministrativeExpense",),
+    "investing_cash_flow": ("us-gaap:NetCashProvidedByUsedInInvestingActivities",),
+    "financing_cash_flow": ("us-gaap:NetCashProvidedByUsedInFinancingActivities",),
+}
+
 # Entries are ordered only to pick a label when the original rows agree.
 # A newer tag never supersedes a different tag for the same period.
 METRIC_CONCEPTS: dict[str, tuple[str, ...]] = {
@@ -36,6 +49,7 @@ METRIC_CONCEPTS: dict[str, tuple[str, ...]] = {
     "net_income": ("us-gaap:NetIncomeLoss", "ifrs-full:ProfitLoss"),
     "operating_income": ("us-gaap:OperatingIncomeLoss", "ifrs-full:ProfitLossFromOperatingActivities"),
     "gross_profit": ("us-gaap:GrossProfit", "ifrs-full:GrossProfit"),
+    **CONSOLIDATED_METRIC_CONCEPTS,
     "total_assets": ("us-gaap:Assets", "ifrs-full:Assets"),
     "total_liabilities": ("us-gaap:Liabilities", "ifrs-full:Liabilities"),
     "cash_and_equivalents": (
