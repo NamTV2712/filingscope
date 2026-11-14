@@ -86,9 +86,10 @@ and labels reproduced with every Company Facts observation removed.
 The structured diagnostic supplies the requested identities directly.
 Its agreement measures consistency across SEC representations. The
 document-only and hybrid QA arms have been run on the separate PDF
-pilot. On the mixed cohorts, those arms, narrative predictions, context
-precision, citation support and claim faithfulness remain unmeasured.
-[PDF pilot](G2_RUNTIME_REPLAY.md) · [Narrative pilot](G2_SEC_NARRATIVE.md).
+pilot and on the mixed benchmark using SEC HTML. The matched runtime
+results and evidence limitations appear in the mixed runtime report.
+[PDF pilot](G2_RUNTIME_REPLAY.md) · [Narrative pilot](G2_SEC_NARRATIVE.md) ·
+[Mixed runtime](G2_SEC_MIXED_RUNTIME.md).
 
 ## Reproduction and decision
 
@@ -112,6 +113,5 @@ and deterministic claim and citation checks passed. Baseline commit `c8495e7`.
 | [Validation](../.local/g2/mixed-cohorts-final/validation.json) | `82db2c40dcdff67f67775a5d5c2ec63bb78f82d517966682f68f814f30744840` |
 
 **KEEP** the mixed development benchmark and deterministic provenance
-checks. **DEFER** mixed document and hybrid QA claims pending broader
-source indexing and answer adjudication. Independent final evaluation
-still requires the G6 reviewer bundle.
+checks. **DEFER** full semantic citation and faithfulness claims pending
+adjudication. Independent final evaluation requires the G6 reviewer bundle.

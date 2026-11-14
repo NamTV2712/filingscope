@@ -190,10 +190,13 @@ def _run_architecture_controls(
     return {name: {"overall": summarize_ablation(rows), "per_case": rows} for name, rows in rows_by_arm.items()}
 
 
-def _load_pilot_vectors(directory: Path, *, chunks_hash: str, rows: int, dimension: int):
+def _load_pilot_vectors(
+    directory: Path, *, chunks_hash: str, rows: int, dimension: int, report: dict | None = None,
+):
     import numpy as np
 
-    report = json.loads((directory / "report.json").read_bytes())
+    if report is None:
+        report = json.loads((directory / "report.json").read_bytes())
     if report["chunks_sha256"] != chunks_hash or report["embedding_revision"] != P1_EMBEDDING_REVISION:
         raise ValueError("Frozen vectors do not match the reconstructed chunks and model")
     content = (directory / "normalized-vectors.npy").read_bytes()

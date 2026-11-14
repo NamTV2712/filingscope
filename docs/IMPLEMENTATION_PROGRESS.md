@@ -133,8 +133,11 @@ arms confused Tesla segment revenue with consolidated revenue.
 The separate mixed benchmark covers all eight planned categories in
 32/100/72 cases. Structured lookup matched 187/187 numeric cases and
 withheld 8/8 missing-unit controls. Its narrative and revision labels
-are author-checked. Mixed document and hybrid QA and independent review
-remain open. [Mixed cohorts](G2_SEC_MIXED_COHORTS.md).
+are author-checked. The matched question-to-answer runtime replay
+confirmed 20/187, 37/187 and 37/187 numeric answers with document-only,
+Company Facts-only and hybrid. Five document and hybrid answers added
+an unrequested prior fiscal year. Independent review remains open.
+[Mixed cohorts](G2_SEC_MIXED_COHORTS.md) · [Mixed replay](G2_SEC_MIXED_RUNTIME.md).
 [Runtime pilot](G2_RUNTIME_REPLAY.md) · [G2 report](G2_SEC_DATA.md) ·
 [Frozen SEC manifest](G2_SEC_CORPUS_MANIFEST.json).
 The dimensioned replay resolved 10/10 PDF-transcribed facts and
