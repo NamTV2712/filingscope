@@ -230,6 +230,11 @@ eight of eight claims and their numbered citations in each arm. The
 remaining revision question was withheld. All 585 numeric and
 missing-unit arm/case outcomes and 122 PDF-pilot outcomes matched.
 [Annual business disclosures](G4_ANNUAL_BUSINESS_DISCLOSURES.md).
+The amendment follow-up cites Tesla's explanatory note and recovers the
+ninth mixed disclosure. Codex reviewed 9/9 claims and citations in
+each document-enabled arm. Context Precision@10 was 22/88 and Gold
+Evidence Recall@10 was 9/9. The remaining 609 arm/case records match,
+apart from timing. [Amendment scope and review](G4_AMENDMENT_SCOPE.md).
 
 ## G5 observer and architecture comparison
 

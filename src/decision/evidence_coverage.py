@@ -11,8 +11,9 @@ from typing import Any
 
 from src.decision.company_catalog import CompanyCatalog
 from src.decision.filing_disclosures import (
-    BUSINESS_DISCLOSURE_METRICS, business_disclosure_source_matches, filing_industry_relations, filing_segment_disclosures,
-    is_segment_list_question, segment_kind_matches, segment_signature,
+    AMENDMENT_SCOPE_METRIC, BUSINESS_DISCLOSURE_METRICS, AmendmentScope, amendment_source_matches,
+    business_disclosure_source_matches, filing_amendment_scopes, filing_industry_relations, filing_segment_disclosures,
+    is_segment_list_question, requested_amendment_scope, segment_kind_matches, segment_signature,
 )
 from src.decision.models import (
     CoverageStatus,
@@ -286,6 +287,8 @@ def _facts_from_chunk(
                 and any(segment_kind_matches(question, kind, len(names))
                         for kind, names in filing_segment_disclosures(text, issuer_aliases))
             )
+        elif metric.metric_id == AMENDMENT_SCOPE_METRIC:
+            supports_topic = page_number is not None and page_number >= 0 and bool(filing_amendment_scopes(text))
         else:
             supports_topic = _contains_alias(text, metric.aliases)
         if supports_topic:
@@ -348,6 +351,7 @@ class EvidenceCoverageAnalyzer:
         number_seen: dict[str, bool] = defaultdict(bool)
         source_conflict_ids: dict[str, set[str]] = defaultdict(set)
         revisions = requested_revision_policies(requirements.question)
+        amendment = requested_amendment_scope(requirements.question)
         interval = requirements.reporting_interval
         quarter_ytd = requirements.quarter_ytd
         fiscal_year_pair = requirements.fiscal_year_pair
@@ -364,6 +368,7 @@ class EvidenceCoverageAnalyzer:
         for requirement in requirements.evidence:
             metric = metric_by_id[requirement.metric_id]
             is_segment_list = metric.metric_id in BUSINESS_DISCLOSURE_METRICS
+            is_amendment_scope = metric.metric_id == AMENDMENT_SCOPE_METRIC
             energy_segment = (
                 metric.metric_id == ENERGY_METRIC and requirement.entity_id == ENERGY_ENTITY
                 and requirement.period == ENERGY_PERIOD and len(requirements.evidence) == 1
@@ -385,6 +390,7 @@ class EvidenceCoverageAnalyzer:
                 continue
             candidate_facts: list[EvidenceFact] = []
             segment_lists: set[frozenset[str]] = set()
+            amendment_scopes: set[AmendmentScope] = set()
             entity_chunks = 0
             usable_chunks = 0
             revision_mismatch = False
@@ -411,7 +417,16 @@ class EvidenceCoverageAnalyzer:
                     revision_mismatch = True
                     usable_chunks -= 1
                     continue
-                normalized = None if is_segment_list else _normalized_facts(chunk, metric, requirement.entity_id)
+                if is_amendment_scope and (
+                    amendment is None
+                    or not amendment_source_matches(amendment[1], _period_from_metadata(chunk), chunk)
+                ):
+                    revision_mismatch = True
+                    usable_chunks -= 1
+                    continue
+                normalized = None if is_segment_list or is_amendment_scope else _normalized_facts(
+                    chunk, metric, requirement.entity_id,
+                )
                 if normalized is not None:
                     if normalized:
                         metric_seen[requirement.requirement_id] = True
@@ -494,6 +509,8 @@ class EvidenceCoverageAnalyzer:
                             for kind, names in filing_segment_disclosures(text, issuer_aliases[requirement.entity_id]):
                                 if segment_kind_matches(requirements.question, kind, len(names)):
                                     segment_lists.add(segment_signature(names))
+                        if is_amendment_scope:
+                            amendment_scopes.update(filing_amendment_scopes(text))
                     elif fact.currency is not None:
                         unit_mismatch = True
 
@@ -515,13 +532,16 @@ class EvidenceCoverageAnalyzer:
             conflicted_source = bool(source_conflict_ids[requirement.requirement_id])
             contradictory_values = len(distinct_values) > 1
             contradictory_segments = len(segment_lists) > 1
+            contradictory_amendments = len(amendment_scopes) > 1
 
-            if conflicted_source or incompatible_periods or contradictory_values or contradictory_segments:
+            if (conflicted_source or incompatible_periods or contradictory_values or contradictory_segments
+                    or contradictory_amendments):
                 status = CoverageStatus.CONFLICTED
                 reason = (
                     "source_metadata_conflict" if conflicted_source else
                     "incompatible_observation_periods" if incompatible_periods else
                     "contradictory_segment_lists" if contradictory_segments else
+                    "contradictory_amendment_scopes" if contradictory_amendments else
                     "contradictory_values_or_units"
                 )
             elif (

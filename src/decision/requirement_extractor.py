@@ -5,8 +5,10 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable, Mapping
 
-from src.decision.company_catalog import CompanyCatalog
-from src.decision.filing_disclosures import business_disclosure_issuer_text
+from src.decision.company_catalog import CompanyCatalog, normalize_entity
+from src.decision.filing_disclosures import (
+    AMENDMENT_SCOPE_METRIC, business_disclosure_issuer_text, requested_amendment_scope,
+)
 from src.decision.models import (
     EvidenceEntity,
     EvidenceRequirement,
@@ -22,6 +24,12 @@ from src.ingestion.period_identity import (
     requested_quarter_ytd, requested_reporting_interval,
 )
 from src.ingestion.segment_revenue import ENERGY_ALIASES, ENERGY_FILING, ENERGY_LABEL, ENERGY_METRIC
+
+
+_AMENDMENT_SCOPE = MetricRequirement(
+    metric_id=AMENDMENT_SCOPE_METRIC, display_name="explanatory note", aliases=("explanatory note",),
+    quantitative=False, expected_value_kind="topic",
+)
 
 
 _METRIC_DEFINITIONS: tuple[MetricRequirement, ...] = (
@@ -299,7 +307,16 @@ class EvidenceRequirementExtractor:
 
         # COST is also an issuer ticker. Preserve explicit issuer mentions
         # outside the recognized financial line item.
-        matches = self.catalog.identify(mask_cost_of_revenue(business_disclosure_issuer_text(question)))
+        amendment = requested_amendment_scope(question)
+        metrics: tuple[MetricRequirement, ...]
+        if amendment is not None:
+            issuer = amendment[0]
+            matches = tuple(match for match in self.catalog.identify(issuer)
+                            if normalize_entity(match.matched_alias) == normalize_entity(issuer))
+            metrics = (_AMENDMENT_SCOPE,)
+        else:
+            matches = self.catalog.identify(mask_cost_of_revenue(business_disclosure_issuer_text(question)))
+            metrics = _metrics(question)
         entities = tuple(
             EvidenceEntity(
                 entity_id=match.entity_id,
@@ -308,7 +325,6 @@ class EvidenceRequirementExtractor:
             )
             for match in matches
         )
-        metrics = _metrics(question)
         interval_error = None
         interval = quarter_ytd = fiscal_year_pair = None
         instant_parts = ()

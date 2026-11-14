@@ -62,6 +62,24 @@ _ANNUAL_LIST_QUESTION = re.compile(
     rf"|which (?:{_COUNT}) segments does the company use to report financial performance)", re.I,
 )
 BUSINESS_DISCLOSURE_METRICS = frozenset({"business_segments", "business_lines"})
+AMENDMENT_SCOPE_METRIC = "amendment_scope"
+_AMENDMENT_QUESTION = re.compile(
+    r"which items of (?P<issuer>[^?\n]+?)['’]s original (?:Form )?10-K did the explanatory note in (?:Form )?10-K/A "
+    r"(?P<accession>[0-9]{10}-[0-9]{2}-[0-9]{6}) say it amended\??", re.I,
+)
+_ITEM_NUMBER = r"[1-9][0-9]?"
+_ITEM_LIST = rf"{_ITEM_NUMBER}(?: through {_ITEM_NUMBER}|(?:, {_ITEM_NUMBER})*,? and {_ITEM_NUMBER})?"
+_AMENDMENT_ITEMS = rf"Part (?P<part>IV|III|II|I), (?P<label>Items?) (?P<items>{_ITEM_LIST})"
+_EXPLANATORY_NOTE = re.compile(r"explanatory note[.]?", re.I)
+_AMENDMENT_SOURCE = re.compile(
+    rf"(?:[·•]\s*amend|this amendment amends) {_AMENDMENT_ITEMS} of the original Form 10-K"
+    r"(?: to include the information required by such items)?[.;]", re.I,
+)
+_AMENDMENT_CLAIM = re.compile(
+    rf"the explanatory note states that (?P<issuer>.+?) amended {_AMENDMENT_ITEMS} of its original Form 10-K[.]?",
+    re.I,
+)
+AmendmentScope = tuple[str, tuple[int, ...]]
 
 
 def _words(text: str) -> str:
@@ -243,8 +261,13 @@ def business_disclosure_source_matches(
     requested = {match[0] for match in _ACCESSION.finditer(question)}
     if not requested:
         return segment_period_matches(period, observed_period)
+    return (len(requested) == 1 and (period is None or period == observed_period)
+            and _sec_accession_matches(next(iter(requested)), chunk))
+
+
+def _sec_accession_matches(accession: str, chunk: Mapping[str, object]) -> bool:
     supplied = {value for key in ("accession", "accession_number") if isinstance(value := chunk.get(key), str) and value}
-    if len(requested) != 1 or requested != supplied or (period is not None and period != observed_period):
+    if supplied != {accession}:
         return False
     source_url = chunk.get("source_url") or chunk.get("source_repository_url") or chunk.get("filing_url")
     if not isinstance(source_url, str):
@@ -253,8 +276,63 @@ def business_disclosure_source_matches(
         locator = urlsplit(source_url)
     except ValueError:
         return False
-    accession = next(iter(requested)).replace("-", "")
-    path = re.fullmatch(r"/Archives/edgar/data/(\d{1,10})/" + accession + r"/[^/]+", locator.path)
+    path = re.fullmatch(r"/Archives/edgar/data/([0-9]{1,10})/" + accession.replace("-", "") + r"/[^/]+", locator.path)
     cik = chunk.get("cik")
     return bool(locator.scheme == "https" and locator.netloc == "www.sec.gov" and path
                 and (cik is None or str(cik).lstrip("0") == path[1].lstrip("0")))
+
+
+def requested_amendment_scope(question: str) -> tuple[str, str] | None:
+    if frame := _AMENDMENT_QUESTION.fullmatch(question.strip()):
+        return frame["issuer"], frame["accession"]
+    return None
+
+
+def amendment_source_matches(accession: str, period: str | None, chunk: Mapping[str, object]) -> bool:
+    forms = {form.upper() for key in ("doc_type", "filing_type", "form_type")
+             if isinstance(form := chunk.get(key), str) and form}
+    return (forms == {"10-K/A"} and period is not None and bool(_SEGMENT_PERIOD.fullmatch(period))
+            and bool(chunk.get("cik")) and _sec_accession_matches(accession, chunk))
+
+
+def _amendment_items(frame: re.Match[str]) -> AmendmentScope | None:
+    items = tuple(int(value) for value in re.findall(r"[0-9]+", frame["items"]))
+    if items != tuple(sorted(set(items))):
+        return None
+    if " through " in frame["items"].casefold():
+        items = tuple(range(items[0], items[-1] + 1))
+    if (len(items) == 1) != (frame["label"].casefold() == "item"):
+        return None
+    return frame["part"].upper(), items
+
+
+def filing_amendment_scopes(text: str) -> set[AmendmentScope]:
+    """Read explicit item lists at the start of an explanatory note block."""
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    if not lines or not _EXPLANATORY_NOTE.fullmatch(lines[0]):
+        return set()
+    scopes = set()
+    for line in lines[1:]:
+        frame = _AMENDMENT_SOURCE.fullmatch(" ".join(line.split()))
+        if frame is not None and (scope := _amendment_items(frame)) is not None:
+            scopes.add(scope)
+        elif re.match(r"(?:[·•]\s*amend\b|this amendment amends\b)", line, re.I):
+            return set()
+        elif not scopes:
+            return set()
+    return scopes
+
+
+def amendment_scope_claim(statement: str) -> tuple[str, AmendmentScope] | None:
+    frame = _AMENDMENT_CLAIM.fullmatch(" ".join(statement.split()))
+    if frame is not None and (scope := _amendment_items(frame)) is not None:
+        return frame["issuer"], scope
+    return None
+
+
+def amendment_scope_sentence(issuer: str, scope: AmendmentScope) -> str:
+    part, items = scope
+    numbers = [str(item) for item in items]
+    listing = numbers[0] if len(items) == 1 else f"{', '.join(numbers[:-1])} and {numbers[-1]}"
+    label = "Item" if len(items) == 1 else "Items"
+    return f"The explanatory note states that {issuer} amended Part {part}, {label} {listing} of its original Form 10-K."

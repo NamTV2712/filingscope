@@ -8,8 +8,10 @@ from typing import Any
 
 from src.decision.company_catalog import CompanyCatalog
 from src.decision.filing_disclosures import (
-    BUSINESS_DISCLOSURE_METRICS, business_disclosure_source_matches, filing_industry_relations, filing_segment_disclosures,
-    industry_relation, is_segment_list_question, segment_disclosure, segment_kind_matches, segment_signature,
+    AMENDMENT_SCOPE_METRIC, BUSINESS_DISCLOSURE_METRICS, amendment_scope_claim, amendment_source_matches,
+    business_disclosure_source_matches, filing_amendment_scopes, filing_industry_relations, filing_segment_disclosures,
+    industry_relation, is_segment_list_question, requested_amendment_scope, segment_disclosure,
+    segment_kind_matches, segment_signature,
 )
 from src.decision.models import CoverageStatus, EvidenceFact, MetricRequirement, QuestionRequirements
 from src.decision.period_value_parser import extract_period_value_mentions, period_matches
@@ -143,9 +145,10 @@ class AtomicClaimVerifier(ClaimLevelVerifier):
         asserted_scope = layer.extractor.extract(statement)
         explicit_metrics = asserted_scope.metrics
         consolidated_lookup = question_requirements.fiscal_year_pair is not None or question_requirements.has_filing_instants
-        if (len(draft.metric_ids) == 1 and draft.metric_ids[0] in BUSINESS_DISCLOSURE_METRICS
-                and not draft.values and not draft.has_unparsed_numeric_value):
-            return self._segment_assessment(draft, question_requirements, catalog, cited_chunks, evidence_ids)
+        if (requested_amendment_scope(question)
+                or (len(draft.metric_ids) == 1 and draft.metric_ids[0] in BUSINESS_DISCLOSURE_METRICS
+                    and not draft.values and not draft.has_unparsed_numeric_value)):
+            return self._filing_disclosure_assessment(draft, question_requirements, catalog, cited_chunks, evidence_ids)
         requested_segment = any(metric.metric_id == ENERGY_METRIC for metric in question_requirements.metrics)
         asserted_segment = any(metric.metric_id == ENERGY_METRIC for metric in explicit_metrics)
         cited_segment = any(chunk.get("section") == ENERGY_SECTION for chunk in cited_chunks)
@@ -259,24 +262,34 @@ class AtomicClaimVerifier(ClaimLevelVerifier):
         return matches[0]
 
     @staticmethod
-    def _segment_assessment(
+    def _filing_disclosure_assessment(
         draft: ClaimDraft, requirements: QuestionRequirements, catalog: CompanyCatalog,
         chunks: list[dict[str, Any]], evidence_ids: tuple[str, ...],
     ) -> ClaimAssessment:
         question = requirements.question
+        amendment = requested_amendment_scope(question)
+        metrics = {AMENDMENT_SCOPE_METRIC} if amendment else BUSINESS_DISCLOSURE_METRICS
         matches = [item for item in requirements.evidence if (item.metric_id,) == draft.metric_ids
-                   and item.metric_id in BUSINESS_DISCLOSURE_METRICS
+                   and item.metric_id in metrics
                    and (item.entity_id,) == draft.entity_ids]
         supports: set[str] = set()
         refutes: set[str] = set()
-        if len(matches) == 1 and is_segment_list_question(question):
+        if len(matches) == 1:
             requirement = matches[0]
             entity_id = requirement.entity_id
             aliases = catalog.aliases_for(entity_id)
-            claim = segment_disclosure(_text(draft.statement), aliases)
-            if claim is not None and segment_kind_matches(question, claim[0], len(claim[1])):
-                kind, names = claim
-                signature = segment_signature(names)
+            signature: object = None
+            kind: str | None = None
+            if amendment:
+                claim = amendment_scope_claim(_text(draft.statement))
+                if claim is not None and _words(claim[0]) in {_words(alias) for alias in aliases}:
+                    signature = claim[1]
+            elif is_segment_list_question(question):
+                disclosure = segment_disclosure(_text(draft.statement), aliases)
+                if disclosure is not None and segment_kind_matches(question, disclosure[0], len(disclosure[1])):
+                    kind, names = disclosure
+                    signature = segment_signature(names)
+            if signature is not None:
                 for chunk in chunks:
                     chunk_id = chunk.get("chunk_id")
                     issuer = catalog.metadata_entity_id(
@@ -288,14 +301,21 @@ class AtomicClaimVerifier(ClaimLevelVerifier):
                         isinstance(fact, EvidenceFact) and fact.entity_id == entity_id
                         and fact.metric_id == requirement.metric_id and fact.evidence_id == chunk_id
                         and fact.value_kind == "topic"
-                        and business_disclosure_source_matches(question, requirement.period, fact.period, chunk)
+                        and (amendment_source_matches(amendment[1], fact.period, chunk) if amendment
+                             else business_disclosure_source_matches(question, requirement.period, fact.period, chunk))
                         for fact in chunk.get("approved_facts", ())
                     ):
                         continue
-                    for observed_kind, observed_names in filing_segment_disclosures(str(chunk.get("text", "")), aliases):
-                        if observed_kind == kind:
-                            target = supports if segment_signature(observed_names) == signature else refutes
-                            target.add(chunk_id)
+                    text = str(chunk.get("text", ""))
+                    observed: set[object] = set(filing_amendment_scopes(text)) if amendment else {
+                        segment_signature(observed_names)
+                        for observed_kind, observed_names in filing_segment_disclosures(text, aliases)
+                        if observed_kind == kind
+                    }
+                    if signature in observed:
+                        supports.add(chunk_id)
+                    if observed - {signature}:
+                        refutes.add(chunk_id)
         if supports and refutes:
             status, reason = ClaimStatus.UNVERIFIABLE, "cited_sources_conflict"
         elif refutes:

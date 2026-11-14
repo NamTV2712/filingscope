@@ -109,6 +109,16 @@ The [refreshed reviewer handoff](../.local/g6/roadmap-checkpoint/reviewer-handof
 matches the G6 primary handoff SHA-256
 `270b025c817121b6bcfa89c5a28162a2b5df373a05af98aebe6a27b6073bb140`.
 
+## Internal review of SEC HTML results
+
+Codex performed claim, numbered-citation and retrieval relevance
+adjudication on the nine exposed narrative and amendment cases. The
+G1 scorer recorded 9/9 grounded answers, 9/9 supported claims and
+citations, Context Precision@10 of 22/88 and Gold Evidence Recall@10
+of 9/9 in each document-enabled arm. The descriptive Wilson upper
+bound on incorrect release was 29.91%. This review is internal and
+development-exposed. [Individual outcomes and evidence](G4_AMENDMENT_SCOPE.md).
+
 **KEEP** the freeze-and-predict handoff. **DEFER** independent
 conclusions until a qualifying reviewer bundle arrives. G6 builds
 over `85f7d82d1e108544cac5b961008b63b61d5aec59`. G7 can report the

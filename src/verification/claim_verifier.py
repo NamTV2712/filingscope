@@ -8,6 +8,7 @@ from decimal import Decimal
 from typing import Any
 
 from src.decision.company_catalog import CompanyCatalog
+from src.decision.filing_disclosures import AMENDMENT_SCOPE_METRIC, amendment_scope_claim
 from src.decision.models import EvidenceFact
 from src.decision.period_value_parser import (
     PeriodValueMention,
@@ -430,7 +431,10 @@ class ClaimLevelVerifier:
                     subjects.setdefault(entity_id, (start, end))
             for start, end in subjects.values():
                 statement_for_values = statement_for_values[:start] + " " * (end - start) + statement_for_values[end:]
-        mentions = extract_period_value_mentions(statement_for_values, allow_unmarked_attached=True)
+        mentions = (
+            () if metric_ids == (AMENDMENT_SCOPE_METRIC,) and amendment_scope_claim(statement_for_values)
+            else extract_period_value_mentions(statement_for_values, allow_unmarked_attached=True)
+        )
         values: list[ClaimValue] = []
         for mention in mentions:
             metric_id = _nearest_id(mention.start, metric_hits, metrics[0].metric_id if len(metrics) == 1 else None)

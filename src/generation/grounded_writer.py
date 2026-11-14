@@ -14,8 +14,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from configs.end_to_end import GENERATOR_MAX_INPUT_TOKENS, GENERATOR_MAX_OUTPUT_TOKENS, GENERATOR_MODEL_ID
 from src.decision.filing_disclosures import (
-    BUSINESS_DISCLOSURE_METRICS, business_disclosure_sentence, filing_industry_relations, filing_segment_disclosures,
-    segment_kind_matches, segment_signature,
+    AMENDMENT_SCOPE_METRIC, BUSINESS_DISCLOSURE_METRICS, amendment_scope_sentence, business_disclosure_sentence,
+    filing_amendment_scopes, filing_industry_relations, filing_segment_disclosures, segment_kind_matches, segment_signature,
 )
 from src.decision.models import EvidenceCoverage, EvidenceFact, QuestionRequirements
 from src.generation.answer_generator import (
@@ -104,6 +104,8 @@ def _topic_sentences(
             (industry, positive): f"{company} {'operates in' if positive else 'does not operate in'} the {industry} industry."
             for industry, positive in sorted(filing_industry_relations(text, (entity.canonical_name,)))
         }
+    if fact.metric_id == AMENDMENT_SCOPE_METRIC:
+        return {scope: amendment_scope_sentence(company, scope) for scope in sorted(filing_amendment_scopes(text))}
     if fact.metric_id not in BUSINESS_DISCLOSURE_METRICS:
         return {}
     result: dict[object, str] = {}
@@ -248,7 +250,10 @@ class OptionalProviderWriter:
     def write(self, report: GroundedReportInput, *, max_context_tokens: int,
               can_attempt: Callable[[], bool], start_attempt: Callable[[int], None]) -> AnswerGenerationResult | None:
         if (not report.sufficient or report.arithmetic or report.calculations or report.revision_policy
-                or report.deterministic_lookup or any(metric.metric_id == "business_segments" for metric in report.requirements.metrics)):
+                or report.deterministic_lookup or any(
+                    metric.metric_id in {"business_segments", AMENDMENT_SCOPE_METRIC}
+                    for metric in report.requirements.metrics
+                )):
             return None
         chunks = report.provider_chunks()
         if not any(chunk["text"] for chunk in chunks):

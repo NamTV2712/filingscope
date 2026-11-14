@@ -1007,6 +1007,81 @@ def test_annual_disclosure_does_not_substitute_parent_and_business_lists() -> No
     assert whole_issuer.verification.disposition == ResponseDisposition.ABSTAIN
 
 
+_AMENDMENT_ACCESSION = "0000320193-25-000100"
+_AMENDMENT_QUESTION = (
+    f"Which items of Apple's original 10-K did the explanatory note in 10-K/A {_AMENDMENT_ACCESSION} say it amended?"
+)
+_AMENDMENT_NOTE = (
+    "EXPLANATORY NOTE\nThis amendment amends Part III, Items 10 and 12 of the original Form 10-K."
+)
+
+
+def _amendment_chunk(chunk_id: str = "amendment", **overrides: Any) -> dict[str, Any]:
+    return {
+        **_annual_chunk(chunk_id=chunk_id),
+        "document_id": "AAPL_amendment.htm", "doc_name": "AAPL_amendment.htm",
+        "filing_type": "10-K/A", "doc_type": "10-K/A", "cik": "0000320193",
+        "reporting_periods": [2024], "accession": _AMENDMENT_ACCESSION,
+        "source_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000100/aapl-amendment.htm",
+        "text": _AMENDMENT_NOTE,
+        **overrides,
+    }
+
+
+def test_amendment_scope_uses_the_amended_filing_and_preserves_nonconsecutive_items() -> None:
+    amendment = _amendment_chunk()
+    original = _annual_chunk()
+    original["doc_type"] = "10-K"
+    sec = FakeSECCompanyFacts()
+    router = ComplexityRouter(CorpusMap.from_chunks([original, amendment]))
+    graph = SpecialistResearchGraph(router=router, retriever=FakeRetriever([original, amendment]), sec_client=sec)
+    result = graph.run(_AMENDMENT_QUESTION)
+
+    assert result.verification.disposition == ResponseDisposition.VERIFIED
+    assert result.route.research_plan.tasks[0].form_types == ("10ka",)
+    assert result.route.research_plan.tasks[0].target_document_ids == ("AAPL_amendment.htm",)
+    assert "Part III, Items 10 and 12" in result.answer
+    assert result.verification.claims[0].claim_type == "qualitative"
+    assert sec.request_count == 0
+
+
+@pytest.mark.parametrize("overrides", [
+    {"doc_type": "10-K"},
+    {"accession_number": "0000320193-25-000101"},
+    {"source_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000101/aapl-10ka.htm"},
+    {"cik": "0000789019"},
+    {"ticker": "MSFT", "company": "Microsoft Corporation"},
+    {"text": "EXPLANATORY NOTE\nThe original Form 10-K omitted Part III, Items 10 and 12."},
+    {"text": _AMENDMENT_NOTE.splitlines()[1]},
+    {"text": _AMENDMENT_NOTE + "\nThis amendment amends Part III, Item 14 of the original Form 10-K."},
+    {"text": _AMENDMENT_NOTE + "\n· amend Part IV, Items 15 and 15 of the original Form 10-K;"},
+])
+def test_amendment_scope_abstains_on_wrong_source_or_unsupported_note(overrides: dict[str, Any]) -> None:
+    graph = SpecialistResearchGraph(retriever=FakeRetriever([_amendment_chunk(**overrides)]))
+    result = graph.run(_AMENDMENT_QUESTION)
+    assert result.verification.disposition == ResponseDisposition.ABSTAIN
+
+
+def test_amendment_scope_rejects_altered_claims_and_unrelated_citations() -> None:
+    from src.decision.policy import EvidenceDecisionLayer
+
+    chunk = _amendment_chunk()
+    layer = EvidenceDecisionLayer()
+    coverage = layer.analyzer.analyze(layer.extractor.extract(_AMENDMENT_QUESTION), [chunk])
+    assert coverage.sufficient
+    chunk["approved_facts"] = coverage.findings[0].facts
+    text = "The explanatory note states that Apple amended Part III, Items 10 and 12 of its original Form 10-K."
+    verifier = AtomicClaimVerifier()
+    assert verifier.verify(_AMENDMENT_QUESTION, f"{text} [Source 1]", [chunk]).disposition == ResponseDisposition.VERIFIED
+
+    altered = text.replace("10 and 12", "10 through 12")
+    assert verifier.verify(_AMENDMENT_QUESTION, f"{altered} [Source 1]", [chunk]).claims[0].status == ClaimStatus.CONTRADICTED
+
+    irrelevant = _amendment_chunk(chunk_id="unrelated", text="Part IV, Item 15. Exhibits.")
+    result = verifier.verify(_AMENDMENT_QUESTION, f"{text} [Source 1] [Source 2]", [chunk, irrelevant])
+    assert result.disposition == ResponseDisposition.REJECTED
+
+
 def test_unmarked_retriever_retains_serial_query_plan() -> None:
     retriever = FakeRetriever([])
     question = "Compare Apple and Microsoft revenue for FY2024."

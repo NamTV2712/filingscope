@@ -8,6 +8,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from src.decision.filing_disclosures import requested_amendment_scope
 from src.decision.models import QuestionRequirements
 from src.decision.requirement_extractor import EvidenceRequirementExtractor
 from src.research.corpus_map import (
@@ -30,6 +31,7 @@ _FORM_PATTERNS = (
 )
 _FORM_LABELS = {
     "10k": "10-K annual filing",
+    "10ka": "10-K/A",
     "10q": "10-Q quarterly filing",
     "8k": "8-K current filing",
     "earnings": "earnings release",
@@ -506,6 +508,8 @@ def _requirement_query(
 
 
 def _requested_forms(question: str) -> tuple[str, ...]:
+    if requested_amendment_scope(question):
+        return ("10ka",)
     return tuple(form for form, pattern in _FORM_PATTERNS if pattern.search(question))
 
 
