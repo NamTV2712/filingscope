@@ -89,6 +89,7 @@ and faithfulness on a new real-filing cohort remain unmeasured.
 | Consolidated metric mappings | Company Facts-only and hybrid each increased to 26/26 quarter/YTD pairs and 97/187 confirmed numeric cases. Each observed 0/97 incorrect releases and 8/8 correct missing-unit abstentions. Document-only confirmed 26/187. [Metric mapping replay](G3_FINANCIAL_METRIC_MAPPINGS.md). |
 | Fiscal year pairs from one 10-K | Company Facts-only and hybrid each confirmed 32/32 annual pairs and 133/187 numeric cases with 0/133 incorrect releases. Document-only confirmed 28/187 with the additional operating cash flow alias. [Fiscal year replay](G3_FISCAL_YEAR_PAIRS.md). |
 | Issuer-specific annual balance sheet dates | Company Facts-only and hybrid confirmed 16/16 multi-company cases and 182/187 numeric cases each, with 0/182 incorrect releases. Document-only confirmed 3/16 and 30/187. [Balance sheet date replay](G3_FILING_INSTANTS.md). |
+| Exact concept lookups | Company Facts-only and hybrid each confirmed 187/187 numeric cases with 0/187 incorrect releases and eight correct missing-unit abstentions. Document-only confirmed 30/187. Nine narrative or revision requests remained withheld. [Exact concept replay](G3_EXACT_CONCEPT_LOOKUPS.md). |
 | Dimensioned iXBRL lookup | Exact typed lookup matched 10/10 PDF cells and rejected 50/50 identity perturbations. [Dimensioned replay](G2_DIMENSIONED_REPLAY.md). |
 | SEC 2025 runtime pilot | PDF only grounded 3/23, and Company Facts only and hybrid each grounded 21/23 by frozen locator. All three released consolidated Tesla revenue for an energy business question. |
 | Segment reporting scope follow-up | All three tracks withheld the consolidated Tesla value after the guard change. The other 25 case outcomes matched. [Paired report](G3_REPORTING_SCOPE.md). |
@@ -152,7 +153,7 @@ outcomes. These disposition points do not support continuous AURC.
 | Missing taxonomy or transformation | G2 recorded 81 skipped numeric transforms and Arelle schema diagnostics. A schema-complete validation pass remains open. |
 | Incomplete data or unavailable filing | Routed LangGraph preserved healthy-source work in the persistent-outage fixture. Both compared workflows withheld the incomplete answer. |
 | Unsupported or mis-cited claim | G1 synthetic controls cover wrong basis and a valid narrative cited to the wrong page. G4 preserved existing prompt-injection and release checks. |
-| Incomplete applicability | Both structured arms withhold five numeric requests with unsupported metric wording or missing concept mappings. Document-only still lacks typed dates for quarter/YTD and annual pairs. The mixed cohort has nine unresolved narrative or revision questions. [Balance sheet date replay](G3_FILING_INSTANTS.md). |
+| Incomplete applicability | Document-only still lacks typed dates for quarter/YTD and annual pairs. The mixed cohort has nine unresolved narrative or revision questions. [Exact concept replay](G3_EXACT_CONCEPT_LOOKUPS.md). |
 
 ## Reproduce and verify
 
@@ -191,7 +192,7 @@ reviewer bundle is available. Remaining research gaps include adjudicated mixed
 cohorts and full Inline XBRL taxonomy validation. The Transformers
 4.57.6 compatibility debt remains documented in G0.
 
-The latest offline verification passed 564 tests on Windows with
-three corpus skips and 563 tests with four skips on Linux WSL with
+The latest offline verification passed 565 tests on Windows with
+three corpus skips and 564 tests with four skips on Linux WSL with
 the Inline XBRL extra. Ruff and focused mypy passed. GitHub Actions
 has no run for these local commits.

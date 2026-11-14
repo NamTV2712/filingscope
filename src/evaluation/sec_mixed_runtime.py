@@ -12,9 +12,6 @@ from src.generation.answer_generator import is_fallback_answer
 from src.ingestion.company_facts import METRIC_CONCEPTS, normalize_cik
 
 
-_CONCEPT_METRIC = {concept: metric for metric, concepts in METRIC_CONCEPTS.items() for concept in concepts}
-
-
 def _signature(value: str, currency: str) -> tuple:
     return "amount", currency, format(Decimal(value).normalize(), "f"), "base"
 
@@ -27,9 +24,8 @@ def _matches_record(record: dict, slot: dict) -> bool:
         source_ok = (provenance["accession"] == slot["accession"] and not provenance.get("dimensions")
                      and f"{provenance['taxonomy']}:{provenance['tag']}" == concept)
     else:
-        metric = _CONCEPT_METRIC.get(concept)
         source_ok = (record.get("source_revision") == slot["accession"] and record.get("table_row") is not None
-                     and metric is not None and metric == record.get("metric_id"))
+                     and concept in METRIC_CONCEPTS.get(record.get("metric_id"), ()))
     return bool(
         source_ok and record.get("cik") and normalize_cik(record["cik"]) == slot["cik"]
         and period.get("start") == slot["start"] and period.get("end") == slot["end"]

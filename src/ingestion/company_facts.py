@@ -25,10 +25,13 @@ _ANNUAL_FORMS = frozenset({"10-K", "20-F", "40-F"})
 _PERIODIC_FORMS = _ANNUAL_FORMS | {"10-Q"}
 _ACCESSION = re.compile(r"[0-9]{10}-[0-9]{2}-[0-9]{6}")
 _PERIOD = re.compile(r"(?:(Q[1-4]) (YTD )?)?FY((?:19|20)[0-9]{2})")
+_CONTRACT_REVENUE_CONCEPT = "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax"
 
 # Each entry binds a reported consolidated measure to one US-GAAP tag.
 CONSOLIDATED_METRIC_CONCEPTS: dict[str, tuple[str, ...]] = {
     "cost_of_revenue": ("us-gaap:CostOfRevenue",),
+    "contract_revenue": (_CONTRACT_REVENUE_CONCEPT,),
+    "operating_expenses": ("us-gaap:OperatingExpenses",),
     "income_tax_expense": ("us-gaap:IncomeTaxExpenseBenefit",),
     "continuing_operations_pretax_income": (
         "us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest",
@@ -50,7 +53,7 @@ CONSOLIDATED_METRIC_CONCEPTS: dict[str, tuple[str, ...]] = {
 # A newer tag never supersedes a different tag for the same period.
 METRIC_CONCEPTS: dict[str, tuple[str, ...]] = {
     "revenue": (
-        "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+        _CONTRACT_REVENUE_CONCEPT,
         "us-gaap:Revenues",
         "us-gaap:SalesRevenueNet",
         "ifrs-full:Revenue",

@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from src.decision.models import QuestionRequirements
 from src.decision.requirement_extractor import (
-    EvidenceRequirementExtractor, permits_energy_segment_lookup, requires_nonstandard_reporting_basis,
+    EvidenceRequirementExtractor, mask_contract_revenue, permits_energy_segment_lookup, requires_nonstandard_reporting_basis,
 )
 from src.ingestion.company_facts import CONSOLIDATED_METRIC_CONCEPTS, METRIC_CONCEPTS, requested_revision_policies
 from src.ingestion.segment_revenue import ENERGY_ENTITY, ENERGY_METRIC, ENERGY_PERIOD
@@ -549,7 +549,7 @@ class ComplexityRouter:
             len(requirements.evidence) != 1 or not requirements.evidence[0].quantitative
             or requirements.evidence[0].period is None and requirements.reporting_interval is None
             or any(item.operation != "lookup" for item in requirements.operations)
-            or _SPECIAL_BASIS_RE.search(question)
+            or _SPECIAL_BASIS_RE.search(mask_contract_revenue(question))
             or requires_nonstandard_reporting_basis(question, requirements.metrics)
         ):
             return SourceCapability.TEXT_RAG

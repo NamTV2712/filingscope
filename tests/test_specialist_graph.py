@@ -258,6 +258,26 @@ def test_cross_company_balances_require_each_issuers_date_and_accession(mismatch
     assert "USD 191,131,000,000 as of 2025-06-30 (FY2025)" in result.answer
 
 
+def test_contract_revenue_uses_only_the_named_concept_when_revenue_tags_disagree() -> None:
+    sec = FakeSECCompanyFacts()
+    gaap = sec.facts[320193]["facts"]["us-gaap"]
+    contract_tag = "RevenueFromContractWithCustomerExcludingAssessedTax"
+    current = gaap[contract_tag]["units"]["USD"][-1]
+    gaap["Revenues"] = {"units": {"USD": [{**current, "val": 123_000_000_000}]}}
+    graph = SpecialistResearchGraph(sec_client=sec)
+    interval = f"from {current['start']} to {current['end']} in 10-K {current['accn']}"
+    question = f"What was Apple's revenue from contract with customer, excluding assessed tax, {interval} in USD?"
+    specific = graph.run(question)
+    assert specific.verification.disposition == ResponseDisposition.VERIFIED
+    assert "revenue from contracts with customers of USD 110,000,000,000" in specific.answer
+    assert [item.financial_concept for item in specific.ledger_snapshot.evidence_records] == [f"us-gaap:{contract_tag}"]
+
+    generic = graph.run(f"What was Apple's revenue {interval} in USD?")
+    assert generic.verification.disposition == ResponseDisposition.ABSTAIN
+    wrong_basis = graph.run(question.replace("excluding assessed tax", "including assessed tax"))
+    assert wrong_basis.verification.disposition == ResponseDisposition.ABSTAIN
+
+
 def test_specialist_releases_only_rechecked_claims_and_keeps_draft_audit() -> None:
     class DraftGenerator:
         def generate(self, question, chunks):

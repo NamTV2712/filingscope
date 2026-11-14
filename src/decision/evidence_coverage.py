@@ -29,7 +29,7 @@ from src.decision.period_value_parser import (
     period_matches,
 )
 from src.decision.requirement_extractor import (
-    mask_cost_of_revenue, permits_energy_segment_lookup, requires_nonstandard_reporting_basis,
+    mask_revenue_components, permits_energy_segment_lookup, requires_nonstandard_reporting_basis,
 )
 from src.ingestion.company_facts import (
     CONSOLIDATED_METRIC_CONCEPTS, METRIC_CONCEPTS, matches_requested_revision, requested_revision_policies,
@@ -228,7 +228,7 @@ def _facts_from_chunk(
             # Unscoped text can contain differently based expense components.
             return ()
         if metric.metric_id == "revenue":
-            text = mask_cost_of_revenue(text)
+            text = mask_revenue_components(text)
         # Reuse the migrated exact SEC table-row matcher for canonical total
         # rows. It only sees this retrieved chunk, never the complete corpus.
         ticker = chunk.get("ticker")

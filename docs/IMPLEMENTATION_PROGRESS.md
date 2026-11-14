@@ -180,6 +180,12 @@ confirmed 3/16 multi-company and 30/187 numeric. All arms kept their
 prior correct releases and withheld the eight missing-unit controls.
 Windows passed 564 tests with three skips and WSL passed 563 with four.
 [Balance sheet dates](G3_FILING_INSTANTS.md).
+Exact concept and line-item wording resolved the remaining five
+numeric questions in Company Facts-only and hybrid. Both confirmed
+187/187 with zero incorrect releases and all eight missing-unit
+controls withheld. Document-only stayed at 30/187. Windows passed
+565 tests with three skips and WSL passed 564 with four.
+[Exact concept lookups](G3_EXACT_CONCEPT_LOOKUPS.md).
 
 G3 retains Dense and the current statement ranker. Scoped scoring
 matched all 30 top-ten rankings while reducing paired rank p50

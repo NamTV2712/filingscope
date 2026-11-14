@@ -14,7 +14,9 @@ from src.decision.filing_disclosures import (
 from src.decision.models import CoverageStatus, EvidenceFact, MetricRequirement, QuestionRequirements
 from src.decision.period_value_parser import extract_period_value_mentions, period_matches
 from src.decision.policy import EvidenceDecisionLayer
-from src.decision.requirement_extractor import permits_energy_segment_lookup, requires_nonstandard_reporting_basis
+from src.decision.requirement_extractor import (
+    mask_contract_revenue, permits_energy_segment_lookup, requires_nonstandard_reporting_basis,
+)
 from src.ingestion.company_facts import (
     CONSOLIDATED_METRIC_CONCEPTS, matches_requested_revision, requested_revision_policies,
 )
@@ -159,7 +161,7 @@ class AtomicClaimVerifier(ClaimLevelVerifier):
                 reason_codes=("dimensioned_claim_scope_mismatch",),
             )
         if draft.values and (
-            _UNVERIFIED_QUALIFIER.search(statement) or len(draft.values) != 1 or len(draft.entity_ids) != 1
+            _UNVERIFIED_QUALIFIER.search(mask_contract_revenue(statement)) or len(draft.values) != 1 or len(draft.entity_ids) != 1
             or len(explicit_metrics) != 1
             or (question_requirements.has_filing_instants
                 and tuple(entity.entity_id for entity in asserted_scope.entities) != draft.entity_ids)

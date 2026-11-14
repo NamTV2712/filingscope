@@ -28,9 +28,15 @@ _METRIC_DEFINITIONS: tuple[MetricRequirement, ...] = (
     MetricRequirement(metric_id="revenue", display_name="revenue", aliases=(
         "total net sales", "total revenue", "net sales", "revenues", "revenue", "sales",
     )),
+    MetricRequirement(metric_id="contract_revenue", display_name="revenue from contracts with customers", aliases=(
+        "revenue from contracts with customers", "revenue from contract with customer",
+        "revenue from contract with customer, excluding assessed tax",
+        "revenue from contract with customer excluding assessed tax",
+    )),
     MetricRequirement(metric_id="operating_income", display_name="operating income", aliases=(
         "operating income", "income from operations",
     )),
+    MetricRequirement(metric_id="operating_expenses", display_name="operating expenses", aliases=("operating expenses",)),
     MetricRequirement(metric_id="net_income", display_name="net income", aliases=(
         "net income", "net earnings",
     )),
@@ -67,6 +73,7 @@ _METRIC_DEFINITIONS: tuple[MetricRequirement, ...] = (
     )),
     MetricRequirement(metric_id="capital_expenditures", display_name="capital expenditures", aliases=(
         "capital expenditures", "capital expenditure", "capex",
+        "payments to acquire property, plant and equipment", "payments to acquire property, plant, and equipment",
     )),
     MetricRequirement(metric_id="operating_cash_flow", display_name="operating cash flow", aliases=(
         "cash flow from operations", "operating cash flow", "net cash from operating activities",
@@ -138,6 +145,8 @@ _NONSTANDARD_BASIS = re.compile(
     re.I,
 )
 _COST_OF_REVENUE = re.compile(r"\bcost of (?:revenues?|sales)\b", re.I)
+_CONTRACT_REVENUE = re.compile(r"\brevenue from contracts? with customers?(?:,? excluding assessed tax)?\b", re.I)
+_CONTRACT_REVENUE_OTHER_BASIS = re.compile(r"\bincluding (?:assessed |sales )?tax(?:es)?\b", re.I)
 _COMPONENT_SCOPE = re.compile(
     r"\b(?:excluding|adjusted|discontinued operations|domestic|foreign|federal|state|deferred|subsidiar(?:y|ies))\b"
     r"|\b(?:products?|services?) cost of revenues?\b",
@@ -181,18 +190,30 @@ def _periods(question: str) -> tuple[str, ...]:
     return tuple(dict.fromkeys(item.label for item in period_mentions(question)))
 
 
+def mask_contract_revenue(text: str) -> str:
+    return _CONTRACT_REVENUE.sub(lambda match: " " * len(match[0]), text)
+
+
 def requires_nonstandard_reporting_basis(
     question: str, metrics: tuple[MetricRequirement, ...] = (), *, consolidated_only: bool = False,
 ) -> bool:
     if _NONSTANDARD_BASIS.search(question) or _SEGMENT_BASIS.search(question):
         return True
     consolidated_metric = consolidated_only or any(metric.metric_id in CONSOLIDATED_METRIC_CONCEPTS for metric in metrics)
-    return consolidated_metric and bool(_COMPONENT_SCOPE.search(question) or _CURRENT_TAX_COMPONENT.search(question))
+    contract_revenue = any(metric.metric_id == "contract_revenue" for metric in metrics)
+    if contract_revenue and _CONTRACT_REVENUE_OTHER_BASIS.search(question):
+        return True
+    scope = mask_contract_revenue(question) if contract_revenue else question
+    return consolidated_metric and bool(_COMPONENT_SCOPE.search(scope) or _CURRENT_TAX_COMPONENT.search(question))
 
 
 def mask_cost_of_revenue(text: str) -> str:
     """Keep offsets stable when resolving embedded issuer and revenue aliases."""
     return _COST_OF_REVENUE.sub(lambda match: " " * len(match[0]), text)
+
+
+def mask_revenue_components(text: str) -> str:
+    return mask_contract_revenue(mask_cost_of_revenue(text))
 
 
 def permits_energy_segment_lookup(question: str, *, assertion: bool = False) -> bool:
@@ -211,7 +232,7 @@ def permits_energy_segment_lookup(question: str, *, assertion: bool = False) -> 
 
 def _metrics(question: str) -> tuple[MetricRequirement, ...]:
     folded = question.casefold().replace("’", "'")
-    revenue_text = mask_cost_of_revenue(folded)
+    revenue_text = mask_revenue_components(folded)
     found: dict[str, tuple[int, int]] = {}
     aliases = sorted(
         [
@@ -223,7 +244,8 @@ def _metrics(question: str) -> tuple[MetricRequirement, ...]:
     )
     for alias, metric in aliases:
         pattern = re.compile(rf"(?<![\w]){re.escape(alias)}(?![\w])", re.I)
-        match = pattern.search(revenue_text if metric.metric_id == "revenue" else folded)
+        text = revenue_text if metric.metric_id in {"revenue", "customers"} else folded
+        match = pattern.search(text)
         if match is None:
             continue
         current = found.get(metric.metric_id)

@@ -15,7 +15,7 @@ from src.decision.period_value_parser import (
     period_matches,
 )
 from src.decision.policy import EvidenceDecisionLayer
-from src.decision.requirement_extractor import mask_cost_of_revenue
+from src.decision.requirement_extractor import mask_contract_revenue, mask_cost_of_revenue
 from src.ingestion.period_identity import intervals_agree
 from src.verification.models import (
     CalculationOperand,
@@ -404,8 +404,9 @@ class ClaimLevelVerifier:
         )
         metric_hits: list[tuple[int, int, str]] = []
         text_without_cost = mask_cost_of_revenue(statement)
+        text_without_revenue_components = mask_contract_revenue(text_without_cost)
         for metric in metrics:
-            metric_text = text_without_cost if metric.metric_id == "revenue" else statement
+            metric_text = text_without_revenue_components if metric.metric_id in {"revenue", "customers"} else statement
             metric_hits.extend((start, end, metric.metric_id) for start, end, _ in _find_spans(metric_text, metric.aliases))
         entity_hits: list[tuple[int, int, str]] = []
         possible_entity_ids = list(dict.fromkeys((*claim_entities, *question_entities)))
