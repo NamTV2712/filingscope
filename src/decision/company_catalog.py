@@ -31,6 +31,7 @@ _LEGAL_SUFFIXES = {
     "limited", "ltd", "plc", "llc", "lp", "holdings", "group",
 }
 _TOKEN_RE = re.compile(r"[a-z0-9]+")
+_WORD_TICKERS = frozenset({"COST"})
 
 
 def normalize_entity(value: str) -> str:
@@ -129,15 +130,15 @@ class CompanyCatalog:
         folded = text.casefold()
         for entity_id, aliases in self._aliases.items():
             for alias in aliases:
-                is_short_ticker = (
-                    alias == entity_id
-                    and bool(re.fullmatch(r"[A-Z]{1,2}", entity_id))
+                requires_uppercase = (
+                    alias.upper() == entity_id
+                    and (entity_id in _WORD_TICKERS or bool(re.fullmatch(r"[A-Z]{1,2}", entity_id)))
                 )
                 pattern = re.compile(
-                    rf"(?<![\w]){re.escape(alias)}(?![\w])",
-                    0 if is_short_ticker else re.I,
+                    rf"(?<![\w]){re.escape(entity_id if requires_uppercase else alias)}(?![\w])",
+                    0 if requires_uppercase else re.I,
                 )
-                found = pattern.search(text if is_short_ticker else folded)
+                found = pattern.search(text if requires_uppercase else folded)
                 if found is None:
                     continue
                 current = matches.get(entity_id)

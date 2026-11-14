@@ -67,6 +67,7 @@ The Python policy determines candidate acceptance and final release.
 | SEC 2025 provisional | 17 filings, eight issuers, 32/100/72 auto-XBRL pilot/development/validation lookups | Source-aligned parser and structured lookup tests. The cohort split excludes issuer/accession/fact/revision-family overlap within these groups. [G2 report](G2_SEC_DATA.md). |
 | SEC 2025 runtime pilot | 26 PDF-transcribed questions from five filings and four issuers | Identical source-track questions and frozen citation locators. Issuers overlap with earlier cohorts. [Runtime pilot](G2_RUNTIME_REPLAY.md). |
 | Public applicability | Pinned FinAgent v1.1.1, 133 questions | 35 cases matched issuer/form, and 10 matched an excerpt in one frozen SEC filing. No full answer benchmark. [Benchmark matrix](G2_SEC_DATA.md#benchmark-compatibility). |
+| Public FinRank replay | Devon and EOG FY2024 Form 10-K PDFs, 130 questions | Adaptive and routed both released 0/130. Source-page alignment was available for 31 records. [FinRank review](G6_FINRANK_PUBLIC_REVIEW.md). |
 | Independent final | Reviewer-held cohort pending | No independent performance or release-risk estimate. [G6 handoff](G6_EVALUATION_READINESS.md). |
 
 The G1 contract scores eight primary outcomes with raw counts,
@@ -156,6 +157,7 @@ outcomes. These disposition points do not support continuous AURC.
 | Incomplete data or unavailable filing | Routed LangGraph preserved healthy-source work in the persistent-outage fixture. Both compared workflows withheld the incomplete answer. |
 | Unsupported or mis-cited claim | G1 synthetic controls cover wrong basis and a valid narrative cited to the wrong page. G4 preserved existing prompt-injection and release checks. |
 | Incomplete applicability | Document-only still lacks typed dates for quarter/YTD and annual pairs. The measured amendment path requires an exact accession and explicit item scope in the note. [Exact concept replay](G3_EXACT_CONCEPT_LOOKUPS.md) · [Amendment replay](G4_AMENDMENT_SCOPE.md). |
+| Public query coverage and label errors | Both workflows withheld the FinRank slice. Of 107 routing rejections, 88 had unrecognized metrics. The source check found a USD 100 million discrepancy in one reference. [FinRank review](G6_FINRANK_PUBLIC_REVIEW.md). |
 
 ## Reproduce and verify
 
@@ -194,7 +196,7 @@ reviewer bundle is available. Remaining research gaps include adjudicated mixed
 cohorts and full Inline XBRL taxonomy validation. The Transformers
 4.57.6 compatibility debt remains documented in G0.
 
-The latest offline verification passed 582 tests on Windows with
-three corpus skips and 581 tests with four skips on Linux WSL with
+The latest offline verification passed 583 tests on Windows with
+three corpus skips and 582 tests with four skips on Linux WSL with
 the Inline XBRL extra. Ruff and focused mypy passed. GitHub Actions
 has no run for these local commits.

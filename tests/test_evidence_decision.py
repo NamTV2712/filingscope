@@ -116,6 +116,13 @@ def test_cost_of_revenue_does_not_identify_costco_or_revenue() -> None:
         assert decision.action == DecisionAction.ABSTAIN
 
 
+def test_common_word_does_not_match_cost_ticker() -> None:
+    extractor = EvidenceRequirementExtractor.from_document_rows([{"ticker": "COST", "company": "Costco Wholesale Corporation"}])
+    assert extractor.extract("What are Apple's risks from the cost and availability of components?").companies == ("AAPL",)
+    for company in ("COST", "Costco"):
+        assert extractor.extract(f"Compare Apple's and {company}'s revenue in FY2024.").companies == ("AAPL", "COST")
+
+
 def test_date_and_filing_cannot_be_shared_across_unbound_issuers() -> None:
     question = "What total assets did Apple and Microsoft as of 2025-06-30 in 10-K 0000950170-25-100235 report?"
     requirements = EvidenceRequirementExtractor().extract(question)

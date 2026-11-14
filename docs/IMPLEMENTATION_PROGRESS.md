@@ -279,6 +279,11 @@ The [draft G6 exposure inventory](G6_EXPOSURE_INVENTORY.md) consolidates
 offline runs produced identical inventory and source receipt hashes.
 The [G6 prediction receipt](G6_PREDICTION_RECEIPT.md) binds prediction
 and freeze hashes to a Git commit the reviewer records before label release.
+The public FinRank replay measured 0/130 coverage for both workflows
+and reviewed evidence and routing failures. A targeted COST alias fix
+removed seven false issuer resolutions. All 612 mixed runtime records
+and the historical architecture and fault outputs matched apart from
+resource fields. [FinRank review](G6_FINRANK_PUBLIC_REVIEW.md).
 
 ## G7 research report
 

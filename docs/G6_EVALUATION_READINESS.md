@@ -119,6 +119,14 @@ of 9/9 in each document-enabled arm. The descriptive Wilson upper
 bound on incorrect release was 29.91%. This review is internal and
 development-exposed. [Individual outcomes and evidence](G4_AMENDMENT_SCOPE.md).
 
+## Public FinRank replay
+
+Both workflows withheld all 130 cases in a public replay on two
+complete FY2024 filing PDFs. The case review found missing financial
+and narrative scopes, and verified a discrepancy in one published
+commodity sales reference against the SEC filing. A paired fix removed
+seven false resolutions of the COST ticker. [FinRank public replay](G6_FINRANK_PUBLIC_REVIEW.md).
+
 **KEEP** the freeze-and-predict handoff. **DEFER** independent
 conclusions until a qualifying reviewer bundle arrives. G6 builds
 over `85f7d82d1e108544cac5b961008b63b61d5aec59`. G7 can report the

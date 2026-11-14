@@ -17,6 +17,8 @@ answers on a 26-question development pilot. A separate candidate-level
 comparison measured Groq relevance observations on SEC filing pages.
 The same candidate set was evaluated with TypeSafe Jev 1.14.
 Independent final evaluation awaits a reviewer-held cohort.
+On a public FinRank slice with two filing PDFs, Adaptive and routed
+LangGraph each withheld all 130 questions. [Public replay](docs/G6_FINRANK_PUBLIC_REVIEW.md).
 The [research report](docs/G7_RESEARCH_REPORT.md) covers the implemented
 architecture, results, limitations and reproduction commands.
 
