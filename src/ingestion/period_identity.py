@@ -37,10 +37,15 @@ _PERIOD_MENTION = re.compile(
 _ISO_RANGE = re.compile(r"\bfrom\s+(\d{4}-\d{2}-\d{2})\s+(?:to|through)\s+(\d{4}-\d{2}-\d{2})\b", re.I)
 _RANGE_START = re.compile(r"\bfrom\s+(\d{4}-\d{2}-\d{2})\s+(?:to|through)\b", re.I)
 _ACCESSION = re.compile(r"\b[0-9]{10}-[0-9]{2}-[0-9]{6}\b")
+_OTHER_SEC_FORM = re.compile(r"\b(?:10-[KQ](?:/A)?|8-K(?:/A)?|20-F|40-F)\b", re.I)
 _QUARTER_AND_YTD = re.compile(
     r"\b(?:standalone|discrete)\s+quarter\s+and\s+(?:fiscal\s+)?(?:year[- ]to[- ]date|YTD)\s+ended\s+"
     r"(\d{4}-\d{2}-\d{2})\s+in\s+(?:its\s+)?10-Q\s+([0-9]{10}-[0-9]{2}-[0-9]{6})\b", re.I,
 )
+_TWO_FISCAL_YEARS = re.compile(
+    r"\bfiscal years ended\s+(\d{4}-\d{2}-\d{2})(?:\s*,)?\s+and\s+(\d{4}-\d{2}-\d{2})\b", re.I,
+)
+_ANNUAL_ACCESSION = re.compile(r"\s+in\s+(?:its\s+)?10-K\s+([0-9]{10}-[0-9]{2}-[0-9]{6})\b", re.I)
 
 
 class QuarterYtdLookup(BaseModel):
@@ -78,6 +83,44 @@ def quarter_ytd_pair_matches(quarter: PeriodIdentity, cumulative: PeriodIdentity
                 and cumulative.start < quarter.start and quarter.year == cumulative.year
                 and quarter.quarter == cumulative.quarter and quarter.scope == PeriodScope.QUARTER
                 and cumulative.scope == PeriodScope.YEAR_TO_DATE)
+
+
+class FiscalYearPair(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    ends: tuple[date, date]
+    accession: str
+
+    def matches(self, period: PeriodIdentity | None, accession: object, end: date | None) -> bool:
+        return bool(period and end in self.ends and period.end == end and accession == self.accession
+                    and period.year_basis == YearBasis.FISCAL and period.scope == PeriodScope.ANNUAL
+                    and period.kind == PeriodKind.DURATION and period.start is not None and period.end is not None
+                    and 330 <= (period.end - period.start).days + 1 <= 400)
+
+
+def requested_fiscal_year_pair(question: str) -> FiscalYearPair | None:
+    dates = _TWO_FISCAL_YEARS.search(question)
+    if dates is None:
+        return None
+    filing = _ANNUAL_ACCESSION.match(question, dates.end())
+    if filing is None:
+        raise ValueError("fiscal_year_pair_requires_10k_accession")
+    remainder = question[:dates.start()] + " " + question[filing.end():]
+    if (_ACCESSION.search(remainder) or _OTHER_SEC_FORM.search(remainder) or period_mentions(remainder)
+            or re.match(r"/A\b", question[filing.end():], re.I)):
+        raise ValueError("ambiguous_fiscal_year_pair")
+    try:
+        earlier, later = sorted(date.fromisoformat(value) for value in dates.groups())
+    except ValueError as exc:
+        raise ValueError("invalid_fiscal_year_pair") from exc
+    if not 330 <= (later - earlier).days <= 400:
+        raise ValueError("invalid_fiscal_year_pair")
+    return FiscalYearPair(ends=(earlier, later), accession=filing[1])
+
+
+def fiscal_years_are_consecutive(earlier: PeriodIdentity, later: PeriodIdentity) -> bool:
+    return bool(earlier.end and later.start and (later.start - earlier.end).days == 1
+                and later.year == earlier.year + 1)
 
 
 class ReportingInterval(BaseModel):

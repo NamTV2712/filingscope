@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from datetime import date
 from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, model_serializer
 
-from src.ingestion.period_identity import PeriodIdentity, PeriodScope, QuarterYtdLookup, ReportingInterval
+from src.ingestion.period_identity import FiscalYearPair, PeriodIdentity, PeriodScope, QuarterYtdLookup, ReportingInterval
 
 
 class DecisionAction(StrEnum):
@@ -65,12 +66,15 @@ class EvidenceRequirement(BaseModel):
     minimum_observations: int = Field(default=1, ge=1)
     quantitative: bool = True
     period_scope: PeriodScope | None = None
+    period_end: date | None = None
 
     @model_serializer(mode="wrap")
     def _serialize(self, handler):
         data = handler(self)
         if self.period_scope is None:
             data.pop("period_scope", None)
+        if self.period_end is None:
+            data.pop("period_end", None)
         return data
 
 
@@ -98,6 +102,11 @@ class QuestionRequirements(BaseModel):
     unsupported_reasons: tuple[str, ...] = ()
     reporting_interval: ReportingInterval | None = None
     quarter_ytd: QuarterYtdLookup | None = None
+    fiscal_year_pair: FiscalYearPair | None = None
+
+    @property
+    def requires_period_pair(self) -> bool:
+        return self.quarter_ytd is not None or self.fiscal_year_pair is not None
 
     @model_serializer(mode="wrap")
     def _serialize(self, handler):
@@ -106,6 +115,8 @@ class QuestionRequirements(BaseModel):
             data.pop("reporting_interval", None)
         if self.quarter_ytd is None:
             data.pop("quarter_ytd", None)
+        if self.fiscal_year_pair is None:
+            data.pop("fiscal_year_pair", None)
         return data
 
 

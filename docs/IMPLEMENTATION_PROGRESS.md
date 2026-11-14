@@ -168,6 +168,12 @@ missing-unit abstentions. Document-only stayed at 26/187. The 122 PDF-pilot
 outputs and historical architecture outcomes matched. Windows passed 550
 tests with three skips and WSL passed 549 with four.
 [Financial metric mappings](G3_FINANCIAL_METRIC_MAPPINGS.md).
+Accession-bound fiscal year pairs confirmed 32/32 previously withheld
+pairs with Company Facts-only and hybrid. Each arm reached 133/187
+confirmed numeric outcomes. Document-only reached 28/187 with two
+additional operating cash flow lookups. Windows passed 557 tests with
+three fixture skips and WSL passed 556 with four.
+[Fiscal year pairs](G3_FISCAL_YEAR_PAIRS.md).
 
 G3 retains Dense and the current statement ranker. Scoped scoring
 matched all 30 top-ten rankings while reducing paired rank p50

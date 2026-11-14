@@ -11,6 +11,7 @@ from src.agent.complexity_router import ComplexityRouter, ExecutionPath, SourceC
 from src.agent.research_progress import ResearchProgress
 from src.agent.specialist_graph import SpecialistResearchGraph
 from src.agent.specialists import SpecialistStatus
+from src.decision.requirement_extractor import EvidenceRequirementExtractor
 from src.generation.answer_generator import AnswerGenerationResult
 from src.generation.grounded_writer import ProviderLimits
 from src.ingestion.company_facts import RevisionKind
@@ -19,6 +20,7 @@ from src.local_research import public_result
 from src.research.corpus_map import CorpusMap
 from src.verification.atomic_claim_verifier import AtomicClaimVerifier
 from src.verification.models import ClaimStatus, ResponseDisposition
+from src.verification.response_policy import INSUFFICIENT_EVIDENCE_ANSWER, verify_and_release
 
 
 class FakeRetriever:
@@ -167,6 +169,52 @@ def test_new_quarter_ytd_metrics_preserve_filing_concept_and_signed_amounts(
     assert unavailable.status == "UNSUPPORTED"
     assert unavailable.route.decision.reason_codes == ("required_structured_financial_source_unavailable",)
     assert not retriever.calls
+
+
+@pytest.mark.parametrize("comparative_accession", ["0000320193-24-000001", "0000320193-24-000002"])
+def test_fiscal_year_pair_requires_both_claims_from_the_named_filing(comparative_accession: str) -> None:
+    sec = FakeSECCompanyFacts()
+    rows = sec.facts[320193]["facts"]["us-gaap"]["RevenueFromContractWithCustomerExcludingAssessedTax"]["units"]["USD"]
+    earlier, later = rows
+    rows.append({**earlier, "fy": later["fy"], "filed": later["filed"], "accn": comparative_accession})
+    accession = later["accn"]
+    question = f"What was Apple's revenue in USD for the fiscal years ended 2023-12-31 and 2024-12-31 in 10-K {accession}?"
+    result = SpecialistResearchGraph(sec_client=sec).run(question)
+    assert sec.request_count == 1
+    assert result.verification is not None
+    if comparative_accession != accession:
+        assert result.verification.disposition == ResponseDisposition.ABSTAIN
+        assert result.answer == INSUFFICIENT_EVIDENCE_ANSWER
+        return
+
+    assert result.verification.disposition == ResponseDisposition.VERIFIED
+    assert "USD 100,000,000,000 for FY2023" in result.answer
+    assert "USD 110,000,000,000 for FY2024" in result.answer
+    requirements = EvidenceRequirementExtractor().extract(question)
+    assert [claim.requirement_ids for claim in result.verification.claims] == [
+        (slot.requirement_id,) for slot in requirements.evidence
+    ]
+    evidence = {item.fiscal_period: item for item in result.ledger_snapshot.evidence_records}
+    assert evidence["FY2023"].xbrl_provenance.revision_kind == RevisionKind.REFILED
+    assert all(item.xbrl_provenance.accession == accession for item in evidence.values())
+    assert result.coverage is not None
+    facts = {fact.evidence_id: fact for finding in result.coverage.findings for fact in finding.facts}
+    chunks = []
+    for evidence_id in result.citation_evidence_ids:
+        record = next(item for item in evidence.values() if item.evidence_id == evidence_id)
+        fact = facts[record.chunk_id]
+        chunks.append({
+            "chunk_id": record.chunk_id, "document_id": record.document_id, "ticker": record.ticker,
+            "source_type": record.source_type, "source_url": record.source_url, "filing_type": record.form_type,
+            "accession": accession, "financial_concept": record.financial_concept, "normalized_facts": (fact,),
+        })
+    one_claim = result.verification.claims[0].statement
+    verifier = AtomicClaimVerifier()
+    assert verify_and_release(verifier, question, result.answer, chunks, requirements).result.disposition == ResponseDisposition.VERIFIED
+    incomplete = verify_and_release(verifier, question, one_claim, chunks, requirements)
+    assert incomplete.initial.claims[0].status == ClaimStatus.SUPPORTED
+    assert incomplete.result.disposition == ResponseDisposition.ABSTAIN
+    assert incomplete.answer == INSUFFICIENT_EVIDENCE_ANSWER
 
 
 def test_specialist_releases_only_rechecked_claims_and_keeps_draft_audit() -> None:

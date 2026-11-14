@@ -13,8 +13,10 @@ from src.decision.models import (
     OperationRequirement,
     QuestionRequirements,
 )
-from src.ingestion.company_facts import CONSOLIDATED_METRIC_CONCEPTS, requested_currencies
-from src.ingestion.period_identity import PeriodScope, period_mentions, requested_quarter_ytd, requested_reporting_interval
+from src.ingestion.company_facts import CONSOLIDATED_METRIC_CONCEPTS, requested_currencies, requested_revision_policies
+from src.ingestion.period_identity import (
+    PeriodScope, period_mentions, requested_fiscal_year_pair, requested_quarter_ytd, requested_reporting_interval,
+)
 from src.ingestion.segment_revenue import ENERGY_ALIASES, ENERGY_FILING, ENERGY_LABEL, ENERGY_METRIC
 
 
@@ -64,7 +66,7 @@ _METRIC_DEFINITIONS: tuple[MetricRequirement, ...] = (
         "capital expenditures", "capital expenditure", "capex",
     )),
     MetricRequirement(metric_id="operating_cash_flow", display_name="operating cash flow", aliases=(
-        "cash flow from operations", "operating cash flow",
+        "cash flow from operations", "operating cash flow", "net cash from operating activities",
     )),
     MetricRequirement(metric_id="free_cash_flow", display_name="free cash flow", aliases=(
         "free cash flow", "free cashflow",
@@ -160,12 +162,13 @@ def _periods(question: str) -> tuple[str, ...]:
     return tuple(dict.fromkeys(item.label for item in period_mentions(question)))
 
 
-def requires_nonstandard_reporting_basis(question: str, metrics: tuple[MetricRequirement, ...] = ()) -> bool:
+def requires_nonstandard_reporting_basis(
+    question: str, metrics: tuple[MetricRequirement, ...] = (), *, consolidated_only: bool = False,
+) -> bool:
     if _NONSTANDARD_BASIS.search(question) or _SEGMENT_BASIS.search(question):
         return True
-    return any(metric.metric_id in CONSOLIDATED_METRIC_CONCEPTS for metric in metrics) and bool(
-        _COMPONENT_SCOPE.search(question) or _CURRENT_TAX_COMPONENT.search(question)
-    )
+    consolidated_metric = consolidated_only or any(metric.metric_id in CONSOLIDATED_METRIC_CONCEPTS for metric in metrics)
+    return consolidated_metric and bool(_COMPONENT_SCOPE.search(question) or _CURRENT_TAX_COMPONENT.search(question))
 
 
 def mask_cost_of_revenue(text: str) -> str:
@@ -263,13 +266,14 @@ class EvidenceRequirementExtractor:
         )
         metrics = _metrics(question)
         interval_error = None
-        interval = quarter_ytd = None
+        interval = quarter_ytd = fiscal_year_pair = None
         try:
             interval = requested_reporting_interval(question)
             quarter_ytd = requested_quarter_ytd(question)
+            fiscal_year_pair = requested_fiscal_year_pair(question)
         except ValueError as error:
             interval_error = str(error)
-        periods = () if interval is not None or quarter_ytd is not None or interval_error else _periods(question)
+        periods = () if interval or quarter_ytd or fiscal_year_pair or interval_error else _periods(question)
         cumulative = None if quarter_ytd is not None else _CUMULATIVE_RE.search(question)
         cumulative_unresolved = bool(cumulative and (not periods or any(not period.startswith("Q") for period in periods)))
         if cumulative and (quarter := {"six": "Q2", "nine": "Q3"}.get(cumulative[0].casefold().split()[0])):
@@ -318,6 +322,12 @@ class EvidenceRequirementExtractor:
             len(entities) != 1 or len(metrics) != 1 or not quantitative or operations != ["lookup"] or interval is not None
         ):
             unsupported_reasons.append("quarter_ytd_lookup_scope_unresolved")
+        if fiscal_year_pair is not None and (
+            len(entities) != 1 or len(metrics) != 1 or not quantitative or operations != ["lookup"]
+            or interval is not None or quarter_ytd is not None or requested_revision_policies(question)
+            or requires_nonstandard_reporting_basis(question, metrics, consolidated_only=True)
+        ):
+            unsupported_reasons.append("fiscal_year_pair_scope_unresolved")
         currencies = requested_currencies(question)
         if len(currencies) > 1:
             unsupported_reasons.append("multiple_requested_currencies")
@@ -331,7 +341,13 @@ class EvidenceRequirementExtractor:
             )
             for entity in entities:
                 for metric in metrics:
-                    if quarter_ytd is not None:
+                    if fiscal_year_pair is not None:
+                        for end in fiscal_year_pair.ends:
+                            evidence.append(EvidenceRequirement(
+                                requirement_id=f"{entity.entity_id}:{metric.metric_id}:{end}",
+                                entity_id=entity.entity_id, metric_id=metric.metric_id, period_end=end,
+                            ))
+                    elif quarter_ytd is not None:
                         for scope in (PeriodScope.QUARTER, PeriodScope.YEAR_TO_DATE):
                             evidence.append(EvidenceRequirement(
                                 requirement_id=f"{entity.entity_id}:{metric.metric_id}:{scope.value}",
@@ -385,4 +401,5 @@ class EvidenceRequirementExtractor:
             unsupported_reasons=tuple(unsupported_reasons),
             reporting_interval=interval,
             quarter_ytd=quarter_ytd,
+            fiscal_year_pair=fiscal_year_pair,
         )

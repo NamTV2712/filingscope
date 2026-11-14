@@ -262,7 +262,7 @@ class SpecialistResearchGraph:
                 raise ValueError("research plan exceeds the selected retrieval-call budget")
             if route.source_capability in _DIRECT_LOOKUP and (
                 route.selected_path != ExecutionPath.FAST
-                or len(route.research_plan.tasks) != (2 if requirements.quarter_ytd else 1)
+                or len(route.research_plan.tasks) != (2 if requirements.requires_period_pair else 1)
             ):
                 raise ValueError("a direct source lookup requires the complete FAST task set")
         if ledger is not None and ledger.request_id != request_id:
@@ -440,7 +440,7 @@ class SpecialistResearchGraph:
             )
             receipts.append(receipt)
             sufficient = bool(receipt.evidence_ids and not receipt.missing_requirement_ids)
-            if sufficient and context.requirements.quarter_ytd:
+            if sufficient and context.requirements.requires_period_pair:
                 sufficient = context.decision_layer.analyzer.analyze(
                     context.requirements, context.source_chunks.values(),
                 ).sufficient

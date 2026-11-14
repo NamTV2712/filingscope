@@ -5,14 +5,16 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.ingestion.period_identity import PeriodIdentity, PeriodKind, PeriodScope, QuarterYtdLookup, ReportingInterval
+from src.ingestion.period_identity import (
+    FiscalYearPair, PeriodIdentity, PeriodKind, PeriodScope, QuarterYtdLookup, ReportingInterval,
+)
 
 
 COMPANY_FACTS_POLICY_VERSION = "sec-company-facts-v2"
@@ -337,6 +339,29 @@ class CompanyFactsResolver:
             return f"{row.fiscal_focus} YTD FY{row.fiscal_year}"
         return None
 
+    def _fiscal_year_pair_rows(
+        self, rows: list[_Observation], pair: FiscalYearPair, end: date,
+    ) -> tuple[list[_Observation], list[_Observation]]:
+        earlier, later = pair.ends
+        current = [row for row in rows if row.accession == pair.accession and row.form == "10-K"
+                   and row.end == later and self._original_period(row, row.fiscal_year, None, False)]
+        if end == later:
+            return current, current
+
+        comparative = [
+            row for row in rows if row.accession == pair.accession and row.form == "10-K"
+            and row.end == earlier and row.start is not None and 330 <= (row.end - row.start).days + 1 <= 400
+            and any(anchor.fiscal_year == row.fiscal_year and anchor.fiscal_focus == row.fiscal_focus
+                    and anchor.filed == row.filed and anchor.currency == row.currency and anchor.concept == row.concept
+                    and anchor.start == row.end + timedelta(days=1) for anchor in current)
+        ]
+        originals = [row for row in rows if row.end == earlier and row.form == "10-K"
+                     and self._original_period(row, row.fiscal_year, None, False)
+                     and any(row.interval == match.interval and row.currency == match.currency
+                             and row.concept == match.concept and row.fiscal_year + 1 == match.fiscal_year
+                             and row.filed < match.filed for match in comparative)]
+        return originals, comparative
+
     def resolve(
         self,
         metric_id: str,
@@ -348,12 +373,14 @@ class CompanyFactsResolver:
         interval: ReportingInterval | None = None,
         quarter_ytd: QuarterYtdLookup | None = None,
         scope: PeriodScope | None = None,
+        fiscal_year_pair: FiscalYearPair | None = None,
+        period_end: date | None = None,
     ) -> CompanyFactResolution:
         concepts = METRIC_CONCEPTS.get(metric_id)
         if concepts is None:
             return CompanyFactResolution("unsupported_concept")
         match = _PERIOD.fullmatch(period or "")
-        if match is None and interval is None and quarter_ytd is None:
+        if match is None and interval is None and quarter_ytd is None and fiscal_year_pair is None:
             return CompanyFactResolution("explicit_fiscal_period_required")
         quarter, cumulative, year_text = match.groups() if match else (None, None, "")
         instant = metric_id in _INSTANT_METRICS
@@ -369,7 +396,14 @@ class CompanyFactsResolver:
             if (requested_currency is None or row.currency == requested_currency)
             and (not requested_forms or row.form.replace("-", "") in requested_forms)
         ]
-        if quarter_ytd is not None:
+        selected_rows: list[_Observation] | None = None
+        if fiscal_year_pair is not None:
+            if (instant or period_end is None or period_end not in fiscal_year_pair.ends
+                    or period is not None or interval is not None or quarter_ytd is not None
+                    or revision != RevisionPolicy.AS_REPORTED):
+                return CompanyFactResolution("fiscal_year_pair_scope_unsupported")
+            originals, selected_rows = self._fiscal_year_pair_rows(eligible, fiscal_year_pair, period_end)
+        elif quarter_ytd is not None:
             if instant or scope not in {PeriodScope.QUARTER, PeriodScope.YEAR_TO_DATE} or revision != RevisionPolicy.AS_REPORTED:
                 return CompanyFactResolution("quarter_ytd_scope_unsupported")
             originals = [row for row in eligible if row.form == "10-Q" and row.accession == quarter_ytd.accession
@@ -387,6 +421,9 @@ class CompanyFactsResolver:
                          and self._interval_label(row) is not None]
         if not originals:
             return CompanyFactResolution("original_period_unavailable")
+        if selected_rows is not None and len({(row.interval, row.currency, row.value, row.fiscal_year, row.filed)
+                                               for row in selected_rows}) != 1:
+            return CompanyFactResolution("ambiguous_fiscal_year_pair_observation")
         if interval is not None and interval.accession is None and len({row.accession for row in originals}) != 1:
             return CompanyFactResolution("ambiguous_original_accession")
         if len({row.interval for row in originals}) != 1:
@@ -403,7 +440,9 @@ class CompanyFactsResolver:
         if len({row.accession for row in first_rows}) != 1:
             return CompanyFactResolution("ambiguous_original_accession")
         original = min(first_rows, key=lambda row: (concepts.index(row.concept), _revision_order(row)))
-        if interval is not None:
+        if fiscal_year_pair is not None:
+            period = f"FY{original.fiscal_year}"
+        elif interval is not None:
             labels = {self._interval_label(row) for row in first_rows}
             if len(labels) != 1:
                 return CompanyFactResolution("ambiguous_period")
@@ -421,7 +460,13 @@ class CompanyFactsResolver:
             and (not requested_forms or row.form.removesuffix("/A").replace("-", "") in requested_forms)
         }, key=_revision_order)
         selected = original
-        if revision == RevisionPolicy.LATEST:
+        if selected_rows is not None:
+            matching = [row for row in selected_rows if row.interval == original.interval and row.concept == original.concept
+                        and row.currency == original.currency]
+            if not matching:
+                return CompanyFactResolution("fiscal_year_pair_concept_unavailable")
+            selected = min(matching, key=_revision_order)
+        elif revision == RevisionPolicy.LATEST:
             last_rows = [row for row in history if row.filed == history[-1].filed]
             if len({row.value for row in last_rows}) != 1:
                 return CompanyFactResolution("conflicting_latest_values")
@@ -458,6 +503,7 @@ class CompanyFactsResolver:
                 period_start=selected.start.isoformat() if selected.start else None,
                 period_end=selected.end.isoformat(),
                 period_alignment=(
+                    "filing_accession_and_consecutive_years" if fiscal_year_pair is not None else
                     "filing_report_date" if original.accession in self.report_dates else "filing_focus_and_dates"
                 ),
                 raw_unit=selected.raw_unit,

@@ -49,6 +49,17 @@ def test_ambiguous_or_invalid_intervals_do_not_fall_back_to_fiscal_years(dates):
     assert not req.supported and not req.evidence
 
 
+@pytest.mark.parametrize("scope", [
+    "2023-09-30 and 2023-09-30 in 10-K 0000320193-24-000123",
+    "2023-02-30 and 2024-09-28 in 10-K 0000320193-24-000123",
+    "2023-09-30 and 2024-09-28 in its annual filing",
+    "2023-09-30 and 2024-09-28 in 10-K 0000320193-24-000123 or 0000320193-24-000124",
+])
+def test_invalid_fiscal_year_pairs_do_not_fall_back_to_bare_years(scope):
+    req = EvidenceDecisionLayer().extractor.extract(f"What was Apple's revenue for the fiscal years ended {scope}?")
+    assert not req.supported and not req.evidence
+
+
 def test_consolidated_income_tax_cannot_support_a_component_or_use_a_different_tag():
     question = "What was Apple's income tax expense in FY2024?"
     chunk = _financial_chunk(chunk_id="apple-tax")

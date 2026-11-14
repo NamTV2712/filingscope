@@ -139,6 +139,7 @@ class AtomicClaimVerifier(ClaimLevelVerifier):
         statement = _text(draft.statement)
         asserted_scope = layer.extractor.extract(statement)
         explicit_metrics = asserted_scope.metrics
+        fiscal_year_pair = question_requirements.fiscal_year_pair
         if draft.metric_ids == ("business_segments",) and not draft.values and not draft.has_unparsed_numeric_value:
             return self._segment_assessment(draft, question_requirements, catalog, cited_chunks, evidence_ids)
         requested_segment = any(metric.metric_id == ENERGY_METRIC for metric in question_requirements.metrics)
@@ -159,8 +160,10 @@ class AtomicClaimVerifier(ClaimLevelVerifier):
         if draft.values and (
             _UNVERIFIED_QUALIFIER.search(statement) or len(draft.values) != 1 or len(draft.entity_ids) != 1
             or len(explicit_metrics) != 1
-            or (explicit_metrics[0].metric_id in CONSOLIDATED_METRIC_CONCEPTS
-                and requires_nonstandard_reporting_basis(statement, explicit_metrics))
+            or ((fiscal_year_pair is not None or explicit_metrics[0].metric_id in CONSOLIDATED_METRIC_CONCEPTS)
+                and requires_nonstandard_reporting_basis(
+                    statement, explicit_metrics, consolidated_only=fiscal_year_pair is not None,
+                ))
             or (draft.operation is None and (len(draft.periods) > 1 or _GROWTH_RE.search(statement)))
         ):
             return ClaimAssessment(
@@ -176,7 +179,7 @@ class AtomicClaimVerifier(ClaimLevelVerifier):
                 citation_status=CitationStatus.VALID, citations=draft.citations, evidence_ids=evidence_ids,
                 reason_codes=("cited_source_revision_does_not_match_claim",),
             )
-        if question_requirements.reporting_interval is not None or question_requirements.quarter_ytd is not None:
+        if question_requirements.reporting_interval is not None or question_requirements.requires_period_pair:
             coverage = layer.analyzer.analyze(question_requirements, cited_chunks)
             facts = [fact for finding in coverage.findings if finding.status == CoverageStatus.FOUND for fact in finding.facts]
             supported_ids = set()
@@ -402,9 +405,16 @@ class AtomicClaimVerifier(ClaimLevelVerifier):
             }
             if not periods:
                 periods = tuple(sorted(approved_periods))
+        period_ends = {
+            fact.period_identity.end for chunk in cited_chunks if chunk.get("chunk_id") in sources
+            for fact in chunk.get("approved_facts", chunk.get("normalized_facts", ()))
+            if isinstance(fact, EvidenceFact) and fact.period_identity is not None and fact.period in periods
+            and fact.entity_id in draft.entity_ids and fact.metric_id in draft.metric_ids
+        } if question_requirements.fiscal_year_pair is not None else set()
         requirements = tuple(item.requirement_id for item in question_requirements.evidence if
             item.entity_id in draft.entity_ids and item.metric_id in draft.metric_ids
             and (item.period is None or any(period_matches(item.period, period) for period in periods))
+            and (item.period_end is None or item.period_end in period_ends)
             and (item.period_scope is None or any(
                 period.startswith("Q") and ((" YTD " in period) == (item.period_scope == "year_to_date"))
                 for period in periods

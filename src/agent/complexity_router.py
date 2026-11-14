@@ -286,7 +286,8 @@ class ComplexityRouter:
             path = ExecutionPath.UNSUPPORTED
             reason_codes.append("mixed_filing_revision_request")
         elif (source_inventory is not None and requirements.metrics
-              and all(metric.metric_id in CONSOLIDATED_METRIC_CONCEPTS for metric in requirements.metrics)
+              and (requirements.fiscal_year_pair is not None
+                   or all(metric.metric_id in CONSOLIDATED_METRIC_CONCEPTS for metric in requirements.metrics))
               and not source_inventory.xbrl_entities.intersection(requirements.companies)):
             complexity = ComplexityClass.UNSUPPORTED
             path = ExecutionPath.UNSUPPORTED
@@ -318,10 +319,11 @@ class ComplexityRouter:
             else:
                 path = ExecutionPath.RESEARCH
                 reason_codes.append("calculation_scope_exceeds_fast_profile")
-        elif requirements.quarter_ytd is not None:
+        elif requirements.requires_period_pair:
             complexity = ComplexityClass.SINGLE_DOCUMENT
             path = ExecutionPath.FAST
-            reason_codes.append("quarter_and_ytd_from_one_filing")
+            reason_codes.append("quarter_and_ytd_from_one_filing" if requirements.quarter_ytd
+                                else "fiscal_year_pair_from_one_filing")
         elif entities == 1 and metrics > 0 and _SINGLE_DOCUMENT_RE.search(question):
             complexity = ComplexityClass.SINGLE_DOCUMENT
             path = ExecutionPath.FAST
@@ -366,6 +368,10 @@ class ComplexityRouter:
                             "ambiguous_quarter_ytd_lookup",
                             "invalid_quarter_ytd_lookup",
                             "quarter_ytd_lookup_scope_unresolved",
+                            "fiscal_year_pair_requires_10k_accession",
+                            "ambiguous_fiscal_year_pair",
+                            "invalid_fiscal_year_pair",
+                            "fiscal_year_pair_scope_unresolved",
                         }
                     )
                 )
@@ -510,11 +516,12 @@ class ComplexityRouter:
             if ((slot.entity_id, slot.metric_id, slot.period) == (ENERGY_ENTITY, ENERGY_METRIC, ENERGY_PERIOD)
                     and permits_energy_segment_lookup(question)):
                 return SourceCapability.DIRECT_XBRL
-        if requirements.quarter_ytd is not None and len(plan.tasks) == 2:
+        if requirements.requires_period_pair and len(plan.tasks) == 2:
             if requires_nonstandard_reporting_basis(question, requirements.metrics):
                 return SourceCapability.TEXT_RAG
             slot = requirements.evidence[0]
-            if slot.entity_id in inventory.xbrl_entities and slot.metric_id in METRIC_CONCEPTS:
+            if (slot.entity_id in inventory.xbrl_entities and slot.metric_id in METRIC_CONCEPTS
+                    and (requirements.fiscal_year_pair is None or not requires_statement_source(question))):
                 return SourceCapability.DIRECT_XBRL
             return SourceCapability.DIRECT_TABLE if any(
                 inventory.statement_documents.intersection(task.target_document_ids) for task in plan.tasks

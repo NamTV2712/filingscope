@@ -89,8 +89,10 @@ def _release_supported(
         return INSUFFICIENT_EVIDENCE_ANSWER, result
     required = {item.requirement_id for item in requirements.evidence}
     covered = {item for claim in supported for item in claim.requirement_ids}
-    if requirements.quarter_ytd is not None and (len(supported) != 2 or covered != required):
-        result = _disposition(result, ResponseDisposition.ABSTAIN, "quarter_ytd_requires_both_claims")
+    if requirements.requires_period_pair and (len(supported) != 2 or covered != required):
+        reason = ("quarter_ytd_requires_both_claims" if requirements.quarter_ytd
+                  else "fiscal_year_pair_requires_both_claims")
+        result = _disposition(result, ResponseDisposition.ABSTAIN, reason)
         return INSUFFICIENT_EVIDENCE_ANSWER, result
     if required and not required.intersection(covered):
         result = _disposition(result, ResponseDisposition.ABSTAIN, "no_requested_claim_supported")
@@ -131,12 +133,14 @@ def verify_and_release(
 ) -> AnswerRelease:
     def release(result: VerificationResult, text: str, *, dropped: bool) -> tuple[str, VerificationResult]:
         text, result = _release_supported(result, text, requirements, dropped=dropped)
-        if requirements.quarter_ytd is not None and result.disposition in {ResponseDisposition.VERIFIED, ResponseDisposition.PARTIAL}:
+        if requirements.requires_period_pair and result.disposition in {ResponseDisposition.VERIFIED, ResponseDisposition.PARTIAL}:
             cited_numbers = {number for claim in result.claims for number in claim.citations}
             cited = [chunk for number, chunk in enumerate(chunks, start=1) if number in cited_numbers]
             layer = EvidenceDecisionLayer(catalog=CompanyCatalog.from_document_rows(cited))
             if not layer.analyzer.analyze(requirements, cited).sufficient:
-                result = _disposition(result, ResponseDisposition.ABSTAIN, "quarter_ytd_pair_not_established")
+                reason = ("quarter_ytd_pair_not_established" if requirements.quarter_ytd
+                          else "fiscal_year_pair_not_established")
+                result = _disposition(result, ResponseDisposition.ABSTAIN, reason)
                 return INSUFFICIENT_EVIDENCE_ANSWER, result
         return text, result
 

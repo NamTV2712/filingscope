@@ -7,7 +7,7 @@ from decimal import Decimal
 import pytest
 
 from src.ingestion.company_facts import CompanyFactsResolver, RevisionKind, RevisionPolicy
-from src.ingestion.period_identity import requested_reporting_interval
+from src.ingestion.period_identity import requested_fiscal_year_pair, requested_reporting_interval
 
 
 REVENUE = "RevenueFromContractWithCustomerExcludingAssessedTax"
@@ -75,6 +75,33 @@ def test_explicit_interval_selects_quarter_or_ytd_by_exact_start(apple):
     for text in ("from 2023-12-30 to 2024-03-30 in 0000320193-24-000069",
                  "from 2023-12-31 to 2024-03-30 in 0000320193-24-000123"):
         assert resolver.resolve("revenue", None, interval=requested_reporting_interval(text)).fact is None
+
+
+def test_fiscal_pair_selects_the_named_comparative_and_keeps_the_original_accession(apple):
+    pair = requested_fiscal_year_pair("Fiscal years ended 2024-09-28 and 2023-09-30 in 10-K 0000320193-24-000123")
+    assert pair is not None
+    assert tuple(end.isoformat() for end in pair.ends) == ("2023-09-30", "2024-09-28")
+    rows = apple["facts"]["us-gaap"][REVENUE]["units"]["USD"]
+    original, comparative, current = rows[:3]
+    comparative["val"] = 381_123_000_000
+    rows.append({**comparative, "val": 999, "accn": "0000320193-25-000100", "filed": "2025-10-31", "fy": 2025})
+    result = CompanyFactsResolver(apple, expected_cik=320193).resolve(
+        "revenue", None, fiscal_year_pair=pair, period_end=pair.ends[0], currency="USD",
+    )
+    fact = result.fact
+    assert fact is not None
+    assert (fact.fiscal_period, fact.value) == ("FY2023", Decimal(381_123_000_000))
+    assert fact.provenance.original_accession == original["accn"]
+    assert fact.provenance.accession == pair.accession
+    assert fact.provenance.filing_fiscal_year == 2024
+    assert fact.provenance.revision_kind == RevisionKind.COMPARATIVE_REVISION
+    assert fact.period_identity.comparative
+
+    current["start"] = "2023-10-02"
+    gap = CompanyFactsResolver(apple, expected_cik=320193).resolve(
+        "revenue", None, fiscal_year_pair=pair, period_end=pair.ends[0], currency="USD",
+    )
+    assert gap.fact is None
 
 
 @pytest.mark.parametrize(("metric", "period", "value", "end", "accession"), [
