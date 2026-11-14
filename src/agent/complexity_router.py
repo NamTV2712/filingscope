@@ -304,6 +304,13 @@ class ComplexityRouter:
             complexity = ComplexityClass.MULTI_HOP
             path = ExecutionPath.RESEARCH
             reason_codes.append("causal_or_cross_requirement_reasoning")
+        elif requirements.has_filing_instants:
+            complexity = ComplexityClass.SINGLE_DOCUMENT if entities == 1 else ComplexityClass.COMPARATIVE
+            can_use_structured = (source_inventory is not None
+                                  and set(requirements.companies).issubset(source_inventory.xbrl_entities)
+                                  and not requires_statement_source(question))
+            path = ExecutionPath.FAST if entities == 1 or can_use_structured else ExecutionPath.RESEARCH
+            reason_codes.append("issuer_specific_filing_dates")
         elif entities > 1 or _COMPARATIVE_RE.search(question):
             complexity = ComplexityClass.COMPARATIVE
             path = ExecutionPath.RESEARCH
@@ -372,6 +379,10 @@ class ComplexityRouter:
                             "ambiguous_fiscal_year_pair",
                             "invalid_fiscal_year_pair",
                             "fiscal_year_pair_scope_unresolved",
+                            "as_of_date_requires_10k_accession",
+                            "ambiguous_as_of_filing",
+                            "invalid_as_of_filing_date",
+                            "as_of_filing_scope_unresolved",
                         }
                     )
                 )
@@ -511,6 +522,12 @@ class ComplexityRouter:
             return SourceCapability.TEXT_RAG
         question = state["question"]
         requirements = state["requirements"]
+        if requirements.has_filing_instants and len(plan.tasks) == len(requirements.evidence):
+            if set(requirements.companies).issubset(inventory.xbrl_entities) and not requires_statement_source(question):
+                return SourceCapability.DIRECT_XBRL
+            if len(plan.tasks) == 1 and inventory.statement_documents.intersection(plan.tasks[0].target_document_ids):
+                return SourceCapability.DIRECT_TABLE
+            return SourceCapability.TEXT_RAG
         if inventory.inline_energy_revenue and len(plan.tasks) == 1 and len(requirements.evidence) == 1:
             slot = requirements.evidence[0]
             if ((slot.entity_id, slot.metric_id, slot.period) == (ENERGY_ENTITY, ENERGY_METRIC, ENERGY_PERIOD)

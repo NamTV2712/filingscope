@@ -351,9 +351,10 @@ class EvidenceCoverageAnalyzer:
         interval = requirements.reporting_interval
         quarter_ytd = requirements.quarter_ytd
         fiscal_year_pair = requirements.fiscal_year_pair
-        needs_typed_period = interval is not None or requirements.requires_period_pair
+        filing_instants = requirements.has_filing_instants
+        needs_typed_period = interval is not None or requirements.requires_period_pair or filing_instants
         nonstandard_basis = requires_nonstandard_reporting_basis(
-            requirements.question, requirements.metrics, consolidated_only=fiscal_year_pair is not None,
+            requirements.question, requirements.metrics, consolidated_only=fiscal_year_pair is not None or filing_instants,
         )
         issuer_aliases = {
             entity.entity_id: tuple(dict.fromkeys((entity.matched_alias, entity.canonical_name)))
@@ -421,7 +422,7 @@ class EvidenceCoverageAnalyzer:
                             accession = next(iter(accessions), None)
                             if interval and not interval.matches(fact.period_identity, accession):
                                 continue
-                            if requirements.requires_period_pair:
+                            if quarter_ytd or fiscal_year_pair or requirement.filing_instant:
                                 forms = {chunk[key] for key in ("doc_type", "filing_type", "form_type")
                                          if isinstance(chunk.get(key), str) and chunk[key]}
                                 if quarter_ytd and (forms != {"10-Q"} or not quarter_ytd.matches(
@@ -432,6 +433,14 @@ class EvidenceCoverageAnalyzer:
                                     forms != {"10-K"} or chunk.get("source_type") != "XBRL_FACT"
                                     or chunk.get("financial_concept") not in METRIC_CONCEPTS.get(metric.metric_id, ())
                                     or not fiscal_year_pair.matches(fact.period_identity, accession, requirement.period_end)
+                                ):
+                                    continue
+                                if requirement.filing_instant and (
+                                    forms != {"10-K"} or not requirement.filing_instant.matches(fact.period_identity, accession)
+                                    or fact.currency is None
+                                    or (chunk.get("source_type") == "XBRL_FACT"
+                                        and chunk.get("financial_concept") not in METRIC_CONCEPTS.get(metric.metric_id, ()))
+                                    or (chunk.get("source_type") != "XBRL_FACT" and fact.table_row is None)
                                 ):
                                     continue
                         period_seen[requirement.requirement_id] = True
@@ -574,7 +583,7 @@ class EvidenceCoverageAnalyzer:
             if finding.status == CoverageStatus.CONFLICTED
         )
         operation_gaps = self._operation_gaps(requirements, findings)
-        if (requirements.requires_period_pair and len(findings) == 2
+        if ((quarter_ytd or fiscal_year_pair) and len(findings) == 2
                 and all(finding.status == CoverageStatus.FOUND for finding in findings)):
             facts = tuple(fact for finding in findings for fact in finding.facts)
             identities = {fact.period_identity for fact in facts if fact.period_identity is not None}

@@ -60,6 +60,24 @@ def test_invalid_fiscal_year_pairs_do_not_fall_back_to_bare_years(scope):
     assert not req.supported and not req.evidence
 
 
+def test_as_of_claim_checks_the_rendered_date_against_the_cited_balance():
+    accession = "0000320193-24-000123"
+    question = f"What were Apple's total assets as of 2024-09-28 in 10-K {accession}?"
+    chunk = _financial_chunk(chunk_id="apple-assets")
+    chunk.update(accession=accession, source_type="XBRL_FACT", financial_concept="us-gaap:Assets", filing_type="10-K")
+    chunk["normalized_facts"] = (EvidenceFact(
+        evidence_id=chunk["chunk_id"], entity_id="AAPL", metric_id="total_assets", period="FY2024",
+        period_identity=PeriodIdentity.from_label("FY2024", kind=PeriodKind.INSTANT, end=date(2024, 9, 28)),
+        value="USD 364 billion", numeric_value="364", currency="USD", scale="billion", value_kind="amount",
+        document_id=chunk["doc_name"], page_number=chunk["page_number"], source_url=chunk.get("source_url"),
+    ),)
+    answer = "AAPL reported total assets of USD 364 billion as of 2024-09-28 (FY2024). [Source 1]"
+    verifier = AtomicClaimVerifier()
+    assert verifier.verify(question, answer, [chunk]).disposition == ResponseDisposition.VERIFIED
+    assert verifier.verify(question, answer.replace("2024-09-28", "2024-09-29"), [chunk]).disposition == ResponseDisposition.REJECTED
+    assert verifier.verify(question, answer, [{**chunk, "accession": "0000320193-24-000124"}]).disposition == ResponseDisposition.REJECTED
+
+
 def test_consolidated_income_tax_cannot_support_a_component_or_use_a_different_tag():
     question = "What was Apple's income tax expense in FY2024?"
     chunk = _financial_chunk(chunk_id="apple-tax")

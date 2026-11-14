@@ -13,7 +13,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.ingestion.period_identity import (
-    FiscalYearPair, PeriodIdentity, PeriodKind, PeriodScope, QuarterYtdLookup, ReportingInterval,
+    FilingInstant, FiscalYearPair, PeriodIdentity, PeriodKind, PeriodScope, QuarterYtdLookup, ReportingInterval,
 )
 
 
@@ -37,6 +37,13 @@ CONSOLIDATED_METRIC_CONCEPTS: dict[str, tuple[str, ...]] = {
     "selling_general_administrative_expense": ("us-gaap:SellingGeneralAndAdministrativeExpense",),
     "investing_cash_flow": ("us-gaap:NetCashProvidedByUsedInInvestingActivities",),
     "financing_cash_flow": ("us-gaap:NetCashProvidedByUsedInFinancingActivities",),
+    "current_net_accounts_receivable": ("us-gaap:AccountsReceivableNetCurrent",),
+    "current_assets": ("us-gaap:AssetsCurrent",),
+    "noncurrent_assets": ("us-gaap:AssetsNoncurrent",),
+    "current_liabilities": ("us-gaap:LiabilitiesCurrent",),
+    "net_inventory": ("us-gaap:InventoryNet",),
+    "net_property_plant_equipment": ("us-gaap:PropertyPlantAndEquipmentNet",),
+    "stockholders_equity": ("us-gaap:StockholdersEquity",),
 }
 
 # Entries are ordered only to pick a label when the original rows agree.
@@ -66,7 +73,11 @@ METRIC_CONCEPTS: dict[str, tuple[str, ...]] = {
         "ifrs-full:PurchaseOfPropertyPlantAndEquipment",
     ),
 }
-_INSTANT_METRICS = frozenset({"total_assets", "total_liabilities", "cash_and_equivalents"})
+INSTANT_METRICS = frozenset({
+    "total_assets", "total_liabilities", "cash_and_equivalents", "current_net_accounts_receivable",
+    "current_assets", "noncurrent_assets", "current_liabilities", "net_inventory", "net_property_plant_equipment",
+    "stockholders_equity",
+})
 
 
 class RevisionPolicy(StrEnum):
@@ -375,15 +386,16 @@ class CompanyFactsResolver:
         scope: PeriodScope | None = None,
         fiscal_year_pair: FiscalYearPair | None = None,
         period_end: date | None = None,
+        filing_instant: FilingInstant | None = None,
     ) -> CompanyFactResolution:
         concepts = METRIC_CONCEPTS.get(metric_id)
         if concepts is None:
             return CompanyFactResolution("unsupported_concept")
         match = _PERIOD.fullmatch(period or "")
-        if match is None and interval is None and quarter_ytd is None and fiscal_year_pair is None:
+        if match is None and interval is None and quarter_ytd is None and fiscal_year_pair is None and filing_instant is None:
             return CompanyFactResolution("explicit_fiscal_period_required")
         quarter, cumulative, year_text = match.groups() if match else (None, None, "")
-        instant = metric_id in _INSTANT_METRICS
+        instant = metric_id in INSTANT_METRICS
         if cumulative and instant:
             return CompanyFactResolution("cumulative_scope_inapplicable_to_instant")
         requested_currency = normalize_currency(currency) if currency else None
@@ -397,7 +409,15 @@ class CompanyFactsResolver:
             and (not requested_forms or row.form.replace("-", "") in requested_forms)
         ]
         selected_rows: list[_Observation] | None = None
-        if fiscal_year_pair is not None:
+        if filing_instant is not None:
+            if (not instant or any(item is not None for item in (period, interval, quarter_ytd, fiscal_year_pair))
+                    or revision != RevisionPolicy.AS_REPORTED):
+                return CompanyFactResolution("filing_instant_scope_unsupported")
+            originals = [row for row in eligible if row.form == "10-K" and row.accession == filing_instant.accession
+                         and row.end == filing_instant.end and self._original_period(row, row.fiscal_year, None, True)]
+            if len({(row.filed, row.fiscal_year) for row in originals}) > 1:
+                return CompanyFactResolution("ambiguous_filing_instant")
+        elif fiscal_year_pair is not None:
             if (instant or period_end is None or period_end not in fiscal_year_pair.ends
                     or period is not None or interval is not None or quarter_ytd is not None
                     or revision != RevisionPolicy.AS_REPORTED):
@@ -440,7 +460,7 @@ class CompanyFactsResolver:
         if len({row.accession for row in first_rows}) != 1:
             return CompanyFactResolution("ambiguous_original_accession")
         original = min(first_rows, key=lambda row: (concepts.index(row.concept), _revision_order(row)))
-        if fiscal_year_pair is not None:
+        if filing_instant is not None or fiscal_year_pair is not None:
             period = f"FY{original.fiscal_year}"
         elif interval is not None:
             labels = {self._interval_label(row) for row in first_rows}
@@ -503,6 +523,7 @@ class CompanyFactsResolver:
                 period_start=selected.start.isoformat() if selected.start else None,
                 period_end=selected.end.isoformat(),
                 period_alignment=(
+                    "filing_accession_and_instant" if filing_instant is not None else
                     "filing_accession_and_consecutive_years" if fiscal_year_pair is not None else
                     "filing_report_date" if original.accession in self.report_dates else "filing_focus_and_dates"
                 ),

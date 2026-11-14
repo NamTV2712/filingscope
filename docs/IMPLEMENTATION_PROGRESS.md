@@ -174,6 +174,12 @@ confirmed numeric outcomes. Document-only reached 28/187 with two
 additional operating cash flow lookups. Windows passed 557 tests with
 three fixture skips and WSL passed 556 with four.
 [Fiscal year pairs](G3_FISCAL_YEAR_PAIRS.md).
+Issuer-specific balance-sheet dates raised both structured arms to
+16/16 multi-company and 182/187 numeric confirmations. Document-only
+confirmed 3/16 multi-company and 30/187 numeric. All arms kept their
+prior correct releases and withheld the eight missing-unit controls.
+Windows passed 564 tests with three skips and WSL passed 563 with four.
+[Balance sheet dates](G3_FILING_INSTANTS.md).
 
 G3 retains Dense and the current statement ranker. Scoped scoring
 matched all 30 top-ten rankings while reducing paired rank p50

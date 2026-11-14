@@ -119,9 +119,13 @@ def _topic_sentences(
 def fact_sentence(requirements: QuestionRequirements, fact: EvidenceFact, revision: RevisionKind | None = None) -> str:
     entity = next((item.canonical_name for item in requirements.entities if item.entity_id == fact.entity_id),
                   fact.entity_id).rstrip(".")
+    if requirements.has_filing_instants:
+        entity = fact.entity_id
     metric = next((item.display_name for item in requirements.metrics if item.metric_id == fact.metric_id),
                   fact.metric_id.replace("_", " "))
     period = f" for {fact.period}" if fact.period else ""
+    if requirements.has_filing_instants and fact.period_identity and fact.period_identity.end:
+        period = f" as of {fact.period_identity.end} ({fact.period})"
     basis = {
         RevisionKind.ORIGINAL: " in the original filing",
         RevisionKind.REFILED: " in a later filing with the same value",

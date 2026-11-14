@@ -58,8 +58,9 @@ accession. The ledger recorded 32 current original observations and 32
 unchanged comparative observations. Every pair used one cached Company
 Facts read. The operating cash flow alias also recovered four single-period
 lookups in both structured arms and two in document-only. All previous
-releases kept their answers, citations and dispositions. All 16
-multi-company and nine narrative or revision questions remain withheld.
+releases kept their answers, citations and dispositions. Both structured
+arms confirmed two of 16 multi-company questions. The nine narrative or
+revision questions stayed withheld in every arm.
 Semantic citation precision and faithfulness still require adjudication
 on the mixed HTML cohort.
 

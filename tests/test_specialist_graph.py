@@ -217,6 +217,47 @@ def test_fiscal_year_pair_requires_both_claims_from_the_named_filing(comparative
     assert incomplete.answer == INSUFFICIENT_EVIDENCE_ANSWER
 
 
+@pytest.mark.parametrize("mismatch", [None, "accession", "date", "duration", "currency"])
+def test_cross_company_balances_require_each_issuers_date_and_accession(mismatch: str | None) -> None:
+    sec = FakeSECCompanyFacts()
+    apple_accession = "0000320193-24-000123"
+    microsoft_accession = "0000950170-25-100235"
+    apple = {"val": 147_957_000_000, "accn": apple_accession, "fy": 2024, "fp": "FY", "form": "10-K",
+             "end": "2024-09-28", "filed": "2024-11-01"}
+    microsoft = {"val": 191_131_000_000, "accn": microsoft_accession, "fy": 2025, "fp": "FY", "form": "10-K",
+                 "end": "2025-06-30", "filed": "2025-07-30"}
+    if mismatch == "accession":
+        microsoft["accn"] = apple_accession
+    elif mismatch == "date":
+        microsoft["end"] = "2025-06-29"
+    elif mismatch == "duration":
+        microsoft["start"] = "2024-07-01"
+    sec.facts[320193]["facts"]["us-gaap"]["AssetsCurrent"] = {"units": {"USD": [apple]}}
+    sec.facts[789019]["facts"]["us-gaap"]["AssetsCurrent"] = {
+        "units": {"EUR" if mismatch == "currency" else "USD": [microsoft]},
+    }
+    question = (
+        f"What current assets in USD did Apple as of 2024-09-28 in 10-K {apple_accession} "
+        f"and Microsoft as of 2025-06-30 in 10-K {microsoft_accession} report?"
+    )
+    graph = SpecialistResearchGraph(sec_client=sec)
+    req = graph.router.extractor.extract(question)
+    assert [(slot.entity_id, slot.filing_instant.end.isoformat(), slot.filing_instant.accession) for slot in req.evidence] == [
+        ("AAPL", "2024-09-28", apple_accession), ("MSFT", "2025-06-30", microsoft_accession),
+    ]
+    result = graph.run(question)
+    assert sec.request_count == 2
+    assert result.verification is not None
+    if mismatch:
+        assert result.verification.disposition == ResponseDisposition.ABSTAIN
+        assert result.answer == INSUFFICIENT_EVIDENCE_ANSWER
+        return
+    assert result.verification.disposition == ResponseDisposition.VERIFIED
+    assert [claim.requirement_ids for claim in result.verification.claims] == [(slot.requirement_id,) for slot in req.evidence]
+    assert "USD 147,957,000,000 as of 2024-09-28 (FY2024)" in result.answer
+    assert "USD 191,131,000,000 as of 2025-06-30 (FY2025)" in result.answer
+
+
 def test_specialist_releases_only_rechecked_claims_and_keeps_draft_audit() -> None:
     class DraftGenerator:
         def generate(self, question, chunks):

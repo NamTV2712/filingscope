@@ -46,6 +46,59 @@ _TWO_FISCAL_YEARS = re.compile(
     r"\bfiscal years ended\s+(\d{4}-\d{2}-\d{2})(?:\s*,)?\s+and\s+(\d{4}-\d{2}-\d{2})\b", re.I,
 )
 _ANNUAL_ACCESSION = re.compile(r"\s+in\s+(?:its\s+)?10-K\s+([0-9]{10}-[0-9]{2}-[0-9]{6})\b", re.I)
+_AS_OF_DATE = re.compile(r"\bas of\s+(\d{4}-\d{2}-\d{2})\b", re.I)
+
+
+def reported_as_of_date(text: str) -> date | None:
+    match = _AS_OF_DATE.search(text)
+    if match is None:
+        return None
+    try:
+        return date.fromisoformat(match[1])
+    except ValueError:
+        return None
+
+
+def mask_reported_as_of_dates(text: str) -> str:
+    return _AS_OF_DATE.sub(lambda match: " " * len(match[0]), text)
+
+
+class FilingInstant(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    end: date
+    accession: str
+
+    def matches(self, period: PeriodIdentity | None, accession: object) -> bool:
+        return bool(period and period.end == self.end and accession == self.accession
+                    and period.year_basis == YearBasis.FISCAL and period.scope == PeriodScope.ANNUAL
+                    and period.kind == PeriodKind.INSTANT and not period.comparative)
+
+
+def requested_filing_instants(question: str) -> tuple[tuple[str, FilingInstant], ...]:
+    parts = []
+    start = 0
+    for match in _AS_OF_DATE.finditer(question):
+        filing = _ANNUAL_ACCESSION.match(question, match.end())
+        if filing is None:
+            if not parts and not _OTHER_SEC_FORM.search(question) and not _ACCESSION.search(question):
+                return ()
+            raise ValueError("as_of_date_requires_10k_accession")
+        prefix = question[start:match.start()]
+        if (_ACCESSION.search(prefix) or period_mentions(prefix)
+                or re.match(r"/A\b", question[filing.end():], re.I)):
+            raise ValueError("ambiguous_as_of_filing")
+        try:
+            end = date.fromisoformat(match[1])
+        except ValueError as exc:
+            raise ValueError("invalid_as_of_filing_date") from exc
+        parts.append((prefix, FilingInstant(end=end, accession=filing[1])))
+        start = filing.end()
+    remainder = question[start:]
+    if parts and (len(parts) > 2 or len({part.accession for _, part in parts}) != len(parts)
+                  or _ACCESSION.search(remainder) or _OTHER_SEC_FORM.search(remainder) or period_mentions(remainder)):
+        raise ValueError("ambiguous_as_of_filing")
+    return tuple(parts)
 
 
 class QuarterYtdLookup(BaseModel):

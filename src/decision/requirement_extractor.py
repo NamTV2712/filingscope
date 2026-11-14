@@ -13,9 +13,12 @@ from src.decision.models import (
     OperationRequirement,
     QuestionRequirements,
 )
-from src.ingestion.company_facts import CONSOLIDATED_METRIC_CONCEPTS, requested_currencies, requested_revision_policies
+from src.ingestion.company_facts import (
+    CONSOLIDATED_METRIC_CONCEPTS, INSTANT_METRICS, requested_currencies, requested_revision_policies,
+)
 from src.ingestion.period_identity import (
-    PeriodScope, period_mentions, requested_fiscal_year_pair, requested_quarter_ytd, requested_reporting_interval,
+    FilingInstant, PeriodScope, mask_reported_as_of_dates, period_mentions, requested_filing_instants, requested_fiscal_year_pair,
+    requested_quarter_ytd, requested_reporting_interval,
 )
 from src.ingestion.segment_revenue import ENERGY_ALIASES, ENERGY_FILING, ENERGY_LABEL, ENERGY_METRIC
 
@@ -76,6 +79,22 @@ _METRIC_DEFINITIONS: tuple[MetricRequirement, ...] = (
     )),
     MetricRequirement(metric_id="total_assets", display_name="total assets", aliases=("total assets",)),
     MetricRequirement(metric_id="total_liabilities", display_name="total liabilities", aliases=("total liabilities",)),
+    MetricRequirement(
+        metric_id="current_net_accounts_receivable", display_name="current net accounts receivable",
+        aliases=("current net accounts receivable", "net current accounts receivable"),
+    ),
+    MetricRequirement(metric_id="current_assets", display_name="current assets", aliases=("current assets",)),
+    MetricRequirement(metric_id="noncurrent_assets", display_name="noncurrent assets", aliases=("noncurrent assets",)),
+    MetricRequirement(metric_id="current_liabilities", display_name="current liabilities", aliases=("current liabilities",)),
+    MetricRequirement(metric_id="net_inventory", display_name="net inventory", aliases=("net inventory",)),
+    MetricRequirement(
+        metric_id="net_property_plant_equipment", display_name="net property, plant and equipment",
+        aliases=("net property, plant and equipment", "net property, plant, and equipment"),
+    ),
+    MetricRequirement(
+        metric_id="stockholders_equity", display_name="stockholders' equity",
+        aliases=("stockholders' equity", "stockholders equity", "equity attributable to the parent"),
+    ),
     MetricRequirement(metric_id="total_debt", display_name="total debt", aliases=(
         "total debt", "long term debt", "long-term debt",
     )),
@@ -267,13 +286,17 @@ class EvidenceRequirementExtractor:
         metrics = _metrics(question)
         interval_error = None
         interval = quarter_ytd = fiscal_year_pair = None
+        instant_parts = ()
         try:
             interval = requested_reporting_interval(question)
             quarter_ytd = requested_quarter_ytd(question)
             fiscal_year_pair = requested_fiscal_year_pair(question)
+            instant_parts = requested_filing_instants(question)
         except ValueError as error:
             interval_error = str(error)
-        periods = () if interval or quarter_ytd or fiscal_year_pair or interval_error else _periods(question)
+        periods = () if interval or quarter_ytd or fiscal_year_pair or instant_parts or interval_error else _periods(
+            mask_reported_as_of_dates(question),
+        )
         cumulative = None if quarter_ytd is not None else _CUMULATIVE_RE.search(question)
         cumulative_unresolved = bool(cumulative and (not periods or any(not period.startswith("Q") for period in periods)))
         if cumulative and (quarter := {"six": "Q2", "nine": "Q3"}.get(cumulative[0].casefold().split()[0])):
@@ -294,7 +317,7 @@ class EvidenceRequirementExtractor:
         quantitative = any(metric.quantitative for metric in metrics)
         if _GROWTH_RE.search(question):
             operations.append("growth")
-        if len(entities) > 1 or _COMPARE_RE.search(question):
+        if (len(entities) > 1 and not instant_parts) or _COMPARE_RE.search(question):
             operations.append("compare")
         for name, pattern in _OPERATION_RE.items():
             if pattern.search(question):
@@ -328,6 +351,19 @@ class EvidenceRequirementExtractor:
             or requires_nonstandard_reporting_basis(question, metrics, consolidated_only=True)
         ):
             unsupported_reasons.append("fiscal_year_pair_scope_unresolved")
+        instant_by_entity: dict[str, FilingInstant] = {}
+        for prefix, instant in instant_parts:
+            owners = self.catalog.identify(mask_cost_of_revenue(prefix))
+            if len(owners) == 1:
+                instant_by_entity[owners[0].entity_id] = instant
+        if instant_parts and (
+            len(instant_by_entity) != len(instant_parts) or set(instant_by_entity) != {entity.entity_id for entity in entities}
+            or len(metrics) != 1 or metrics[0].metric_id not in INSTANT_METRICS or operations != ["lookup"]
+            or interval is not None or quarter_ytd is not None or fiscal_year_pair is not None
+            or requested_revision_policies(question)
+            or requires_nonstandard_reporting_basis(question, metrics, consolidated_only=True)
+        ):
+            unsupported_reasons.append("as_of_filing_scope_unresolved")
         currencies = requested_currencies(question)
         if len(currencies) > 1:
             unsupported_reasons.append("multiple_requested_currencies")
@@ -341,7 +377,12 @@ class EvidenceRequirementExtractor:
             )
             for entity in entities:
                 for metric in metrics:
-                    if fiscal_year_pair is not None:
+                    if instant := instant_by_entity.get(entity.entity_id):
+                        evidence.append(EvidenceRequirement(
+                            requirement_id=f"{entity.entity_id}:{metric.metric_id}:{instant.end}",
+                            entity_id=entity.entity_id, metric_id=metric.metric_id, filing_instant=instant,
+                        ))
+                    elif fiscal_year_pair is not None:
                         for end in fiscal_year_pair.ends:
                             evidence.append(EvidenceRequirement(
                                 requirement_id=f"{entity.entity_id}:{metric.metric_id}:{end}",

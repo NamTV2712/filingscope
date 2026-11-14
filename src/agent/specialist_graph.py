@@ -433,18 +433,19 @@ class SpecialistResearchGraph:
         tasks = tuple(state["plan"].tasks)
         receipts = []
         sufficient = False
+        issuer_specific_pair = len(tasks) > 1 and context.requirements.has_filing_instants
         if state["route"].source_capability == SourceCapability.DIRECT_XBRL:
             context.emit_progress(ResearchProgress.SEARCHING_STRUCTURED_FACTS)
             receipt = StructuredFinancialDataWorker(context.sec_client).run(
-                tasks, context, reserve_tools=int(context.retriever is not None),
+                tasks, context, reserve_tools=int(context.retriever is not None and not issuer_specific_pair),
             )
             receipts.append(receipt)
             sufficient = bool(receipt.evidence_ids and not receipt.missing_requirement_ids)
-            if sufficient and context.requirements.requires_period_pair:
+            if sufficient and (context.requirements.requires_period_pair or context.requirements.has_filing_instants):
                 sufficient = context.decision_layer.analyzer.analyze(
                     context.requirements, context.source_chunks.values(),
                 ).sufficient
-        if not sufficient:
+        if not sufficient and not issuer_specific_pair:
             context.emit_progress(ResearchProgress.INSPECTING_TABLES)
             receipt = TableEvidenceWorker().run_direct(tasks[0], context)
             if receipt is not None:

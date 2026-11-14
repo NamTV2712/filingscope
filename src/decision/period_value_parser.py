@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 
 from src.ingestion.company_facts import MONETARY_CURRENCIES
-from src.ingestion.period_identity import PeriodMention, period_mentions
+from src.ingestion.period_identity import PeriodMention, mask_reported_as_of_dates, period_mentions
 
 
 _YEAR_RE = re.compile(r"(?<!\d)(?:19|20)\d{2}(?!\d)")
@@ -284,6 +284,7 @@ def extract_period_value_mentions(
     Bare years are excluded because they describe periods rather than claimed
     financial values.
     """
+    text = mask_reported_as_of_dates(text)
     mentions: list[PeriodValueMention] = []
     values, periods = _value_matches_and_periods(text, allow_unmarked_attached=allow_unmarked_attached)
     for match in values:

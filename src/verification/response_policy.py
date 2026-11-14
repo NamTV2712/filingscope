@@ -84,11 +84,14 @@ def _release_supported(
     if len(supported) != len(result.claims) or not supported:
         result = _disposition(result, ResponseDisposition.ABSTAIN, "no_safe_complete_draft")
         return INSUFFICIENT_EVIDENCE_ANSWER, result
+    required = {item.requirement_id for item in requirements.evidence}
+    covered = {item for claim in supported for item in claim.requirement_ids}
     if requirements.reporting_interval is not None and len(supported) != 1:
         result = _disposition(result, ResponseDisposition.ABSTAIN, "explicit_interval_requires_one_claim")
         return INSUFFICIENT_EVIDENCE_ANSWER, result
-    required = {item.requirement_id for item in requirements.evidence}
-    covered = {item for claim in supported for item in claim.requirement_ids}
+    if requirements.has_filing_instants and (len(supported) != len(required) or covered != required):
+        result = _disposition(result, ResponseDisposition.ABSTAIN, "as_of_filing_requires_all_claims")
+        return INSUFFICIENT_EVIDENCE_ANSWER, result
     if requirements.requires_period_pair and (len(supported) != 2 or covered != required):
         reason = ("quarter_ytd_requires_both_claims" if requirements.quarter_ytd
                   else "fiscal_year_pair_requires_both_claims")
@@ -138,8 +141,9 @@ def verify_and_release(
             cited = [chunk for number, chunk in enumerate(chunks, start=1) if number in cited_numbers]
             layer = EvidenceDecisionLayer(catalog=CompanyCatalog.from_document_rows(cited))
             if not layer.analyzer.analyze(requirements, cited).sufficient:
-                reason = ("quarter_ytd_pair_not_established" if requirements.quarter_ytd
-                          else "fiscal_year_pair_not_established")
+                reason = ("as_of_filing_pair_not_established" if requirements.has_filing_instants else
+                          "quarter_ytd_pair_not_established" if requirements.quarter_ytd else
+                          "fiscal_year_pair_not_established")
                 result = _disposition(result, ResponseDisposition.ABSTAIN, reason)
                 return INSUFFICIENT_EVIDENCE_ANSWER, result
         return text, result

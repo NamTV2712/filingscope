@@ -7,7 +7,9 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, model_serializer
 
-from src.ingestion.period_identity import FiscalYearPair, PeriodIdentity, PeriodScope, QuarterYtdLookup, ReportingInterval
+from src.ingestion.period_identity import (
+    FilingInstant, FiscalYearPair, PeriodIdentity, PeriodScope, QuarterYtdLookup, ReportingInterval,
+)
 
 
 class DecisionAction(StrEnum):
@@ -67,6 +69,7 @@ class EvidenceRequirement(BaseModel):
     quantitative: bool = True
     period_scope: PeriodScope | None = None
     period_end: date | None = None
+    filing_instant: FilingInstant | None = None
 
     @model_serializer(mode="wrap")
     def _serialize(self, handler):
@@ -75,6 +78,8 @@ class EvidenceRequirement(BaseModel):
             data.pop("period_scope", None)
         if self.period_end is None:
             data.pop("period_end", None)
+        if self.filing_instant is None:
+            data.pop("filing_instant", None)
         return data
 
 
@@ -105,8 +110,13 @@ class QuestionRequirements(BaseModel):
     fiscal_year_pair: FiscalYearPair | None = None
 
     @property
+    def has_filing_instants(self) -> bool:
+        return any(item.filing_instant is not None for item in self.evidence)
+
+    @property
     def requires_period_pair(self) -> bool:
-        return self.quarter_ytd is not None or self.fiscal_year_pair is not None
+        return (self.quarter_ytd is not None or self.fiscal_year_pair is not None
+                or (len(self.evidence) == 2 and self.has_filing_instants))
 
     @model_serializer(mode="wrap")
     def _serialize(self, handler):

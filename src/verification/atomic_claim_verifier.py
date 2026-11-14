@@ -18,6 +18,7 @@ from src.decision.requirement_extractor import permits_energy_segment_lookup, re
 from src.ingestion.company_facts import (
     CONSOLIDATED_METRIC_CONCEPTS, matches_requested_revision, requested_revision_policies,
 )
+from src.ingestion.period_identity import reported_as_of_date
 from src.ingestion.segment_revenue import ENERGY_ENTITY, ENERGY_METRIC, ENERGY_PERIOD, ENERGY_SECTION, is_energy_evidence
 from src.verification.claim_verifier import ClaimLevelVerifier, _BRACKET_RE, _FALLBACK_RE, _GROWTH_RE, _split_clauses
 from src.verification.models import (
@@ -139,7 +140,7 @@ class AtomicClaimVerifier(ClaimLevelVerifier):
         statement = _text(draft.statement)
         asserted_scope = layer.extractor.extract(statement)
         explicit_metrics = asserted_scope.metrics
-        fiscal_year_pair = question_requirements.fiscal_year_pair
+        consolidated_lookup = question_requirements.fiscal_year_pair is not None or question_requirements.has_filing_instants
         if draft.metric_ids == ("business_segments",) and not draft.values and not draft.has_unparsed_numeric_value:
             return self._segment_assessment(draft, question_requirements, catalog, cited_chunks, evidence_ids)
         requested_segment = any(metric.metric_id == ENERGY_METRIC for metric in question_requirements.metrics)
@@ -160,9 +161,11 @@ class AtomicClaimVerifier(ClaimLevelVerifier):
         if draft.values and (
             _UNVERIFIED_QUALIFIER.search(statement) or len(draft.values) != 1 or len(draft.entity_ids) != 1
             or len(explicit_metrics) != 1
-            or ((fiscal_year_pair is not None or explicit_metrics[0].metric_id in CONSOLIDATED_METRIC_CONCEPTS)
+            or (question_requirements.has_filing_instants
+                and tuple(entity.entity_id for entity in asserted_scope.entities) != draft.entity_ids)
+            or ((consolidated_lookup or explicit_metrics[0].metric_id in CONSOLIDATED_METRIC_CONCEPTS)
                 and requires_nonstandard_reporting_basis(
-                    statement, explicit_metrics, consolidated_only=fiscal_year_pair is not None,
+                    statement, explicit_metrics, consolidated_only=consolidated_lookup,
                 ))
             or (draft.operation is None and (len(draft.periods) > 1 or _GROWTH_RE.search(statement)))
         ):
@@ -179,18 +182,21 @@ class AtomicClaimVerifier(ClaimLevelVerifier):
                 citation_status=CitationStatus.VALID, citations=draft.citations, evidence_ids=evidence_ids,
                 reason_codes=("cited_source_revision_does_not_match_claim",),
             )
-        if question_requirements.reporting_interval is not None or question_requirements.requires_period_pair:
+        if (question_requirements.reporting_interval is not None or question_requirements.requires_period_pair
+                or question_requirements.has_filing_instants):
             coverage = layer.analyzer.analyze(question_requirements, cited_chunks)
             facts = [fact for finding in coverage.findings if finding.status == CoverageStatus.FOUND for fact in finding.facts]
+            date_or_accession = re.findall(r"\b(?:\d{4}-\d{2}-\d{2}|\d{10}-\d{2}-\d{6})\b", statement)
+            as_of = reported_as_of_date(statement) if question_requirements.has_filing_instants else None
             supported_ids = set()
             if len(draft.values) == 1 and len(draft.periods) == 1 and draft.operation is None:
                 value = draft.values[0]
                 supported_ids = {fact.evidence_id for fact in facts if fact.entity_id == value.entity_id
                                  and fact.metric_id == value.metric_id and fact.period == draft.periods[0]
+                                 and (as_of is None or fact.period_identity is not None and fact.period_identity.end == as_of)
                                  and self._compare_value(value, (fact,))[0] == ClaimStatus.SUPPORTED}
-            explicit_dates_or_accession = re.search(r"\b(?:\d{4}-\d{2}-\d{2}|\d{10}-\d{2}-\d{6})\b", statement)
             if ((question_requirements.reporting_interval and not coverage.sufficient)
-                    or explicit_dates_or_accession or not supported_ids
+                    or (date_or_accession and (as_of is None or date_or_accession != [as_of.isoformat()])) or not supported_ids
                     or any(chunk.get("chunk_id") not in supported_ids for chunk in cited_chunks)):
                 return ClaimAssessment(
                     claim_id=draft.claim_id, statement=draft.statement, status=ClaimStatus.UNSUPPORTED,

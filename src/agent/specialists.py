@@ -669,6 +669,7 @@ class StructuredFinancialDataWorker:
 
         currency = runtime.requirements.requested_currency
         ticker_groups = list(grouped.items())
+        issuer_specific_pair = runtime.requirements.has_filing_instants and len(ticker_groups) > 1
         for index, (ticker, ticker_tasks) in enumerate(ticker_groups):
             estimate = _estimated_sec_requests(self.sec_client, ticker)
             # Leave one finite tool call for the report writer when configured.
@@ -704,7 +705,7 @@ class StructuredFinancialDataWorker:
                 _estimated_sec_requests(self.sec_client, future_ticker)
                 for future_ticker, _ in ticker_groups[index + 1:]
             )
-            if callable(report_dates) and runtime.budget_tracker.can_start(
+            if callable(report_dates) and not issuer_specific_pair and runtime.budget_tracker.can_start(
                 tools=1 + future_requests + reserve,
             ):
                 runtime.budget_tracker.charge()
@@ -717,7 +718,7 @@ class StructuredFinancialDataWorker:
                         key="xbrl_report_dates_unavailable", value=type(error).__name__,
                     ))
             anchored_slots = {item.requirement_id: item for item in runtime.requirements.evidence
-                              if item.period_scope is not None or item.period_end is not None}
+                              if item.period_scope is not None or item.period_end is not None or item.filing_instant is not None}
             for task in ticker_tasks:
                 slot = next((anchored_slots[key] for key in task.requirement_ids if key in anchored_slots), None)
                 resolution = resolver.resolve(
@@ -726,6 +727,7 @@ class StructuredFinancialDataWorker:
                     interval=runtime.requirements.reporting_interval,
                     quarter_ytd=runtime.requirements.quarter_ytd, scope=slot.period_scope if slot else None,
                     fiscal_year_pair=runtime.requirements.fiscal_year_pair, period_end=slot.period_end if slot else None,
+                    filing_instant=slot.filing_instant if slot else None,
                 )
                 if (
                     runtime.require_structured_facts
@@ -906,9 +908,10 @@ class StructuredFinancialDataWorker:
         }
         if inline:
             runtime.source_chunks[chunk_id]["inline_provenance"] = provenance
-        if runtime.requirements.reporting_interval is not None or runtime.requirements.requires_period_pair:
+        if (runtime.requirements.reporting_interval is not None or runtime.requirements.requires_period_pair
+                or runtime.requirements.has_filing_instants):
             runtime.source_chunks[chunk_id]["accession"] = provenance.accession
-        if runtime.requirements.requires_period_pair:
+        if runtime.requirements.requires_period_pair or runtime.requirements.has_filing_instants:
             runtime.source_chunks[chunk_id]["filing_type"] = fact.form
         runtime.evidence_id_by_chunk_id[chunk_id] = record.evidence_id
         runtime.preferred_evidence_by_chunk_id[chunk_id] = record.evidence_id

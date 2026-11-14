@@ -116,6 +116,14 @@ def test_cost_of_revenue_does_not_identify_costco_or_revenue() -> None:
         assert decision.action == DecisionAction.ABSTAIN
 
 
+def test_date_and_filing_cannot_be_shared_across_unbound_issuers() -> None:
+    question = "What total assets did Apple and Microsoft as of 2025-06-30 in 10-K 0000950170-25-100235 report?"
+    requirements = EvidenceRequirementExtractor().extract(question)
+    assert not requirements.supported
+    assert not requirements.evidence
+    assert "as_of_filing_scope_unresolved" in requirements.unsupported_reasons
+
+
 def test_company_catalog_merges_canonical_names_with_source_aliases() -> None:
     catalog = CompanyCatalog.from_document_rows(
         [{"company": "Apple Inc.", "doc_name": "AAPL_2024_annualreport"}]
