@@ -30,7 +30,7 @@ from src.decision.period_value_parser import (
 )
 from src.decision.requirement_extractor import permits_energy_segment_lookup, requires_nonstandard_reporting_basis
 from src.ingestion.company_facts import matches_requested_revision, requested_revision_policies
-from src.ingestion.period_identity import intervals_agree
+from src.ingestion.period_identity import PeriodScope, intervals_agree, quarter_ytd_pair_matches
 from src.ingestion.segment_revenue import ENERGY_ENTITY, ENERGY_METRIC, ENERGY_PERIOD, is_energy_evidence
 from src.retrieval.structured_lookup import structured_lookup
 
@@ -335,6 +335,7 @@ class EvidenceCoverageAnalyzer:
         nonstandard_basis = requires_nonstandard_reporting_basis(requirements.question)
         revisions = requested_revision_policies(requirements.question)
         interval = requirements.reporting_interval
+        quarter_ytd = requirements.quarter_ytd
         issuer_aliases = {
             entity.entity_id: tuple(dict.fromkeys((entity.matched_alias, entity.canonical_name)))
             for entity in requirements.entities
@@ -393,11 +394,21 @@ class EvidenceCoverageAnalyzer:
                     for fact in normalized:
                         if not period_matches(requirement.period, fact.period):
                             continue
-                        if interval:
+                        if interval or quarter_ytd:
                             accessions = {value for key in ("accession", "accession_number")
                                           if isinstance((value := chunk.get(key)), str) and value}
-                            if len(accessions) > 1 or not interval.matches(fact.period_identity, next(iter(accessions), None)):
+                            if len(accessions) > 1:
                                 continue
+                            accession = next(iter(accessions), None)
+                            if interval and not interval.matches(fact.period_identity, accession):
+                                continue
+                            if quarter_ytd:
+                                forms = {chunk[key] for key in ("doc_type", "filing_type", "form_type")
+                                         if isinstance(chunk.get(key), str) and chunk[key]}
+                                if forms != {"10-Q"} or not quarter_ytd.matches(
+                                    fact.period_identity, accession, requirement.period_scope,
+                                ):
+                                    continue
                         period_seen[requirement.requirement_id] = True
                         number_seen[requirement.requirement_id] = True
                         if requirements.requested_currency is None or fact.currency == requirements.requested_currency:
@@ -405,7 +416,7 @@ class EvidenceCoverageAnalyzer:
                         elif fact.currency is not None:
                             unit_mismatch = True
                     continue
-                if interval:
+                if interval or quarter_ytd:
                     continue
                 text = chunk.get("text")
                 if not isinstance(text, str):
@@ -462,6 +473,7 @@ class EvidenceCoverageAnalyzer:
             incompatible_periods = len(distinct_periods) == 1 and not intervals_agree(
                 fact.period_identity for fact in candidate_facts if fact.period_identity is not None
             )
+            incompatible_periods |= quarter_ytd is not None and len(distinct_periods) > 1
             conflicted_source = bool(source_conflict_ids[requirement.requirement_id])
             contradictory_values = len(distinct_values) > 1
             contradictory_segments = any(len(lists) > 1 for lists in segment_lists.values())
@@ -537,6 +549,17 @@ class EvidenceCoverageAnalyzer:
             if finding.status == CoverageStatus.CONFLICTED
         )
         operation_gaps = self._operation_gaps(requirements, findings)
+        if quarter_ytd and len(findings) == 2 and all(finding.status == CoverageStatus.FOUND for finding in findings):
+            by_scope = {fact.period_identity.scope: fact.period_identity for finding in findings
+                        for fact in finding.facts if fact.period_identity is not None}
+            currencies = {fact.currency for finding in findings for fact in finding.facts}
+            concept_by_chunk = {chunk["chunk_id"]: chunk.get("financial_concept") for chunk in deduplicated}
+            concepts = {concept for finding in findings for fact in finding.facts
+                        if (concept := concept_by_chunk.get(fact.evidence_id)) is not None}
+            if (set(by_scope) != {PeriodScope.QUARTER, PeriodScope.YEAR_TO_DATE} or len(currencies) != 1
+                    or len(concepts) > 1
+                    or not quarter_ytd_pair_matches(by_scope[PeriodScope.QUARTER], by_scope[PeriodScope.YEAR_TO_DATE])):
+                operation_gaps += ("incompatible_quarter_ytd_pair",)
         sufficient = bool(requirements.supported) and not missing_ids and not conflicted_ids and not operation_gaps
         return EvidenceCoverage(
             requirements=requirements,

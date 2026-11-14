@@ -12,7 +12,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.ingestion.period_identity import PeriodIdentity, PeriodKind, ReportingInterval
+from src.ingestion.period_identity import PeriodIdentity, PeriodKind, PeriodScope, QuarterYtdLookup, ReportingInterval
 
 
 COMPANY_FACTS_POLICY_VERSION = "sec-company-facts-v2"
@@ -332,12 +332,14 @@ class CompanyFactsResolver:
         revision: RevisionPolicy = RevisionPolicy.AS_REPORTED,
         form_types: tuple[str, ...] = (),
         interval: ReportingInterval | None = None,
+        quarter_ytd: QuarterYtdLookup | None = None,
+        scope: PeriodScope | None = None,
     ) -> CompanyFactResolution:
         concepts = METRIC_CONCEPTS.get(metric_id)
         if concepts is None:
             return CompanyFactResolution("unsupported_concept")
         match = _PERIOD.fullmatch(period or "")
-        if match is None and interval is None:
+        if match is None and interval is None and quarter_ytd is None:
             return CompanyFactResolution("explicit_fiscal_period_required")
         quarter, cumulative, year_text = match.groups() if match else (None, None, "")
         instant = metric_id in _INSTANT_METRICS
@@ -353,7 +355,14 @@ class CompanyFactsResolver:
             if (requested_currency is None or row.currency == requested_currency)
             and (not requested_forms or row.form.replace("-", "") in requested_forms)
         ]
-        if interval is None:
+        if quarter_ytd is not None:
+            if instant or scope not in {PeriodScope.QUARTER, PeriodScope.YEAR_TO_DATE} or revision != RevisionPolicy.AS_REPORTED:
+                return CompanyFactResolution("quarter_ytd_scope_unsupported")
+            originals = [row for row in eligible if row.form == "10-Q" and row.accession == quarter_ytd.accession
+                         and row.end == quarter_ytd.end and row.fiscal_focus in {"Q2", "Q3"}
+                         and self._original_period(row, row.fiscal_year, row.fiscal_focus, False,
+                                                   year_to_date=scope == PeriodScope.YEAR_TO_DATE)]
+        elif interval is None:
             originals = [row for row in eligible
                          if self._original_period(row, int(year_text), quarter, instant, year_to_date=bool(cumulative))]
         else:
@@ -385,6 +394,12 @@ class CompanyFactsResolver:
             if len(labels) != 1:
                 return CompanyFactResolution("ambiguous_period")
             period = labels.pop()
+        elif quarter_ytd is not None:
+            labels = {(row.fiscal_focus, row.fiscal_year) for row in first_rows}
+            if len(labels) != 1:
+                return CompanyFactResolution("ambiguous_period")
+            focus, year = labels.pop()
+            period = f"{focus} {'YTD ' if scope == PeriodScope.YEAR_TO_DATE else ''}FY{year}"
         history = sorted({
             row for row in rows
             if row.interval == original.interval and row.currency == original.currency

@@ -6,7 +6,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, model_serializer
 
-from src.ingestion.period_identity import PeriodIdentity, ReportingInterval
+from src.ingestion.period_identity import PeriodIdentity, PeriodScope, QuarterYtdLookup, ReportingInterval
 
 
 class DecisionAction(StrEnum):
@@ -64,6 +64,14 @@ class EvidenceRequirement(BaseModel):
     period: str | None = None
     minimum_observations: int = Field(default=1, ge=1)
     quantitative: bool = True
+    period_scope: PeriodScope | None = None
+
+    @model_serializer(mode="wrap")
+    def _serialize(self, handler):
+        data = handler(self)
+        if self.period_scope is None:
+            data.pop("period_scope", None)
+        return data
 
 
 class OperationRequirement(BaseModel):
@@ -89,12 +97,15 @@ class QuestionRequirements(BaseModel):
     supported: bool = True
     unsupported_reasons: tuple[str, ...] = ()
     reporting_interval: ReportingInterval | None = None
+    quarter_ytd: QuarterYtdLookup | None = None
 
     @model_serializer(mode="wrap")
     def _serialize(self, handler):
         data = handler(self)
         if self.reporting_interval is None:
             data.pop("reporting_interval", None)
+        if self.quarter_ytd is None:
+            data.pop("quarter_ytd", None)
         return data
 
 

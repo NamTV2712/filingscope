@@ -36,6 +36,48 @@ _PERIOD_MENTION = re.compile(
 
 _ISO_RANGE = re.compile(r"\bfrom\s+(\d{4}-\d{2}-\d{2})\s+(?:to|through)\s+(\d{4}-\d{2}-\d{2})\b", re.I)
 _RANGE_START = re.compile(r"\bfrom\s+(\d{4}-\d{2}-\d{2})\s+(?:to|through)\b", re.I)
+_ACCESSION = re.compile(r"\b[0-9]{10}-[0-9]{2}-[0-9]{6}\b")
+_QUARTER_AND_YTD = re.compile(
+    r"\b(?:standalone|discrete)\s+quarter\s+and\s+(?:fiscal\s+)?(?:year[- ]to[- ]date|YTD)\s+ended\s+"
+    r"(\d{4}-\d{2}-\d{2})\s+in\s+(?:its\s+)?10-Q\s+([0-9]{10}-[0-9]{2}-[0-9]{6})\b", re.I,
+)
+
+
+class QuarterYtdLookup(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    end: date
+    accession: str
+
+    def matches(self, period: PeriodIdentity | None, accession: object, scope: PeriodScope | None) -> bool:
+        if (period is None or period.year_basis != YearBasis.FISCAL or period.kind != PeriodKind.DURATION
+                or period.scope != scope or period.quarter not in {2, 3} or period.end != self.end
+                or period.start is None or accession != self.accession):
+            return False
+        minimum, maximum = ((70, 110) if scope == PeriodScope.QUARTER else
+                            (155, 210) if period.quarter == 2 else (240, 300))
+        return minimum <= (period.end - period.start).days + 1 <= maximum
+
+
+def requested_quarter_ytd(question: str) -> QuarterYtdLookup | None:
+    match = _QUARTER_AND_YTD.search(question)
+    if match is None:
+        return None
+    remainder = question[:match.start()] + " " + question[match.end():]
+    if _ACCESSION.search(remainder) or period_mentions(remainder):
+        raise ValueError("ambiguous_quarter_ytd_lookup")
+    try:
+        end = date.fromisoformat(match[1])
+    except ValueError as exc:
+        raise ValueError("invalid_quarter_ytd_lookup") from exc
+    return QuarterYtdLookup(end=end, accession=match[2])
+
+
+def quarter_ytd_pair_matches(quarter: PeriodIdentity, cumulative: PeriodIdentity) -> bool:
+    return bool(quarter.start and cumulative.start and quarter.end and cumulative.end == quarter.end
+                and cumulative.start < quarter.start and quarter.year == cumulative.year
+                and quarter.quarter == cumulative.quarter and quarter.scope == PeriodScope.QUARTER
+                and cumulative.scope == PeriodScope.YEAR_TO_DATE)
 
 
 class ReportingInterval(BaseModel):
@@ -58,10 +100,9 @@ def requested_reporting_interval(question: str) -> ReportingInterval | None:
         return None
     match = matches[0]
     remainder = question[:match.start()] + " " + question[match.end():]
-    accession_pattern = r"\b[0-9]{10}-[0-9]{2}-[0-9]{6}\b"
-    accessions = set(re.findall(accession_pattern, remainder))
+    accessions = set(_ACCESSION.findall(remainder))
     if (len(matches) != 1 or len(accessions) > 1 or _RANGE_START.search(remainder)
-            or period_mentions(re.sub(accession_pattern, " ", remainder))):
+            or period_mentions(_ACCESSION.sub(" ", remainder))):
         raise ValueError("ambiguous_explicit_reporting_interval")
     try:
         start, end = (date.fromisoformat(value) for value in match.groups())

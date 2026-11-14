@@ -14,7 +14,7 @@ from src.decision.models import (
     QuestionRequirements,
 )
 from src.ingestion.company_facts import requested_currencies
-from src.ingestion.period_identity import period_mentions, requested_reporting_interval
+from src.ingestion.period_identity import PeriodScope, period_mentions, requested_quarter_ytd, requested_reporting_interval
 from src.ingestion.segment_revenue import ENERGY_ALIASES, ENERGY_FILING, ENERGY_LABEL, ENERGY_METRIC
 
 
@@ -210,12 +210,14 @@ class EvidenceRequirementExtractor:
         )
         metrics = _metrics(question)
         interval_error = None
+        interval = quarter_ytd = None
         try:
             interval = requested_reporting_interval(question)
+            quarter_ytd = requested_quarter_ytd(question)
         except ValueError as error:
-            interval, interval_error = None, str(error)
-        periods = () if interval is not None or interval_error else _periods(question)
-        cumulative = _CUMULATIVE_RE.search(question)
+            interval_error = str(error)
+        periods = () if interval is not None or quarter_ytd is not None or interval_error else _periods(question)
+        cumulative = None if quarter_ytd is not None else _CUMULATIVE_RE.search(question)
         cumulative_unresolved = bool(cumulative and (not periods or any(not period.startswith("Q") for period in periods)))
         if cumulative and (quarter := {"six": "Q2", "nine": "Q3"}.get(cumulative[0].casefold().split()[0])):
             cumulative_unresolved |= any(not period.startswith(quarter) for period in periods)
@@ -259,6 +261,10 @@ class EvidenceRequirementExtractor:
             len(entities) != 1 or len(metrics) != 1 or not quantitative or operations != ["lookup"]
         ):
             unsupported_reasons.append("explicit_reporting_interval_scope_unresolved")
+        if quarter_ytd is not None and (
+            len(entities) != 1 or len(metrics) != 1 or not quantitative or operations != ["lookup"] or interval is not None
+        ):
+            unsupported_reasons.append("quarter_ytd_lookup_scope_unresolved")
         currencies = requested_currencies(question)
         if len(currencies) > 1:
             unsupported_reasons.append("multiple_requested_currencies")
@@ -272,7 +278,13 @@ class EvidenceRequirementExtractor:
             )
             for entity in entities:
                 for metric in metrics:
-                    if periods:
+                    if quarter_ytd is not None:
+                        for scope in (PeriodScope.QUARTER, PeriodScope.YEAR_TO_DATE):
+                            evidence.append(EvidenceRequirement(
+                                requirement_id=f"{entity.entity_id}:{metric.metric_id}:{scope.value}",
+                                entity_id=entity.entity_id, metric_id=metric.metric_id, period_scope=scope,
+                            ))
+                    elif periods:
                         for period in periods:
                             evidence.append(
                                 EvidenceRequirement(
@@ -319,4 +331,5 @@ class EvidenceRequirementExtractor:
             supported=not unsupported_reasons,
             unsupported_reasons=tuple(unsupported_reasons),
             reporting_interval=interval,
+            quarter_ytd=quarter_ytd,
         )

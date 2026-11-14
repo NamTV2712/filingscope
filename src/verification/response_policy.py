@@ -7,7 +7,9 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from src.decision.company_catalog import CompanyCatalog
 from src.decision.models import QuestionRequirements
+from src.decision.policy import EvidenceDecisionLayer
 from src.verification.atomic_claim_verifier import AtomicClaimVerifier
 from src.verification.claim_verifier import _DECLINE_RE, _SCALE_FACTORS, _context_unit
 from src.verification.models import (
@@ -87,6 +89,9 @@ def _release_supported(
         return INSUFFICIENT_EVIDENCE_ANSWER, result
     required = {item.requirement_id for item in requirements.evidence}
     covered = {item for claim in supported for item in claim.requirement_ids}
+    if requirements.quarter_ytd is not None and (len(supported) != 2 or covered != required):
+        result = _disposition(result, ResponseDisposition.ABSTAIN, "quarter_ytd_requires_both_claims")
+        return INSUFFICIENT_EVIDENCE_ANSWER, result
     if required and not required.intersection(covered):
         result = _disposition(result, ResponseDisposition.ABSTAIN, "no_requested_claim_supported")
         return INSUFFICIENT_EVIDENCE_ANSWER, result
@@ -124,9 +129,20 @@ def verify_and_release(
     *,
     can_correct: Callable[[], bool] = lambda: True,
 ) -> AnswerRelease:
+    def release(result: VerificationResult, text: str, *, dropped: bool) -> tuple[str, VerificationResult]:
+        text, result = _release_supported(result, text, requirements, dropped=dropped)
+        if requirements.quarter_ytd is not None and result.disposition in {ResponseDisposition.VERIFIED, ResponseDisposition.PARTIAL}:
+            cited_numbers = {number for claim in result.claims for number in claim.citations}
+            cited = [chunk for number, chunk in enumerate(chunks, start=1) if number in cited_numbers]
+            layer = EvidenceDecisionLayer(catalog=CompanyCatalog.from_document_rows(cited))
+            if not layer.analyzer.analyze(requirements, cited).sufficient:
+                result = _disposition(result, ResponseDisposition.ABSTAIN, "quarter_ytd_pair_not_established")
+                return INSUFFICIENT_EVIDENCE_ANSWER, result
+        return text, result
+
     initial = verifier.verify(question, answer, chunks)
     if all(claim.status == ClaimStatus.SUPPORTED for claim in initial.claims):
-        text, result = _release_supported(initial, answer, requirements, dropped=False)
+        text, result = release(initial, answer, dropped=False)
         return AnswerRelease(text, result, initial)
 
     statements: list[str] = []
@@ -139,10 +155,10 @@ def verify_and_release(
         else:
             dropped = True
     if not statements or not can_correct():
-        text, result = _release_supported(initial, answer, requirements, dropped=False)
+        text, result = release(initial, answer, dropped=False)
         return AnswerRelease(text, result, initial)
 
     revised = "\n".join(statements)
     rechecked = verifier.verify(question, revised, chunks)
-    text, result = _release_supported(rechecked, revised, requirements, dropped=dropped)
+    text, result = release(rechecked, revised, dropped=dropped)
     return AnswerRelease(text, result, initial, correction_passes=1)

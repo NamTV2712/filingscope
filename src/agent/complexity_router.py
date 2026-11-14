@@ -309,6 +309,10 @@ class ComplexityRouter:
             else:
                 path = ExecutionPath.RESEARCH
                 reason_codes.append("calculation_scope_exceeds_fast_profile")
+        elif requirements.quarter_ytd is not None:
+            complexity = ComplexityClass.SINGLE_DOCUMENT
+            path = ExecutionPath.FAST
+            reason_codes.append("quarter_and_ytd_from_one_filing")
         elif entities == 1 and metrics > 0 and _SINGLE_DOCUMENT_RE.search(question):
             complexity = ComplexityClass.SINGLE_DOCUMENT
             path = ExecutionPath.FAST
@@ -350,6 +354,9 @@ class ComplexityRouter:
                             "ambiguous_explicit_reporting_interval",
                             "invalid_explicit_reporting_interval",
                             "explicit_reporting_interval_scope_unresolved",
+                            "ambiguous_quarter_ytd_lookup",
+                            "invalid_quarter_ytd_lookup",
+                            "quarter_ytd_lookup_scope_unresolved",
                         }
                     )
                 )
@@ -494,6 +501,15 @@ class ComplexityRouter:
             if ((slot.entity_id, slot.metric_id, slot.period) == (ENERGY_ENTITY, ENERGY_METRIC, ENERGY_PERIOD)
                     and permits_energy_segment_lookup(question)):
                 return SourceCapability.DIRECT_XBRL
+        if requirements.quarter_ytd is not None and len(plan.tasks) == 2:
+            if requires_nonstandard_reporting_basis(question):
+                return SourceCapability.TEXT_RAG
+            slot = requirements.evidence[0]
+            if slot.entity_id in inventory.xbrl_entities and slot.metric_id in METRIC_CONCEPTS:
+                return SourceCapability.DIRECT_XBRL
+            return SourceCapability.DIRECT_TABLE if any(
+                inventory.statement_documents.intersection(task.target_document_ids) for task in plan.tasks
+            ) else SourceCapability.TEXT_RAG
         if len(requirements.evidence) > 1:
             return SourceCapability.COMPOSITE
         if (

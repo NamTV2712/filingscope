@@ -157,6 +157,10 @@ Exact ISO reporting intervals eliminated five prior-year overreleases
 in each text-enabled mixed arm. Confirmed numeric outcomes rose from
 20 to 26 for document-only and from 37 to 45 for Company Facts-only and
 hybrid. [Interval replay](G3_EXPLICIT_INTERVALS.md).
+Date-bound quarter/YTD requests now recover 9/26 exact pairs in
+Company Facts-only and hybrid. Confirmed numeric cases reached 54/187
+in both arms with zero incorrect releases on this cohort.
+[Quarter/YTD replay](G3_QUARTER_YTD.md).
 
 G3 retains Dense and the current statement ranker. Scoped scoring
 matched all 30 top-ten rankings while reducing paired rank p50

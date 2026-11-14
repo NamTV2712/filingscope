@@ -249,6 +249,7 @@ class SpecialistResearchGraph:
         recorder.add("routing", routing_started, StageStatus.COMPLETE)
         if route.question != question:
             raise ValueError("router execution belongs to a different question")
+        requirements = self.router.extractor.extract(question)
         if route.selected_path == ExecutionPath.UNSUPPORTED:
             allowed_steps = route.budget.max_graph_steps
         else:
@@ -260,9 +261,10 @@ class SpecialistResearchGraph:
             if route.research_plan.retrieval_call_count > route.budget.max_retrieval_calls:
                 raise ValueError("research plan exceeds the selected retrieval-call budget")
             if route.source_capability in _DIRECT_LOOKUP and (
-                route.selected_path != ExecutionPath.FAST or len(route.research_plan.tasks) != 1
+                route.selected_path != ExecutionPath.FAST
+                or len(route.research_plan.tasks) != (2 if requirements.quarter_ytd else 1)
             ):
-                raise ValueError("a direct source lookup requires one FAST task")
+                raise ValueError("a direct source lookup requires the complete FAST task set")
         if ledger is not None and ledger.request_id != request_id:
             raise ValueError("ledger request_id must match the specialist run")
         revisions = requested_revision_policies(question)
@@ -272,7 +274,7 @@ class SpecialistResearchGraph:
             request_id=request_id,
             ledger=ledger or EvidenceLedger(request_id=request_id),
             budget=route.budget,
-            requirements=self.router.extractor.extract(question),
+            requirements=requirements,
             plan=route.research_plan,
             retriever=self.retriever,
             sec_client=self.sec_client,
@@ -438,6 +440,10 @@ class SpecialistResearchGraph:
             )
             receipts.append(receipt)
             sufficient = bool(receipt.evidence_ids and not receipt.missing_requirement_ids)
+            if sufficient and context.requirements.quarter_ytd:
+                sufficient = context.decision_layer.analyzer.analyze(
+                    context.requirements, context.source_chunks.values(),
+                ).sufficient
         if not sufficient:
             context.emit_progress(ResearchProgress.INSPECTING_TABLES)
             receipt = TableEvidenceWorker().run_direct(tasks[0], context)

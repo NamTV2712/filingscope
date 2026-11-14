@@ -11,7 +11,7 @@ from src.decision.filing_disclosures import (
     filing_industry_relations, filing_segment_disclosures, industry_relation, is_segment_list_question, segment_disclosure,
     segment_form_matches, segment_kind_matches, segment_period_matches, segment_signature,
 )
-from src.decision.models import EvidenceFact, MetricRequirement, QuestionRequirements
+from src.decision.models import CoverageStatus, EvidenceFact, MetricRequirement, QuestionRequirements
 from src.decision.period_value_parser import extract_period_value_mentions, period_matches
 from src.decision.policy import EvidenceDecisionLayer
 from src.decision.requirement_extractor import permits_energy_segment_lookup
@@ -172,9 +172,9 @@ class AtomicClaimVerifier(ClaimLevelVerifier):
                 citation_status=CitationStatus.VALID, citations=draft.citations, evidence_ids=evidence_ids,
                 reason_codes=("cited_source_revision_does_not_match_claim",),
             )
-        if question_requirements.reporting_interval is not None:
+        if question_requirements.reporting_interval is not None or question_requirements.quarter_ytd is not None:
             coverage = layer.analyzer.analyze(question_requirements, cited_chunks)
-            facts = [fact for finding in coverage.findings for fact in finding.facts]
+            facts = [fact for finding in coverage.findings if finding.status == CoverageStatus.FOUND for fact in finding.facts]
             supported_ids = set()
             if len(draft.values) == 1 and len(draft.periods) == 1 and draft.operation is None:
                 value = draft.values[0]
@@ -182,7 +182,8 @@ class AtomicClaimVerifier(ClaimLevelVerifier):
                                  and fact.metric_id == value.metric_id and fact.period == draft.periods[0]
                                  and self._compare_value(value, (fact,))[0] == ClaimStatus.SUPPORTED}
             explicit_dates_or_accession = re.search(r"\b(?:\d{4}-\d{2}-\d{2}|\d{10}-\d{2}-\d{6})\b", statement)
-            if (not coverage.sufficient or explicit_dates_or_accession or not supported_ids
+            if ((question_requirements.reporting_interval and not coverage.sufficient)
+                    or explicit_dates_or_accession or not supported_ids
                     or any(chunk.get("chunk_id") not in supported_ids for chunk in cited_chunks)):
                 return ClaimAssessment(
                     claim_id=draft.claim_id, statement=draft.statement, status=ClaimStatus.UNSUPPORTED,
@@ -399,7 +400,11 @@ class AtomicClaimVerifier(ClaimLevelVerifier):
                 periods = tuple(sorted(approved_periods))
         requirements = tuple(item.requirement_id for item in question_requirements.evidence if
             item.entity_id in draft.entity_ids and item.metric_id in draft.metric_ids
-            and (item.period is None or any(period_matches(item.period, period) for period in periods)))
+            and (item.period is None or any(period_matches(item.period, period) for period in periods))
+            and (item.period_scope is None or any(
+                period.startswith("Q") and ((" YTD " in period) == (item.period_scope == "year_to_date"))
+                for period in periods
+            )))
         return assessment.model_copy(update={
             "claim_type": claim_type, "supporting_evidence_ids": sources, "requirement_ids": requirements,
         })

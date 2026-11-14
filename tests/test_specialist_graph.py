@@ -108,6 +108,31 @@ def _annual_chunk(
     }
 
 
+@pytest.mark.parametrize("cumulative_accession", ["0000320193-25-000073", "0000320193-25-000074"])
+def test_quarter_ytd_date_question_requires_both_values_in_one_accession(cumulative_accession: str) -> None:
+    sec = FakeSECCompanyFacts()
+    accession = "0000320193-25-000073"
+    rows = sec.facts[320193]["facts"]["us-gaap"]["RevenueFromContractWithCustomerExcludingAssessedTax"]["units"]["USD"]
+    rows.extend([
+        {"val": 94_036_000_000, "start": "2025-03-30", "end": "2025-06-28", "accn": accession,
+         "filed": "2025-08-01", "form": "10-Q", "fy": 2025, "fp": "Q3"},
+        {"val": 313_695_000_000, "start": "2024-09-29", "end": "2025-06-28", "accn": cumulative_accession,
+         "filed": "2025-08-01", "form": "10-Q", "fy": 2025, "fp": "Q3"},
+    ])
+    graph = SpecialistResearchGraph(sec_client=sec)
+    question = "What was Apple's revenue in USD for the standalone quarter and fiscal year to date ended 2025-06-28 in 10-Q 0000320193-25-000073?"
+    result = graph.run(question)
+    assert sec.request_count == 1
+    assert result.verification is not None
+    if cumulative_accession == accession:
+        assert result.verification.disposition == ResponseDisposition.VERIFIED
+        assert "94,036,000,000 for Q3 FY2025" in result.answer
+        assert "313,695,000,000 for Q3 YTD FY2025" in result.answer
+        assert sorted(len(claim.requirement_ids) for claim in result.verification.claims) == [1, 1]
+    else:
+        assert result.verification.disposition == ResponseDisposition.ABSTAIN
+
+
 def test_specialist_releases_only_rechecked_claims_and_keeps_draft_audit() -> None:
     class DraftGenerator:
         def generate(self, question, chunks):

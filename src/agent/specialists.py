@@ -716,11 +716,15 @@ class StructuredFinancialDataWorker:
                     observations.append(SpecialistObservation(
                         key="xbrl_report_dates_unavailable", value=type(error).__name__,
                     ))
+            scope_by_id = {item.requirement_id: item.period_scope for item in runtime.requirements.evidence
+                           if item.period_scope is not None}
             for task in ticker_tasks:
+                scope = next((scope_by_id[key] for key in task.requirement_ids if key in scope_by_id), None)
                 resolution = resolver.resolve(
                     task.metric_id or "", task.period, currency=currency,
                     revision=runtime.xbrl_revision_policy, form_types=task.form_types,
                     interval=runtime.requirements.reporting_interval,
+                    quarter_ytd=runtime.requirements.quarter_ytd, scope=scope,
                 )
                 if (
                     runtime.require_structured_facts
@@ -901,8 +905,10 @@ class StructuredFinancialDataWorker:
         }
         if inline:
             runtime.source_chunks[chunk_id]["inline_provenance"] = provenance
-        if runtime.requirements.reporting_interval is not None:
+        if runtime.requirements.reporting_interval is not None or runtime.requirements.quarter_ytd is not None:
             runtime.source_chunks[chunk_id]["accession"] = provenance.accession
+        if runtime.requirements.quarter_ytd is not None:
+            runtime.source_chunks[chunk_id]["filing_type"] = fact.form
         runtime.evidence_id_by_chunk_id[chunk_id] = record.evidence_id
         runtime.preferred_evidence_by_chunk_id[chunk_id] = record.evidence_id
         runtime.chunk_tasks.setdefault(chunk_id, set()).add(task.task_id)
