@@ -334,6 +334,7 @@ class EvidenceCoverageAnalyzer:
         source_conflict_ids: dict[str, set[str]] = defaultdict(set)
         nonstandard_basis = requires_nonstandard_reporting_basis(requirements.question)
         revisions = requested_revision_policies(requirements.question)
+        interval = requirements.reporting_interval
         issuer_aliases = {
             entity.entity_id: tuple(dict.fromkeys((entity.matched_alias, entity.canonical_name)))
             for entity in requirements.entities
@@ -392,12 +393,19 @@ class EvidenceCoverageAnalyzer:
                     for fact in normalized:
                         if not period_matches(requirement.period, fact.period):
                             continue
+                        if interval:
+                            accessions = {value for key in ("accession", "accession_number")
+                                          if isinstance((value := chunk.get(key)), str) and value}
+                            if len(accessions) > 1 or not interval.matches(fact.period_identity, next(iter(accessions), None)):
+                                continue
                         period_seen[requirement.requirement_id] = True
                         number_seen[requirement.requirement_id] = True
                         if requirements.requested_currency is None or fact.currency == requirements.requested_currency:
                             candidate_facts.append(fact)
                         elif fact.currency is not None:
                             unit_mismatch = True
+                    continue
+                if interval:
                     continue
                 text = chunk.get("text")
                 if not isinstance(text, str):

@@ -720,6 +720,7 @@ class StructuredFinancialDataWorker:
                 resolution = resolver.resolve(
                     task.metric_id or "", task.period, currency=currency,
                     revision=runtime.xbrl_revision_policy, form_types=task.form_types,
+                    interval=runtime.requirements.reporting_interval,
                 )
                 if (
                     runtime.require_structured_facts
@@ -900,6 +901,8 @@ class StructuredFinancialDataWorker:
         }
         if inline:
             runtime.source_chunks[chunk_id]["inline_provenance"] = provenance
+        if runtime.requirements.reporting_interval is not None:
+            runtime.source_chunks[chunk_id]["accession"] = provenance.accession
         runtime.evidence_id_by_chunk_id[chunk_id] = record.evidence_id
         runtime.preferred_evidence_by_chunk_id[chunk_id] = record.evidence_id
         runtime.chunk_tasks.setdefault(chunk_id, set()).add(task.task_id)
@@ -1041,6 +1044,7 @@ def _normalize_filing_statements(runtime: SpecialistRuntime) -> tuple[int, int]:
         statement = parse_statement_columns(
             text, form=form, fiscal_year=fiscal_year, quarter=int(quarter[1]) if quarter else None,
             confirmed_period_end=report_end or xbrl_end,
+            infer_annual_starts=runtime.requirements.reporting_interval is not None,
         )
         inspected[key] = statement.recognized
         if not statement.recognized:

@@ -82,6 +82,9 @@ def _release_supported(
     if len(supported) != len(result.claims) or not supported:
         result = _disposition(result, ResponseDisposition.ABSTAIN, "no_safe_complete_draft")
         return INSUFFICIENT_EVIDENCE_ANSWER, result
+    if requirements.reporting_interval is not None and len(supported) != 1:
+        result = _disposition(result, ResponseDisposition.ABSTAIN, "explicit_interval_requires_one_claim")
+        return INSUFFICIENT_EVIDENCE_ANSWER, result
     required = {item.requirement_id for item in requirements.evidence}
     covered = {item for claim in supported for item in claim.requirement_ids}
     if required and not required.intersection(covered):

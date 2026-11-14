@@ -153,6 +153,11 @@ retrieved evidence for five cases including valid alternative pages.
 
 ## G3 financial understanding and scoped retrieval
 
+Exact ISO reporting intervals eliminated five prior-year overreleases
+in each text-enabled mixed arm. Confirmed numeric outcomes rose from
+20 to 26 for document-only and from 37 to 45 for Company Facts-only and
+hybrid. [Interval replay](G3_EXPLICIT_INTERVALS.md).
+
 G3 retains Dense and the current statement ranker. Scoped scoring
 matched all 30 top-ten rankings while reducing paired rank p50
 from 4.25 ms to 1.16 ms. YoY expansion now preserves YTD and

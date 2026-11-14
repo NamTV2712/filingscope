@@ -347,6 +347,9 @@ class ComplexityRouter:
                             "metric_not_recognized",
                             "insufficient_period_scope",
                             "relative_period_not_supported",
+                            "ambiguous_explicit_reporting_interval",
+                            "invalid_explicit_reporting_interval",
+                            "explicit_reporting_interval_scope_unresolved",
                         }
                     )
                 )
@@ -495,7 +498,7 @@ class ComplexityRouter:
             return SourceCapability.COMPOSITE
         if (
             len(requirements.evidence) != 1 or not requirements.evidence[0].quantitative
-            or requirements.evidence[0].period is None
+            or requirements.evidence[0].period is None and requirements.reporting_interval is None
             or any(item.operation != "lookup" for item in requirements.operations)
             or _SPECIAL_BASIS_RE.search(question) or requires_nonstandard_reporting_basis(question)
         ):
@@ -508,7 +511,8 @@ class ComplexityRouter:
         supported_forms = {"10k", "10q", "20f", "40f"}
         if (
             task is not None and slot.entity_id in inventory.xbrl_entities
-            and slot.metric_id in METRIC_CONCEPTS and _XBRL_PERIOD_RE.fullmatch(slot.period or "")
+            and slot.metric_id in METRIC_CONCEPTS
+            and (requirements.reporting_interval is not None or _XBRL_PERIOD_RE.fullmatch(slot.period or ""))
             and (not task.form_types or supported_forms.intersection(task.form_types))
         ):
             return SourceCapability.DIRECT_XBRL

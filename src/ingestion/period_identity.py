@@ -34,6 +34,43 @@ _PERIOD_MENTION = re.compile(
     re.I,
 )
 
+_ISO_RANGE = re.compile(r"\bfrom\s+(\d{4}-\d{2}-\d{2})\s+(?:to|through)\s+(\d{4}-\d{2}-\d{2})\b", re.I)
+_RANGE_START = re.compile(r"\bfrom\s+(\d{4}-\d{2}-\d{2})\s+(?:to|through)\b", re.I)
+
+
+class ReportingInterval(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    start: date
+    end: date
+    accession: str | None = None
+
+    def matches(self, period: PeriodIdentity | None, accession: object) -> bool:
+        return bool(period and period.kind == PeriodKind.DURATION and period.start == self.start
+                    and period.end == self.end and (self.accession is None or self.accession == accession))
+
+
+def requested_reporting_interval(question: str) -> ReportingInterval | None:
+    matches = list(_ISO_RANGE.finditer(question))
+    if not matches:
+        if _RANGE_START.search(question):
+            raise ValueError("invalid_explicit_reporting_interval")
+        return None
+    match = matches[0]
+    remainder = question[:match.start()] + " " + question[match.end():]
+    accession_pattern = r"\b[0-9]{10}-[0-9]{2}-[0-9]{6}\b"
+    accessions = set(re.findall(accession_pattern, remainder))
+    if (len(matches) != 1 or len(accessions) > 1 or _RANGE_START.search(remainder)
+            or period_mentions(re.sub(accession_pattern, " ", remainder))):
+        raise ValueError("ambiguous_explicit_reporting_interval")
+    try:
+        start, end = (date.fromisoformat(value) for value in match.groups())
+    except ValueError as exc:
+        raise ValueError("invalid_explicit_reporting_interval") from exc
+    if start > end:
+        raise ValueError("invalid_explicit_reporting_interval")
+    return ReportingInterval(start=start, end=end, accession=next(iter(accessions), None))
+
 
 @dataclass(frozen=True)
 class PeriodMention:

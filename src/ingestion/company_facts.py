@@ -12,7 +12,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.ingestion.period_identity import PeriodIdentity, PeriodKind
+from src.ingestion.period_identity import PeriodIdentity, PeriodKind, ReportingInterval
 
 
 COMPANY_FACTS_POLICY_VERSION = "sec-company-facts-v2"
@@ -312,6 +312,17 @@ class CompanyFactsResolver:
             or (not annual_filing and row.end.year == year - 1)
         )
 
+    def _interval_label(self, row: _Observation) -> str | None:
+        if self._original_period(row, row.fiscal_year, None, False):
+            return f"FY{row.fiscal_year}"
+        if row.fiscal_focus not in {"Q1", "Q2", "Q3", "Q4"}:
+            return None
+        if self._original_period(row, row.fiscal_year, row.fiscal_focus, False):
+            return f"{row.fiscal_focus} FY{row.fiscal_year}"
+        if self._original_period(row, row.fiscal_year, row.fiscal_focus, False, year_to_date=True):
+            return f"{row.fiscal_focus} YTD FY{row.fiscal_year}"
+        return None
+
     def resolve(
         self,
         metric_id: str,
@@ -320,14 +331,15 @@ class CompanyFactsResolver:
         currency: str | None = None,
         revision: RevisionPolicy = RevisionPolicy.AS_REPORTED,
         form_types: tuple[str, ...] = (),
+        interval: ReportingInterval | None = None,
     ) -> CompanyFactResolution:
         concepts = METRIC_CONCEPTS.get(metric_id)
         if concepts is None:
             return CompanyFactResolution("unsupported_concept")
         match = _PERIOD.fullmatch(period or "")
-        if match is None:
+        if match is None and interval is None:
             return CompanyFactResolution("explicit_fiscal_period_required")
-        quarter, cumulative, year_text = match.groups()
+        quarter, cumulative, year_text = match.groups() if match else (None, None, "")
         instant = metric_id in _INSTANT_METRICS
         if cumulative and instant:
             return CompanyFactResolution("cumulative_scope_inapplicable_to_instant")
@@ -336,14 +348,24 @@ class CompanyFactsResolver:
             return CompanyFactResolution("unsupported_currency")
         requested_forms = {item.upper().replace("-", "") for item in form_types}
         rows = tuple(row for concept in concepts for row in self._observations(concept))
-        originals = [
+        eligible = [
             row for row in rows
-            if self._original_period(row, int(year_text), quarter, instant, year_to_date=bool(cumulative))
-            and (requested_currency is None or row.currency == requested_currency)
+            if (requested_currency is None or row.currency == requested_currency)
             and (not requested_forms or row.form.replace("-", "") in requested_forms)
         ]
+        if interval is None:
+            originals = [row for row in eligible
+                         if self._original_period(row, int(year_text), quarter, instant, year_to_date=bool(cumulative))]
+        else:
+            if instant or revision != RevisionPolicy.AS_REPORTED:
+                return CompanyFactResolution("explicit_interval_scope_unsupported")
+            originals = [row for row in eligible if row.interval == (interval.start, interval.end)
+                         and (interval.accession is None or row.accession == interval.accession)
+                         and self._interval_label(row) is not None]
         if not originals:
             return CompanyFactResolution("original_period_unavailable")
+        if interval is not None and interval.accession is None and len({row.accession for row in originals}) != 1:
+            return CompanyFactResolution("ambiguous_original_accession")
         if len({row.interval for row in originals}) != 1:
             return CompanyFactResolution("ambiguous_period")
         if len({row.currency for row in originals}) != 1:
@@ -358,6 +380,11 @@ class CompanyFactsResolver:
         if len({row.accession for row in first_rows}) != 1:
             return CompanyFactResolution("ambiguous_original_accession")
         original = min(first_rows, key=lambda row: (concepts.index(row.concept), _revision_order(row)))
+        if interval is not None:
+            labels = {self._interval_label(row) for row in first_rows}
+            if len(labels) != 1:
+                return CompanyFactResolution("ambiguous_period")
+            period = labels.pop()
         history = sorted({
             row for row in rows
             if row.interval == original.interval and row.currency == original.currency
@@ -384,6 +411,7 @@ class CompanyFactsResolver:
             else:
                 kind = RevisionKind.COMPARATIVE_REVISION
         taxonomy, tag = selected.concept.split(":")
+        assert period is not None
         accession_path = selected.accession.replace("-", "")
         return CompanyFactResolution("resolved", ResolvedCompanyFact(
             value=selected.value,

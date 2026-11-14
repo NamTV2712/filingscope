@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field
+from pydantic import BaseModel, ConfigDict, Field, computed_field, model_serializer
 
-from src.ingestion.period_identity import PeriodIdentity
+from src.ingestion.period_identity import PeriodIdentity, ReportingInterval
 
 
 class DecisionAction(StrEnum):
@@ -88,6 +88,14 @@ class QuestionRequirements(BaseModel):
     evidence: tuple[EvidenceRequirement, ...] = ()
     supported: bool = True
     unsupported_reasons: tuple[str, ...] = ()
+    reporting_interval: ReportingInterval | None = None
+
+    @model_serializer(mode="wrap")
+    def _serialize(self, handler):
+        data = handler(self)
+        if self.reporting_interval is None:
+            data.pop("reporting_interval", None)
+        return data
 
 
 class EvidenceFact(BaseModel):

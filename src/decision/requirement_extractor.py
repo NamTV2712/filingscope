@@ -14,7 +14,7 @@ from src.decision.models import (
     QuestionRequirements,
 )
 from src.ingestion.company_facts import requested_currencies
-from src.ingestion.period_identity import period_mentions
+from src.ingestion.period_identity import period_mentions, requested_reporting_interval
 from src.ingestion.segment_revenue import ENERGY_ALIASES, ENERGY_FILING, ENERGY_LABEL, ENERGY_METRIC
 
 
@@ -209,7 +209,12 @@ class EvidenceRequirementExtractor:
             for match in matches
         )
         metrics = _metrics(question)
-        periods = _periods(question)
+        interval_error = None
+        try:
+            interval = requested_reporting_interval(question)
+        except ValueError as error:
+            interval, interval_error = None, str(error)
+        periods = () if interval is not None or interval_error else _periods(question)
         cumulative = _CUMULATIVE_RE.search(question)
         cumulative_unresolved = bool(cumulative and (not periods or any(not period.startswith("Q") for period in periods)))
         if cumulative and (quarter := {"six": "Q2", "nine": "Q3"}.get(cumulative[0].casefold().split()[0])):
@@ -248,6 +253,12 @@ class EvidenceRequirementExtractor:
             unsupported_reasons.append("relative_period_not_supported")
         if cumulative_unresolved:
             unsupported_reasons.append("cumulative_period_scope_unresolved")
+        if interval_error:
+            unsupported_reasons.append(interval_error)
+        if interval is not None and (
+            len(entities) != 1 or len(metrics) != 1 or not quantitative or operations != ["lookup"]
+        ):
+            unsupported_reasons.append("explicit_reporting_interval_scope_unresolved")
         currencies = requested_currencies(question)
         if len(currencies) > 1:
             unsupported_reasons.append("multiple_requested_currencies")
@@ -307,4 +318,5 @@ class EvidenceRequirementExtractor:
             evidence=tuple(evidence),
             supported=not unsupported_reasons,
             unsupported_reasons=tuple(unsupported_reasons),
+            reporting_interval=interval,
         )

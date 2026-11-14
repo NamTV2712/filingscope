@@ -172,6 +172,23 @@ class AtomicClaimVerifier(ClaimLevelVerifier):
                 citation_status=CitationStatus.VALID, citations=draft.citations, evidence_ids=evidence_ids,
                 reason_codes=("cited_source_revision_does_not_match_claim",),
             )
+        if question_requirements.reporting_interval is not None:
+            coverage = layer.analyzer.analyze(question_requirements, cited_chunks)
+            facts = [fact for finding in coverage.findings for fact in finding.facts]
+            supported_ids = set()
+            if len(draft.values) == 1 and len(draft.periods) == 1 and draft.operation is None:
+                value = draft.values[0]
+                supported_ids = {fact.evidence_id for fact in facts if fact.entity_id == value.entity_id
+                                 and fact.metric_id == value.metric_id and fact.period == draft.periods[0]
+                                 and self._compare_value(value, (fact,))[0] == ClaimStatus.SUPPORTED}
+            explicit_dates_or_accession = re.search(r"\b(?:\d{4}-\d{2}-\d{2}|\d{10}-\d{2}-\d{6})\b", statement)
+            if (not coverage.sufficient or explicit_dates_or_accession or not supported_ids
+                    or any(chunk.get("chunk_id") not in supported_ids for chunk in cited_chunks)):
+                return ClaimAssessment(
+                    claim_id=draft.claim_id, statement=draft.statement, status=ClaimStatus.UNSUPPORTED,
+                    citation_status=CitationStatus.VALID, citations=draft.citations, evidence_ids=evidence_ids,
+                    reason_codes=("cited_source_does_not_match_requested_interval",),
+                )
         assessment = super()._assess_claim(
             draft=draft, question=question, question_requirements=question_requirements,
             layer=layer, catalog=catalog, cited_chunks=cited_chunks, evidence_ids=evidence_ids,

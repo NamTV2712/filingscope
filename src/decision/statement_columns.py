@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from itertools import islice
 
@@ -262,7 +262,7 @@ def _parse_dates(header: list[str], years: list[int]) -> list[date | None]:
 
 def _column_periods(
     header: list[str], *, kind: PeriodKind, fiscal_year: int, quarter: int | None,
-    confirmed_period_end: date | None,
+    confirmed_period_end: date | None, infer_annual_starts: bool = False,
 ) -> tuple[PeriodIdentity | None, ...]:
     current = header[-1]
     year_labels = period_mentions(current)
@@ -301,9 +301,16 @@ def _column_periods(
             return ()
         if abs(years[0] - fiscal_year) > 1:
             return ()
+        starts = [None] * len(dates)
+        if (infer_annual_starts and kind == PeriodKind.DURATION and confirmed_period_end is not None
+                and dates[0] == confirmed_period_end and anniversary_dates and not _REVISION.search(body)
+                and (_ANNUAL_HEADER.search(body) or months == [12])):
+            for index, preceding_end in enumerate(dates[1:]):
+                if preceding_end is not None:
+                    starts[index] = preceding_end + timedelta(days=1)
         return tuple(PeriodIdentity.from_label(
-            f"FY{fiscal_year + year - years[0]}", kind=kind, end=end, filing_fiscal_year=fiscal_year,
-        ) for year, end in zip(years, dates, strict=True))
+            f"FY{fiscal_year + year - years[0]}", kind=kind, start=start, end=end, filing_fiscal_year=fiscal_year,
+        ) for year, start, end in zip(years, starts, dates, strict=True))
     if abs(years[0] - fiscal_year) > 1:
         return ()
     if kind == PeriodKind.INSTANT:
@@ -404,6 +411,7 @@ def _subtotal(body: list[str], columns: int) -> tuple[int, str] | None:
 def parse_statement_columns(
     text: str, *, form: str, fiscal_year: int, quarter: int | None = None,
     confirmed_period_end: date | None = None,
+    infer_annual_starts: bool = False,
 ) -> StatementParse:
     """Return sourced values and report rows whose column ownership is uncertain."""
     amended = form.upper().endswith("/A")
@@ -434,6 +442,7 @@ def parse_statement_columns(
     periods = _column_periods(
         header, kind=kind, fiscal_year=fiscal_year, quarter=quarter,
         confirmed_period_end=confirmed_period_end,
+        infer_annual_starts=infer_annual_starts,
     )
     heading_lines = lines[title + 1:body_start]
     top = " ".join(heading_lines)

@@ -2,12 +2,49 @@ from __future__ import annotations
 
 import pytest
 
+from src.decision.models import EvidenceFact
 from src.decision.policy import EvidenceDecisionLayer
 from src.evaluation.advanced_verification_evaluation import advanced_verification_cases
 from src.evaluation.verification_evaluation import _financial_chunk, _industry_chunk
+from src.ingestion.period_identity import PeriodIdentity, PeriodKind, requested_reporting_interval
 from src.verification.atomic_claim_verifier import AtomicClaimVerifier
 from src.verification.models import ClaimStatus, ResponseDisposition
 from src.verification.response_policy import INSUFFICIENT_EVIDENCE_ANSWER, verify_and_release
+
+
+def test_explicit_interval_checks_the_claim_and_its_accession():
+    question = "What was Apple's revenue from 2023-10-01 to 2024-09-28 in 10-K 0000320193-24-000123?"
+    layer = EvidenceDecisionLayer()
+    requirements = layer.extractor.extract(question)
+    interval = requested_reporting_interval(question)
+    assert interval and requirements.reporting_interval == interval and requirements.periods == ()
+    assert len(requirements.evidence) == 1
+    chunk = _financial_chunk(chunk_id="apple")
+    chunk["accession"] = interval.accession
+    chunk["approved_facts"] = (EvidenceFact(
+        evidence_id="apple", entity_id="AAPL", metric_id="revenue", period="FY2024",
+        period_identity=PeriodIdentity.from_label("FY2024", kind=PeriodKind.DURATION, start=interval.start, end=interval.end),
+        value="USD 110 billion", numeric_value="110", currency="USD", scale="billion", value_kind="amount",
+        document_id=chunk["doc_name"], page_number=chunk["page_number"], source_url=chunk.get("source_url"),
+    ),)
+    verifier = AtomicClaimVerifier()
+    answer = "Apple reported revenue of USD 110 billion for FY2024. [Source 1]"
+    assert verifier.verify(question, answer, [chunk]).disposition == ResponseDisposition.VERIFIED
+    wrong_sources = [
+        {**chunk, "accession": "0000320193-23-000106"},
+        {**chunk, "accession_number": "0000320193-23-000106"},
+        {**chunk, "approved_facts": (chunk["approved_facts"][0].model_copy(update={"period_identity": None}),)},
+    ]
+    for wrong in wrong_sources:
+        assert verifier.verify(question, answer, [wrong]).disposition == ResponseDisposition.REJECTED
+    assert verifier.verify(question, answer.replace("FY2024", "FY2023"), [chunk]).disposition == ResponseDisposition.REJECTED
+
+
+@pytest.mark.parametrize("dates", ["2024-02-30 to 2024-09-28", "2024-09-28 to 2023-10-01",
+                                    "2023-10-01 to September", "2023-10-01 to 2024-09-28 and FY2023"])
+def test_ambiguous_or_invalid_intervals_do_not_fall_back_to_fiscal_years(dates):
+    req = EvidenceDecisionLayer().extractor.extract(f"What was Apple's revenue from {dates}?")
+    assert not req.supported and not req.evidence
 
 
 @pytest.mark.parametrize("case", advanced_verification_cases(), ids=lambda case: case.case_id)

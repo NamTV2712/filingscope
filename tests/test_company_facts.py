@@ -7,6 +7,7 @@ from decimal import Decimal
 import pytest
 
 from src.ingestion.company_facts import CompanyFactsResolver, RevisionKind, RevisionPolicy
+from src.ingestion.period_identity import requested_reporting_interval
 
 
 REVENUE = "RevenueFromContractWithCustomerExcludingAssessedTax"
@@ -62,6 +63,18 @@ def apple():
         ]),
         "Liabilities": node([row(308_030_000_000, start=None)]),
     }})
+
+
+def test_explicit_interval_selects_quarter_or_ytd_by_exact_start(apple):
+    resolver = CompanyFactsResolver(apple, expected_cik=320193)
+    for start, label, value in (("2023-12-31", "Q2 FY2024", 90_753_000_000),
+                                ("2023-10-01", "Q2 YTD FY2024", 210_328_000_000)):
+        interval = requested_reporting_interval(f"Revenue from {start} to 2024-03-30 in 0000320193-24-000069")
+        fact = resolver.resolve("revenue", None, interval=interval).fact
+        assert fact and fact.fiscal_period == label and fact.value == value
+    for text in ("from 2023-12-30 to 2024-03-30 in 0000320193-24-000069",
+                 "from 2023-12-31 to 2024-03-30 in 0000320193-24-000123"):
+        assert resolver.resolve("revenue", None, interval=requested_reporting_interval(text)).fact is None
 
 
 @pytest.mark.parametrize(("metric", "period", "value", "end", "accession"), [
