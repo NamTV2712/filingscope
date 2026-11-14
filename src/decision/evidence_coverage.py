@@ -11,8 +11,8 @@ from typing import Any
 
 from src.decision.company_catalog import CompanyCatalog
 from src.decision.filing_disclosures import (
-    filing_industry_relations, filing_segment_disclosures, is_segment_list_question, segment_form_matches, segment_kind_matches,
-    segment_period_matches, segment_signature,
+    BUSINESS_DISCLOSURE_METRICS, business_disclosure_source_matches, filing_industry_relations, filing_segment_disclosures,
+    is_segment_list_question, segment_kind_matches, segment_signature,
 )
 from src.decision.models import (
     CoverageStatus,
@@ -280,11 +280,11 @@ def _facts_from_chunk(
     else:
         if metric.metric_id == "industry":
             supports_topic = bool(filing_industry_relations(text, issuer_aliases))
-        elif metric.metric_id == "business_segments":
+        elif metric.metric_id in BUSINESS_DISCLOSURE_METRICS:
             supports_topic = (
                 page_number is not None and page_number >= 0 and bool(source_url) and _period_from_metadata(chunk) is not None
-                and segment_form_matches(question, chunk.get("doc_type"), chunk.get("filing_type"))
-                and any(segment_kind_matches(question, kind) for kind, _ in filing_segment_disclosures(text, issuer_aliases))
+                and any(segment_kind_matches(question, kind, len(names))
+                        for kind, names in filing_segment_disclosures(text, issuer_aliases))
             )
         else:
             supports_topic = _contains_alias(text, metric.aliases)
@@ -363,7 +363,7 @@ class EvidenceCoverageAnalyzer:
 
         for requirement in requirements.evidence:
             metric = metric_by_id[requirement.metric_id]
-            is_segment_list = metric.metric_id == "business_segments"
+            is_segment_list = metric.metric_id in BUSINESS_DISCLOSURE_METRICS
             energy_segment = (
                 metric.metric_id == ENERGY_METRIC and requirement.entity_id == ENERGY_ENTITY
                 and requirement.period == ENERGY_PERIOD and len(requirements.evidence) == 1
@@ -384,7 +384,7 @@ class EvidenceCoverageAnalyzer:
                 ))
                 continue
             candidate_facts: list[EvidenceFact] = []
-            segment_lists: dict[str, set[frozenset[str]]] = defaultdict(set)
+            segment_lists: set[frozenset[str]] = set()
             entity_chunks = 0
             usable_chunks = 0
             revision_mismatch = False
@@ -405,7 +405,11 @@ class EvidenceCoverageAnalyzer:
                 if len(entity_ids) > 1 or _source_metadata_conflict(chunk):
                     source_conflict_ids[requirement.requirement_id].add(str(chunk["chunk_id"]))
                     continue
-                if is_segment_list and not segment_period_matches(requirement.period, _period_from_metadata(chunk)):
+                if is_segment_list and not business_disclosure_source_matches(
+                    requirements.question, requirement.period, _period_from_metadata(chunk), chunk,
+                ):
+                    revision_mismatch = True
+                    usable_chunks -= 1
                     continue
                 normalized = None if is_segment_list else _normalized_facts(chunk, metric, requirement.entity_id)
                 if normalized is not None:
@@ -488,8 +492,8 @@ class EvidenceCoverageAnalyzer:
                         candidate_facts.append(fact)
                         if is_segment_list:
                             for kind, names in filing_segment_disclosures(text, issuer_aliases[requirement.entity_id]):
-                                if segment_kind_matches(requirements.question, kind):
-                                    segment_lists[kind].add(segment_signature(names))
+                                if segment_kind_matches(requirements.question, kind, len(names)):
+                                    segment_lists.add(segment_signature(names))
                     elif fact.currency is not None:
                         unit_mismatch = True
 
@@ -510,7 +514,7 @@ class EvidenceCoverageAnalyzer:
             incompatible_periods |= requirements.requires_period_pair and len(distinct_periods) > 1
             conflicted_source = bool(source_conflict_ids[requirement.requirement_id])
             contradictory_values = len(distinct_values) > 1
-            contradictory_segments = any(len(lists) > 1 for lists in segment_lists.values())
+            contradictory_segments = len(segment_lists) > 1
 
             if conflicted_source or incompatible_periods or contradictory_values or contradictory_segments:
                 status = CoverageStatus.CONFLICTED

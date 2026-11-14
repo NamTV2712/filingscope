@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
+from urllib.parse import urlsplit
 
 
 _INDUSTRY = re.compile(
@@ -19,10 +20,24 @@ _SOURCE_SENTENCE_BOUNDARY = re.compile(r"(?<=[.!?])\s+|\s*;\s*|\n\s*\n")
 _SEGMENT_SENTENCE_BOUNDARY = re.compile(
     r'(?<=[.!?])\s+|(?<=[.!?]")\s+|\n\s*\n|\n[ \t]*(?=We[ \t]+operate[ \t]+as\b)', re.I,
 )
-_SEGMENT_COUNT = {"two": 2, "three": 3}
+_SEGMENT_COUNT = {"two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8}
+_COUNT = "|".join(_SEGMENT_COUNT)
+_SEGMENT_SCOPE = r"[A-Za-z][A-Za-z &-]{0,49}"
 _SEGMENT_HEADER = re.compile(
-    r"(?P<subject>.+?) (?:(?P<verb>operate as|operations comprise|reports) )?"
-    r"(?P<count>two|three) (?P<kind>reportable|operating|business) segments(?P<separator>:| are) (?P<names>.+)", re.I,
+    rf"(?P<subject>.+?) (?:(?P<verb>operate as|operations comprise|reports|have organized our operations into) )?"
+    rf"(?P<count>{_COUNT}) (?P<kind>(?:(?:reportable|operating|business) )?segments|lines of business)"
+    rf"(?: for (?P<scope>{_SEGMENT_SCOPE}))?(?P<separator>:| are) (?P<names>.+)", re.I,
+)
+_CONSIST_OF = re.compile(r"(?:the company['’]s|our) reportable segments consist of (?:the )?(?P<names>.+)", re.I)
+_BUSINESS_LINES = re.compile(rf"our company operates in (?P<count>{_COUNT}) lines of business: (?P<names>.+)", re.I)
+_SUBSIDIARY_LIST = re.compile(
+    rf"we report (?P<scope>{_SEGMENT_SCOPE}?) in (?P<count>{_COUNT}) segments, (?P<names>.+?)"
+    rf"(?:; we also report all non-(?P=scope) businesses collectively as .+"
+    rf"|, and all non-(?P=scope) businesses collectively as .+)?", re.I,
+)
+_FINANCIAL_PERFORMANCE_LIST = re.compile(
+    rf"we operate our business and report our financial performance using (?P<count>{_COUNT}) segments: (?P<names>.+)",
+    re.I,
 )
 _SEGMENT_NAME = re.compile(r"[A-Za-z][A-Za-z &'’/-]{0,60}(?: U\.S\.?)?", re.I)
 _SEGMENT_ENUMERATION = re.compile(r"^\(i\) (.+) and \(ii\) (.+)$", re.I)
@@ -31,10 +46,22 @@ _SEGMENT_QUALIFIER = re.compile(
 )
 _SEGMENT_FORM = re.compile(r"\b(?:10-K|10-Q|8-K)(?:/A)?\b", re.I)
 _SEGMENT_PERIOD = re.compile(r"FY(?:19|20)\d{2}")
-_SEGMENT_QUESTION = re.compile(
-    r"^\s*(?:what|which)\s+(?:(?:are|were)\s+[^?]+?['’]s\s+)?"
-    r"(?:(?:reportable|operating)\s+)?(?:business\s+)?segments\b", re.I,
+_ACCESSION = re.compile(r"\b[0-9]{10}-[0-9]{2}-[0-9]{6}\b")
+_ANNUAL_PREAMBLE = re.compile(r"^\s*according to [^?\n,]+?\b10-K(?:/A)?(?:\s+[0-9]{10}-[0-9]{2}-[0-9]{6})?,\s*", re.I)
+_SUBSIDIARY_QUESTION = re.compile(
+    rf"which businesses are reported in (?P<scope>{_SEGMENT_SCOPE}?)['’]s (?P<count>{_COUNT}) segments\b", re.I,
 )
+_SEGMENT_QUESTION = re.compile(
+    rf"^\s*(?:what|which)\s+(?:(?:are|were)\s+)?(?:[^?]+?['’]s\s+)?(?:the\s+)?"
+    rf"(?:(?:{_COUNT})\s+)?(?:(?:reportable|operating)\s+)?(?:business\s+)?(?:segments|lines of business)\b", re.I,
+)
+_SEGMENT_ORGANIZATION_QUESTION = re.compile(r"how does the company organize its operations into segments\b", re.I)
+_ANNUAL_LIST_QUESTION = re.compile(
+    rf"(?:what (?:are|were) the (?:(?:{_COUNT}) )?(?:(?:reportable|operating|business) )?segments"
+    rf"|what (?:are|were) the (?:(?:{_COUNT}) )?lines of business"
+    rf"|which (?:{_COUNT}) segments does the company use to report financial performance)", re.I,
+)
+BUSINESS_DISCLOSURE_METRICS = frozenset({"business_segments", "business_lines"})
 
 
 def _words(text: str) -> str:
@@ -65,28 +92,56 @@ def filing_industry_relations(text: str, aliases: Iterable[str]) -> set[tuple[st
     }
 
 
-def _segment_names(text: str, count: int) -> tuple[str, ...]:
+def _segment_names(text: str, count: int | None) -> tuple[str, ...]:
     text = text.rstrip(".")
     if text.startswith('"'):
         names = re.findall(r'"([^"\n]+)"', text)
-        separators = re.sub(r'"[^"\n]+"', '""', text)
-        if separators not in {'"" and ""', '"", "" and ""', '"", "", and ""'}:
+        if not re.fullmatch(r'"[^"\n]+"(?:, "[^"\n]+")*,? and "[^"\n]+"', text):
             return ()
     elif enumeration := _SEGMENT_ENUMERATION.fullmatch(text):
         names = list(enumeration.groups())
     elif count == 2:
         names = text.split(" and ")
+    elif count is not None and text.count(",") == count - 1:
+        pieces = text.split(",")
+        names = [*pieces[:-1], pieces[-1].strip().removeprefix("and ")]
     else:
         names = re.split(r",\s*(?:and )?| and ", text)
     names = [name.strip().rstrip(".") for name in names]
+    if count is None:
+        count = len(names)
+        if count not in _SEGMENT_COUNT.values():
+            return ()
     if len(names) != count or any(not _SEGMENT_NAME.fullmatch(name) or _SEGMENT_QUALIFIER.search(name) for name in names):
         return ()
     normalized = tuple(name + "." if name.upper().endswith(" U.S") else name for name in names)
     return normalized if len(segment_signature(normalized)) == count else ()
 
 
+def _segment_kind(label: str, scope: str | None) -> str:
+    if scope is not None:
+        return f"business:{_words(scope)}"
+    if label.casefold() == "lines of business":
+        return "lines"
+    return label.casefold().removesuffix("segments").strip() or "segments"
+
+
 def segment_disclosure(statement: str, aliases: Iterable[str], *, source: bool = False) -> tuple[str, tuple[str, ...]] | None:
-    frame = _SEGMENT_HEADER.fullmatch(" ".join(statement.split()))
+    text = " ".join(statement.split())
+    if source:
+        if match := _CONSIST_OF.fullmatch(text):
+            names = _segment_names(match["names"], None)
+            return ("reportable", names) if names else None
+        if match := _BUSINESS_LINES.fullmatch(text):
+            names = _segment_names(match["names"], _SEGMENT_COUNT[match["count"].casefold()])
+            return ("lines", names) if names else None
+        if match := _FINANCIAL_PERFORMANCE_LIST.fullmatch(text):
+            names = _segment_names(match["names"], _SEGMENT_COUNT[match["count"].casefold()])
+            return ("segments", names) if names else None
+        if match := _SUBSIDIARY_LIST.fullmatch(text):
+            names = _segment_names(match["names"], _SEGMENT_COUNT[match["count"].casefold()])
+            return (_segment_kind("segments", match["scope"]), names) if names else None
+    frame = _SEGMENT_HEADER.fullmatch(text)
     if frame is None:
         return None
     subject = _words(frame["subject"])
@@ -94,7 +149,7 @@ def segment_disclosure(statement: str, aliases: Iterable[str], *, source: bool =
     verb = (frame["verb"] or "").casefold()
     if verb == "reports":
         valid_frame = subject in subjects and frame["separator"] == ":"
-    elif source and verb == "operate as":
+    elif source and verb in {"operate as", "have organized our operations into"}:
         valid_frame = subject == "we" and frame["separator"] == ":"
     elif source and verb == "operations comprise":
         valid_frame = subject in {"our", "the company s"} and frame["separator"] == ":"
@@ -102,8 +157,10 @@ def segment_disclosure(statement: str, aliases: Iterable[str], *, source: bool =
         valid_frame = source and not verb and subject == "our" and frame["separator"].casefold() == " are"
     if not valid_frame:
         return None
+    if frame["scope"] and (verb != "reports" or frame["kind"].casefold() != "segments"):
+        return None
     names = _segment_names(frame["names"], _SEGMENT_COUNT[frame["count"].casefold()])
-    return (frame["kind"].casefold(), names) if names else None
+    return (_segment_kind(frame["kind"], frame["scope"]), names) if names else None
 
 
 def filing_segment_disclosures(text: str, aliases: Iterable[str]) -> set[tuple[str, tuple[str, ...]]]:
@@ -115,17 +172,55 @@ def filing_segment_disclosures(text: str, aliases: Iterable[str]) -> set[tuple[s
     }
 
 
+def business_disclosure_sentence(issuer: str, kind: str, names: tuple[str, ...]) -> str:
+    count = next(word for word, size in _SEGMENT_COUNT.items() if size == len(names))
+    label = (f"segments for {kind.split(':', 1)[1].title()}" if kind.startswith("business:") else
+             "lines of business" if kind == "lines" else
+             "segments" if kind == "segments" else f"{kind} segments")
+    quoted = [f'"{name}"' for name in names]
+    listing = f"{', '.join(quoted[:-1])} and {quoted[-1]}"
+    return f"{issuer} reports {count} {label}: {listing}."
+
+
 def segment_signature(names: tuple[str, ...]) -> frozenset[str]:
     return frozenset(name.casefold().replace("’", "'") for name in names)
 
 
-def segment_kind_matches(question: str, kind: str) -> bool:
-    kinds = set(re.findall(r"\b(reportable|operating) (?:business )?segments\b", question.casefold()))
+def _disclosure_body(question: str) -> str:
+    return _ANNUAL_PREAMBLE.sub("", question, count=1).partition("?")[0].strip()
+
+
+def segment_kind_matches(question: str, kind: str, count: int) -> bool:
+    body = _disclosure_body(question)
+    counts = {_SEGMENT_COUNT[word.casefold()] for word in re.findall(rf"\b({_COUNT}) (?=(?:(?:reportable|operating|business) )?(?:segments|lines of business)\b)", body, re.I)}
+    if counts and counts != {count}:
+        return False
+    if match := _SUBSIDIARY_QUESTION.fullmatch(body):
+        return kind == f"business:{_words(match['scope'])}"
+    if re.search(r"\blines of business\b", body, re.I):
+        return kind == "lines"
+    if kind == "lines" or kind.startswith("business:"):
+        return False
+    kinds = set(re.findall(r"\b(reportable|operating) (?:business )?segments\b", body.casefold()))
     return not kinds or kinds == {kind}
 
 
 def is_segment_list_question(question: str) -> bool:
-    return bool(_SEGMENT_QUESTION.match(question))
+    body = _disclosure_body(question)
+    if _ANNUAL_PREAMBLE.match(question):
+        return bool(_ANNUAL_LIST_QUESTION.fullmatch(body) or _SUBSIDIARY_QUESTION.fullmatch(body)
+                    or _SEGMENT_ORGANIZATION_QUESTION.fullmatch(body))
+    return bool(_SEGMENT_QUESTION.match(body))
+
+
+def business_disclosure_issuer_text(question: str) -> str:
+    preamble = _ANNUAL_PREAMBLE.match(question)
+    if preamble is not None and _SUBSIDIARY_QUESTION.fullmatch(_disclosure_body(question)):
+        return preamble[0]
+    frame = _SEGMENT_HEADER.fullmatch(" ".join(question.split()))
+    if frame is not None and (frame["verb"] or "").casefold() == "reports":
+        return frame["subject"]
+    return question
 
 
 def segment_form_matches(question: str, *forms: object) -> bool:
@@ -136,3 +231,30 @@ def segment_form_matches(question: str, *forms: object) -> bool:
 
 def segment_period_matches(requested: str | None, observed: str | None) -> bool:
     return bool(requested and requested == observed and _SEGMENT_PERIOD.fullmatch(requested))
+
+
+def business_disclosure_source_matches(
+    question: str, period: str | None, observed_period: str | None, chunk: Mapping[str, object],
+) -> bool:
+    if not segment_form_matches(question, chunk.get("doc_type"), chunk.get("filing_type"), chunk.get("form_type")):
+        return False
+    if not observed_period or not _SEGMENT_PERIOD.fullmatch(observed_period):
+        return False
+    requested = {match[0] for match in _ACCESSION.finditer(question)}
+    if not requested:
+        return segment_period_matches(period, observed_period)
+    supplied = {value for key in ("accession", "accession_number") if isinstance(value := chunk.get(key), str) and value}
+    if len(requested) != 1 or requested != supplied or (period is not None and period != observed_period):
+        return False
+    source_url = chunk.get("source_url") or chunk.get("source_repository_url") or chunk.get("filing_url")
+    if not isinstance(source_url, str):
+        return False
+    try:
+        locator = urlsplit(source_url)
+    except ValueError:
+        return False
+    accession = next(iter(requested)).replace("-", "")
+    path = re.fullmatch(r"/Archives/edgar/data/(\d{1,10})/" + accession + r"/[^/]+", locator.path)
+    cik = chunk.get("cik")
+    return bool(locator.scheme == "https" and locator.netloc == "www.sec.gov" and path
+                and (cik is None or str(cik).lstrip("0") == path[1].lstrip("0")))

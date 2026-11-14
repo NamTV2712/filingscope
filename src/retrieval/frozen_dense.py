@@ -8,7 +8,8 @@ from typing import Any
 import numpy as np
 
 from src.decision.filing_disclosures import (
-    filing_industry_relations, filing_segment_disclosures, is_segment_list_question, segment_kind_matches,
+    BUSINESS_DISCLOSURE_METRICS, filing_industry_relations, filing_segment_disclosures,
+    is_segment_list_question, segment_kind_matches,
 )
 from src.ingestion.period_identity import PeriodKind
 from src.retrieval.financial_statement_ranker import STATEMENT_CANDIDATE_POOL, FinancialStatementRanker
@@ -86,7 +87,7 @@ class FrozenDenseRetriever:
         wanted = ranker.requirements(query) if ranker is not None else frozenset()
         topics = {metric.metric_id for metric in ranker.extractor.extract(query).metrics} if ranker is not None else set()
         industry_lookup = "industry" in topics
-        segment_lookup = topics == {"business_segments"} and is_segment_list_question(query)
+        segment_lookup = len(topics) == 1 and topics <= BUSINESS_DISCLOSURE_METRICS and is_segment_list_question(query)
         pool_size = max(top_k, STATEMENT_CANDIDATE_POOL) if wanted or industry_lookup or segment_lookup else top_k
         local_order = [int(position) for position in np.argsort(-scores, kind="stable")[:pool_size]
                        if np.isfinite(scores[position])]
@@ -110,7 +111,8 @@ class FrozenDenseRetriever:
                 if not aliases:
                     return False
                 if segment_lookup:
-                    return any(segment_kind_matches(query, kind) for kind, _ in filing_segment_disclosures(chunk["text"], aliases))
+                    return any(segment_kind_matches(query, kind, len(names))
+                               for kind, names in filing_segment_disclosures(chunk["text"], aliases))
                 return bool(filing_industry_relations(chunk["text"], aliases))
 
             order = sorted(order, key=lambda position: not explicit_disclosure(position))

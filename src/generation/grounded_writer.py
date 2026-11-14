@@ -14,7 +14,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from configs.end_to_end import GENERATOR_MAX_INPUT_TOKENS, GENERATOR_MAX_OUTPUT_TOKENS, GENERATOR_MODEL_ID
 from src.decision.filing_disclosures import (
-    filing_industry_relations, filing_segment_disclosures, segment_kind_matches, segment_signature,
+    BUSINESS_DISCLOSURE_METRICS, business_disclosure_sentence, filing_industry_relations, filing_segment_disclosures,
+    segment_kind_matches, segment_signature,
 )
 from src.decision.models import EvidenceCoverage, EvidenceFact, QuestionRequirements
 from src.generation.answer_generator import (
@@ -103,16 +104,14 @@ def _topic_sentences(
             (industry, positive): f"{company} {'operates in' if positive else 'does not operate in'} the {industry} industry."
             for industry, positive in sorted(filing_industry_relations(text, (entity.canonical_name,)))
         }
-    if fact.metric_id != "business_segments":
+    if fact.metric_id not in BUSINESS_DISCLOSURE_METRICS:
         return {}
     result: dict[object, str] = {}
     for kind, names in sorted(filing_segment_disclosures(text, (entity.canonical_name, entity.matched_alias))):
-        if not segment_kind_matches(requirements.question, kind):
+        if not segment_kind_matches(requirements.question, kind, len(names)):
             continue
-        count = "two" if len(names) == 2 else "three"
-        quoted = [f'"{name}"' for name in names]
-        listing = f"{', '.join(quoted[:-1])} and {quoted[-1]}"
-        result[(kind, segment_signature(names))] = f"{company} reports {count} {kind} segments: {listing}."
+        issuer = entity.entity_id if kind.startswith("business:") else company
+        result[segment_signature(names)] = business_disclosure_sentence(issuer, kind, names)
     return result
 
 

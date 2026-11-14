@@ -961,6 +961,52 @@ def test_segment_verifier_rejects_an_altered_name_even_on_an_approved_page() -> 
     assert result.disposition == ResponseDisposition.REJECTED
 
 
+@pytest.mark.parametrize("bad_source", [None, "accession", "url", "cik", "form"])
+def test_annual_disclosure_requires_the_named_accession(bad_source: str | None) -> None:
+    accession = "0000320193-25-000079"
+    chunk = _annual_chunk()
+    chunk.update(
+        ticker="AAPL", cik="0000320193", reporting_periods=[2025], accession=accession,
+        source_url="https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/aapl-20250927.htm",
+        text="The Company's reportable segments consist of Americas, Europe, Greater China, Japan and Rest of Asia Pacific.",
+    )
+    if bad_source == "accession":
+        chunk["accession"] = "0000320193-24-000123"
+    elif bad_source == "url":
+        chunk["source_url"] = chunk["source_url"].replace("25000079", "24000123")
+    elif bad_source == "cik":
+        chunk["cik"] = "0000789019"
+    elif bad_source == "form":
+        chunk["doc_type"] = "10-Q"
+    graph = SpecialistResearchGraph(retriever=FakeRetriever([chunk]))
+    result = graph.run(f"According to AAPL's 10-K {accession}, what are the reportable segments?")
+
+    if bad_source:
+        assert result.verification.disposition == ResponseDisposition.ABSTAIN
+    else:
+        assert result.verification.disposition == ResponseDisposition.VERIFIED
+        assert 'five reportable segments' in result.answer and '"Rest of Asia Pacific"' in result.answer
+
+
+def test_annual_disclosure_does_not_substitute_parent_and_business_lists() -> None:
+    accession = "0001652044-25-000014"
+    chunk = _annual_chunk(ticker="GOOG", company="Alphabet Inc.")
+    chunk.update(
+        cik="0001652044", reporting_periods=[2024], accession=accession,
+        source_url="https://www.sec.gov/Archives/edgar/data/1652044/000165204425000014/goog-20241231.htm",
+        text="We report Google in two segments, Google Services and Google Cloud, and all non-Google businesses collectively as Other Bets.",
+    )
+    router = ComplexityRouter(CorpusMap.from_chunks([chunk]))
+    graph = SpecialistResearchGraph(router=router, retriever=FakeRetriever([chunk]))
+    source = f"According to GOOG's 10-K {accession}, "
+    subsidiary = graph.run(source + "which businesses are reported in Google's two segments?")
+    assert subsidiary.verification.disposition == ResponseDisposition.VERIFIED
+    assert 'segments for Google: "Google Services" and "Google Cloud"' in subsidiary.answer
+    assert "Other Bets" not in subsidiary.answer
+    whole_issuer = graph.run(source + "what are the reportable segments?")
+    assert whole_issuer.verification.disposition == ResponseDisposition.ABSTAIN
+
+
 def test_unmarked_retriever_retains_serial_query_plan() -> None:
     retriever = FakeRetriever([])
     question = "Compare Apple and Microsoft revenue for FY2024."

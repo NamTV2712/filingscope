@@ -6,6 +6,7 @@ import re
 from collections.abc import Iterable, Mapping
 
 from src.decision.company_catalog import CompanyCatalog
+from src.decision.filing_disclosures import business_disclosure_issuer_text
 from src.decision.models import (
     EvidenceEntity,
     EvidenceRequirement,
@@ -121,6 +122,8 @@ _METRIC_DEFINITIONS: tuple[MetricRequirement, ...] = (
     MetricRequirement(metric_id="business_segments", display_name="business segments", aliases=(
         "business segments", "reportable segments", "segments",
     ), quantitative=False, expected_value_kind="topic"),
+    MetricRequirement(metric_id="business_lines", display_name="lines of business", aliases=("lines of business",),
+                      quantitative=False, expected_value_kind="topic"),
     MetricRequirement(metric_id="customers", display_name="customers", aliases=(
         "primary customers", "customer base", "customers", "customer",
     ), quantitative=False, expected_value_kind="topic"),
@@ -296,7 +299,7 @@ class EvidenceRequirementExtractor:
 
         # COST is also an issuer ticker. Preserve explicit issuer mentions
         # outside the recognized financial line item.
-        matches = self.catalog.identify(mask_cost_of_revenue(question))
+        matches = self.catalog.identify(mask_cost_of_revenue(business_disclosure_issuer_text(question)))
         entities = tuple(
             EvidenceEntity(
                 entity_id=match.entity_id,

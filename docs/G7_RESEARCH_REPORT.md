@@ -105,6 +105,7 @@ and faithfulness on a new real-filing cohort remain unmeasured.
 | SEC 2025 narrative diagnostic | All three source inventories abstained on six reportable segment, product and risk questions. PDF-enabled arms retrieved source support for five cases including author-checked alternative pages. [Narrative track](G2_SEC_NARRATIVE.md). |
 | G4 requirement reuse | Instrumented extractor calls 4 → 2 for FAST and 3 → 2 for RESEARCH. Stable historical outputs matched. [G4 method](G4_AGENT_VERIFICATION.md). |
 | G4 segment disclosures | Document-only and hybrid each recovered 3/6 narrative answers with all three cited lists author-checked. The frozen wording and page score remained 0/6. All 104 numeric outcomes matched. [Segment replay](G4_SEGMENT_DISCLOSURES.md). |
+| G4 accession-bound HTML disclosures | Document-only and hybrid each recovered 8/9 disclosures with 8/8 claims and numbered citations supported in Codex's source review. The amendment case stayed withheld. All 585 numeric and missing-unit arm/case outcomes matched. [Annual business disclosure replay](G4_ANNUAL_BUSINESS_DISCLOSURES.md). |
 | Jev mock | Positive and timeout mocks preserved 60/60 expected policy decisions. Negative mock matched 40/60 with 20 ACCEPT → WEAK downgrades and zero hard false accepts. |
 | TypeSafe Jev live | All 18 requests returned valid results. Jev judged 10/14 correctly on the shared binary subset, versus Groq 9/14 and deterministic 8/14. Policy changed 0/18 decisions and preserved all five hard rejects. Estimated USD 0.000977. [Live comparison](G5_JEV_LIVE_PROTOCOL.md). |
 | Groq structured observer | 16 valid classifications on 18 SEC candidate pages, 11/16 correct support judgments, 5/10 false support judgments and zero changes to policy dispositions. All five hard rejections stayed rejected. [Observer comparison](G5_GROQ_OBSERVER.md). |
@@ -153,7 +154,7 @@ outcomes. These disposition points do not support continuous AURC.
 | Missing taxonomy or transformation | G2 recorded 81 skipped numeric transforms and Arelle schema diagnostics. A schema-complete validation pass remains open. |
 | Incomplete data or unavailable filing | Routed LangGraph preserved healthy-source work in the persistent-outage fixture. Both compared workflows withheld the incomplete answer. |
 | Unsupported or mis-cited claim | G1 synthetic controls cover wrong basis and a valid narrative cited to the wrong page. G4 preserved existing prompt-injection and release checks. |
-| Incomplete applicability | Document-only still lacks typed dates for quarter/YTD and annual pairs. The mixed cohort has nine unresolved narrative or revision questions. [Exact concept replay](G3_EXACT_CONCEPT_LOOKUPS.md). |
+| Incomplete applicability | Document-only still lacks typed dates for quarter/YTD and annual pairs. The document-enabled arms withheld the mixed cohort's amendment question. [Exact concept replay](G3_EXACT_CONCEPT_LOOKUPS.md) · [Disclosure replay](G4_ANNUAL_BUSINESS_DISCLOSURES.md). |
 
 ## Reproduce and verify
 
@@ -192,7 +193,7 @@ reviewer bundle is available. Remaining research gaps include adjudicated mixed
 cohorts and full Inline XBRL taxonomy validation. The Transformers
 4.57.6 compatibility debt remains documented in G0.
 
-The latest offline verification passed 565 tests on Windows with
-three corpus skips and 564 tests with four skips on Linux WSL with
+The latest offline verification passed 571 tests on Windows with
+three corpus skips and 570 tests with four skips on Linux WSL with
 the Inline XBRL extra. Ruff and focused mypy passed. GitHub Actions
 has no run for these local commits.

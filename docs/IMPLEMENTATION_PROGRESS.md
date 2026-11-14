@@ -224,6 +224,12 @@ The scoped segment-list path recovered 3/6 narrative answers in both PDF
 arms. All three lists and citations matched the disclosed names and pages
 in author review. The frozen literal score stayed 0/6. All 104 numeric
 outcomes matched the previous replay. [Segment report](G4_SEGMENT_DISCLOSURES.md).
+The accession-bound HTML replay recovered all eight business disclosure
+questions in both document-enabled arms. Codex source review confirmed
+eight of eight claims and their numbered citations in each arm. The
+remaining revision question was withheld. All 585 numeric and
+missing-unit arm/case outcomes and 122 PDF-pilot outcomes matched.
+[Annual business disclosures](G4_ANNUAL_BUSINESS_DISCLOSURES.md).
 
 ## G5 observer and architecture comparison
 
