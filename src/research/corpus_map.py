@@ -7,13 +7,14 @@ from collections.abc import Iterable, Mapping
 from enum import StrEnum
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_serializer
 
 from src.decision.company_catalog import CompanyCatalog
 
 CORPUS_MAP_SCHEMA_VERSION = "1.0.0"
 _TABLE_SECTION_MARKERS = {"table", "tables", "structured table", "structured tables"}
 _FORM_CODE_RE = re.compile(r"\b(10|8)\s*[-–]?\s*([kq])(?:\s*/\s*a)?\b", re.I)
+_ACCESSION = re.compile(r"[0-9]{10}-[0-9]{2}-[0-9]{6}")
 
 
 class SourceAvailability(StrEnum):
@@ -40,6 +41,7 @@ class CorpusDocument(BaseModel):
     tickers: tuple[str, ...] = ()
     ciks: tuple[str, ...] = ()
     form_types: tuple[str, ...] = ()
+    accessions: tuple[str, ...] = ()
     filing_periods: tuple[str, ...] = ()
     sections: tuple[str, ...] = ()
     table_ids: tuple[str, ...] = ()
@@ -47,6 +49,13 @@ class CorpusDocument(BaseModel):
     metadata_conflicts: tuple[str, ...] = ()
     table_evidence: SourceAvailability = SourceAvailability.UNKNOWN
     xbrl_evidence: SourceAvailability = SourceAvailability.UNKNOWN
+
+    @model_serializer(mode="wrap")
+    def _serialize(self, handler):
+        data = handler(self)
+        if not self.accessions:
+            data.pop("accessions", None)
+        return data
 
 
 class CorpusMap(BaseModel):
@@ -97,6 +106,7 @@ class CorpusMap(BaseModel):
                 "tickers": set(),
                 "ciks": set(),
                 "form_types": set(),
+                "accessions": set(),
                 "filing_periods": set(),
                 "sections": set(),
                 "table_ids": set(),
@@ -127,6 +137,8 @@ class CorpusMap(BaseModel):
                 row.get("form_type") or row.get("doc_type") or row.get("form")
             )
             forms = {_normalize_form_type(form) for form in forms}
+            accessions = {value for key in ("accession", "accession_number")
+                          if isinstance(value := row.get(key), str) and _ACCESSION.fullmatch(value)}
             periods = (
                 _values(row.get("filing_periods"))
                 or _values(row.get("reporting_periods"))
@@ -142,6 +154,7 @@ class CorpusMap(BaseModel):
                 ("tickers", tickers),
                 ("ciks", ciks),
                 ("form_types", forms),
+                ("accessions", accessions),
                 ("filing_periods", periods),
                 ("sections", sections),
                 ("table_ids", table_ids),
@@ -207,6 +220,7 @@ class CorpusMap(BaseModel):
                 tickers=tuple(sorted(record["tickers"], key=str.casefold)),
                 ciks=tuple(sorted(record["ciks"])),
                 form_types=tuple(sorted(record["form_types"], key=str.casefold)),
+                accessions=tuple(sorted(record["accessions"])),
                 filing_periods=tuple(sorted(record["filing_periods"], key=str.casefold)),
                 sections=tuple(sorted(record["sections"], key=str.casefold)),
                 table_ids=tuple(sorted(record["table_ids"], key=str.casefold)),

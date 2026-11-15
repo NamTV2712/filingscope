@@ -91,6 +91,7 @@ and faithfulness on a new real-filing cohort remain unmeasured.
 | Fiscal year pairs from one 10-K | Company Facts-only and hybrid each confirmed 32/32 annual pairs and 133/187 numeric cases with 0/133 incorrect releases. Document-only confirmed 28/187 with the additional operating cash flow alias. [Fiscal year replay](G3_FISCAL_YEAR_PAIRS.md). |
 | Issuer-specific annual balance sheet dates | Company Facts-only and hybrid confirmed 16/16 multi-company cases and 182/187 numeric cases each, with 0/182 incorrect releases. Document-only confirmed 3/16 and 30/187. [Balance sheet date replay](G3_FILING_INSTANTS.md). |
 | Exact concept lookups | Company Facts-only and hybrid each confirmed 187/187 numeric cases with 0/187 incorrect releases and eight correct missing-unit abstentions. Document-only confirmed 30/187. Nine narrative or revision requests remained withheld. [Exact concept replay](G3_EXACT_CONCEPT_LOOKUPS.md). |
+| Document balance sheets | Document-only confirmed 75/78 exact balances and 83/187 numeric cases overall. Codex checked all 90 released balance claims and citations. Three questions about Amazon receivables have a display-label scope mismatch with the frozen tag. [Document balance sheet review](G3_DOCUMENT_BALANCE_SHEETS.md). |
 | Dimensioned iXBRL lookup | Exact typed lookup matched 10/10 PDF cells and rejected 50/50 identity perturbations. [Dimensioned replay](G2_DIMENSIONED_REPLAY.md). |
 | SEC 2025 runtime pilot | PDF only grounded 3/23, and Company Facts only and hybrid each grounded 21/23 by frozen locator. All three released consolidated Tesla revenue for an energy business question. |
 | Segment reporting scope follow-up | All three tracks withheld the consolidated Tesla value after the guard change. The other 25 case outcomes matched. [Paired report](G3_REPORTING_SCOPE.md). |
@@ -152,6 +153,7 @@ outcomes. These disposition points do not support continuous AURC.
 | Failure | Observed evidence and handling |
 | --- | --- |
 | Wrong source, period, unit or revision | Historical controls withheld unsupported releases. The G3 prior-year expansion now preserves YTD and CY. |
+| Filing tag versus reported line | Amazon's receivables tag covers a display line with other current assets. The document-only path withheld three affected requests. Structured scores measure agreement with the filed tag on these cases. [Source review](G3_DOCUMENT_BALANCE_SHEETS.md). |
 | Rounded versus precise observations | G2 keeps multiple values visible, including Apple's rounded and precise unrecognized-tax-benefit disclosures. |
 | Missing taxonomy or transformation | G2 recorded 81 skipped numeric transforms and Arelle schema diagnostics. A schema-complete validation pass remains open. |
 | Incomplete data or unavailable filing | Routed LangGraph preserved healthy-source work in the persistent-outage fixture. Both compared workflows withheld the incomplete answer. |
@@ -196,7 +198,7 @@ reviewer bundle is available. Remaining research gaps include adjudicated mixed
 cohorts and full Inline XBRL taxonomy validation. The Transformers
 4.57.6 compatibility debt remains documented in G0.
 
-The latest offline verification passed 583 tests on Windows with
-three corpus skips and 582 tests with four skips on Linux WSL with
+The latest offline verification passed 593 tests on Windows with
+three corpus skips and 592 tests with four skips on Linux WSL with
 the Inline XBRL extra. Ruff and focused mypy passed. GitHub Actions
 has no run for these local commits.

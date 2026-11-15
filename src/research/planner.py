@@ -185,6 +185,7 @@ class CorpusAwarePlanner:
                     metric_id=requirement.metric_id,
                     metric_name=metric.display_name if metric else requirement.metric_id,
                     period=requirement.period,
+                    accession=requirement.filing_instant.accession if requirement.filing_instant else None,
                     requested_forms=requested_forms,
                     task_number=len(tasks) + 1,
                 )
@@ -262,6 +263,7 @@ class CorpusAwarePlanner:
         metric_id: str,
         metric_name: str,
         period: str | None,
+        accession: str | None,
         requested_forms: tuple[str, ...],
         task_number: int,
     ) -> ResearchTask:
@@ -339,6 +341,16 @@ class CorpusAwarePlanner:
             )
 
         candidates = form_docs or company_docs
+        if accession:
+            exact = tuple(document for document in candidates if document.accessions == (accession,))
+            unknown = tuple(document for document in candidates if not document.accessions)
+            return self._task(
+                question, task_number, requirement_id, entity_id, company_name, metric_id, metric_name, period,
+                SourceAvailability.AVAILABLE if exact else SourceAvailability.UNKNOWN if unknown else SourceAvailability.MISSING,
+                "exact_accession_available" if exact else "accession_metadata_incomplete" if unknown
+                else "requested_accession_not_indexed",
+                exact or unknown, requested_forms,
+            )
         if period:
             period_matches, period_unknown = _documents_for_period(candidates, period)
             if period_matches:

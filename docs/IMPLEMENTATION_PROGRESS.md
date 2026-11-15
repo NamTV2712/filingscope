@@ -187,6 +187,14 @@ controls withheld. Document-only stayed at 30/187. Windows passed
 565 tests with three skips and WSL passed 564 with four.
 [Exact concept lookups](G3_EXACT_CONCEPT_LOOKUPS.md).
 
+The accession-scoped balance-sheet reader increased document-only
+confirmations from 22/78 to 75/78 balance questions and from 30/187
+to 83/187 across numeric categories. Codex checked all 90 released
+balance claims and their citations. All three withheld cases involved
+an issuer tag whose display row also includes other assets. The two
+structured arms still match the frozen tags on 187/187 cases.
+[Document balance sheets](G3_DOCUMENT_BALANCE_SHEETS.md).
+
 G3 retains Dense and the current statement ranker. Scoped scoring
 matched all 30 top-ten rankings while reducing paired rank p50
 from 4.25 ms to 1.16 ms. YoY expansion now preserves YTD and

@@ -265,6 +265,14 @@ class ComplexityRouter:
         )
         insufficient_scope = "insufficient_period_scope" in unsupported
         revisions = requested_revision_policies(question)
+        has_balance_sheets = bool(
+            requirements.has_filing_instants and self.corpus_map is not None and source_inventory is not None
+            and all(any(document.document_id in source_inventory.statement_documents and "10k" in document.form_types
+                        and requirement.filing_instant is not None
+                        and document.accessions == (requirement.filing_instant.accession,)
+                        for document in self.corpus_map.documents_for_company(requirement.entity_id))
+                    for requirement in requirements.evidence)
+        )
         if predictive:
             complexity = ComplexityClass.UNSUPPORTED
             path = ExecutionPath.UNSUPPORTED
@@ -288,7 +296,8 @@ class ComplexityRouter:
         elif (source_inventory is not None and requirements.metrics
               and (requirements.fiscal_year_pair is not None
                    or all(metric.metric_id in CONSOLIDATED_METRIC_CONCEPTS for metric in requirements.metrics))
-              and not source_inventory.xbrl_entities.intersection(requirements.companies)):
+              and not source_inventory.xbrl_entities.intersection(requirements.companies)
+              and not has_balance_sheets):
             complexity = ComplexityClass.UNSUPPORTED
             path = ExecutionPath.UNSUPPORTED
             reason_codes.append("required_structured_financial_source_unavailable")
@@ -309,7 +318,7 @@ class ComplexityRouter:
             can_use_structured = (source_inventory is not None
                                   and set(requirements.companies).issubset(source_inventory.xbrl_entities)
                                   and not requires_statement_source(question))
-            path = ExecutionPath.FAST if entities == 1 or can_use_structured else ExecutionPath.RESEARCH
+            path = ExecutionPath.FAST if entities == 1 or can_use_structured or has_balance_sheets else ExecutionPath.RESEARCH
             reason_codes.append("issuer_specific_filing_dates")
         elif entities > 1 or _COMPARATIVE_RE.search(question):
             complexity = ComplexityClass.COMPARATIVE
@@ -525,7 +534,7 @@ class ComplexityRouter:
         if requirements.has_filing_instants and len(plan.tasks) == len(requirements.evidence):
             if set(requirements.companies).issubset(inventory.xbrl_entities) and not requires_statement_source(question):
                 return SourceCapability.DIRECT_XBRL
-            if len(plan.tasks) == 1 and inventory.statement_documents.intersection(plan.tasks[0].target_document_ids):
+            if all(inventory.statement_documents.intersection(task.target_document_ids) for task in plan.tasks):
                 return SourceCapability.DIRECT_TABLE
             return SourceCapability.TEXT_RAG
         if inventory.inline_energy_revenue and len(plan.tasks) == 1 and len(requirements.evidence) == 1:

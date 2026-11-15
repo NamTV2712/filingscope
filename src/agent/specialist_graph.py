@@ -445,11 +445,15 @@ class SpecialistResearchGraph:
                 sufficient = context.decision_layer.analyzer.analyze(
                     context.requirements, context.source_chunks.values(),
                 ).sufficient
-        if not sufficient and not issuer_specific_pair:
+        if not sufficient and (not issuer_specific_pair or state["route"].source_capability == SourceCapability.DIRECT_TABLE):
             context.emit_progress(ResearchProgress.INSPECTING_TABLES)
-            receipt = TableEvidenceWorker().run_direct(tasks[0], context)
-            if receipt is not None:
-                receipts.append(receipt)
+            table_worker = TableEvidenceWorker()
+            table_receipts = [
+                receipt for task in (tasks if issuer_specific_pair else tasks[:1])
+                if (receipt := table_worker.run_direct(task, context)) is not None
+            ]
+            if table_receipts:
+                receipts.extend(table_receipts)
                 _normalize_filing_statements(context)
                 candidates = [chunk for chunk in context.source_chunks.values() if chunk.get("normalized_facts")]
                 sufficient = context.decision_layer.analyzer.analyze(context.requirements, candidates).sufficient

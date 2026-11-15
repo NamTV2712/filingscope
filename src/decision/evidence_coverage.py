@@ -13,7 +13,7 @@ from src.decision.company_catalog import CompanyCatalog
 from src.decision.filing_disclosures import (
     AMENDMENT_SCOPE_METRIC, BUSINESS_DISCLOSURE_METRICS, AmendmentScope, amendment_source_matches,
     business_disclosure_source_matches, filing_amendment_scopes, filing_industry_relations, filing_segment_disclosures,
-    is_segment_list_question, requested_amendment_scope, segment_kind_matches, segment_signature,
+    is_segment_list_question, requested_amendment_scope, sec_accession_matches, segment_kind_matches, segment_signature,
 )
 from src.decision.models import (
     CoverageStatus,
@@ -32,8 +32,9 @@ from src.decision.period_value_parser import (
 from src.decision.requirement_extractor import (
     mask_revenue_components, permits_energy_segment_lookup, requires_nonstandard_reporting_basis,
 )
+from src.decision.statement_columns import statement_report_date
 from src.ingestion.company_facts import (
-    CONSOLIDATED_METRIC_CONCEPTS, METRIC_CONCEPTS, matches_requested_revision, requested_revision_policies,
+    CONSOLIDATED_METRIC_CONCEPTS, INSTANT_METRICS, METRIC_CONCEPTS, matches_requested_revision, requested_revision_policies,
 )
 from src.ingestion.period_identity import PeriodScope, fiscal_years_are_consecutive, intervals_agree, quarter_ytd_pair_matches
 from src.ingestion.segment_revenue import ENERGY_ENTITY, ENERGY_METRIC, ENERGY_PERIOD, is_energy_evidence
@@ -149,9 +150,10 @@ def _normalized_facts(
     if not isinstance(values, tuple):
         return ()
     concepts = CONSOLIDATED_METRIC_CONCEPTS.get(metric.metric_id)
-    if concepts is not None and (
-        chunk.get("source_type") != "XBRL_FACT" or chunk.get("financial_concept") not in concepts
-    ):
+    structured = chunk.get("source_type") == "XBRL_FACT"
+    statement_balance = (not structured and metric.metric_id in INSTANT_METRICS
+                         and chunk.get("filing_page_checked") is True)
+    if concepts is not None and not statement_balance and (not structured or chunk.get("financial_concept") not in concepts):
         return ()
     source_url = chunk.get("source_url") or chunk.get("source_repository_url") or chunk.get("filing_url")
     return tuple(
@@ -162,6 +164,7 @@ def _normalized_facts(
         and fact.source_url == source_url
         and fact.entity_id == entity_id
         and fact.metric_id == metric.metric_id
+        and (not statement_balance or fact.table_row is not None and fact.table_column is not None)
         and (approved is not None and fact.period_identity is None
              or fact.period_identity is not None and fact.period_identity.label == fact.period)
         and _kind_matches(fact, metric)
@@ -459,7 +462,11 @@ class EvidenceCoverageAnalyzer:
                                     or fact.currency is None
                                     or (chunk.get("source_type") == "XBRL_FACT"
                                         and chunk.get("financial_concept") not in METRIC_CONCEPTS.get(metric.metric_id, ()))
-                                    or (chunk.get("source_type") != "XBRL_FACT" and fact.table_row is None)
+                                    or (chunk.get("source_type") != "XBRL_FACT" and (
+                                        fact.table_row is None or fact.table_column is None
+                                        or statement_report_date(chunk) != requirement.filing_instant.end
+                                        or not chunk.get("cik") or not sec_accession_matches(requirement.filing_instant.accession, chunk)
+                                    ))
                                 ):
                                     continue
                         period_seen[requirement.requirement_id] = True

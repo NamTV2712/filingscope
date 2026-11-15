@@ -262,12 +262,15 @@ def business_disclosure_source_matches(
     if not requested:
         return segment_period_matches(period, observed_period)
     return (len(requested) == 1 and (period is None or period == observed_period)
-            and _sec_accession_matches(next(iter(requested)), chunk))
+            and sec_accession_matches(next(iter(requested)), chunk))
 
 
-def _sec_accession_matches(accession: str, chunk: Mapping[str, object]) -> bool:
+def sec_accession_matches(accession: str, chunk: Mapping[str, object]) -> bool:
     supplied = {value for key in ("accession", "accession_number") if isinstance(value := chunk.get(key), str) and value}
-    if supplied != {accession}:
+    revision = chunk.get("source_revision")
+    if isinstance(revision, str) and _ACCESSION.fullmatch(revision) and revision != accession:
+        return False
+    if not _ACCESSION.fullmatch(accession) or supplied != {accession}:
         return False
     source_url = chunk.get("source_url") or chunk.get("source_repository_url") or chunk.get("filing_url")
     if not isinstance(source_url, str):
@@ -292,7 +295,7 @@ def amendment_source_matches(accession: str, period: str | None, chunk: Mapping[
     forms = {form.upper() for key in ("doc_type", "filing_type", "form_type")
              if isinstance(form := chunk.get(key), str) and form}
     return (forms == {"10-K/A"} and period is not None and bool(_SEGMENT_PERIOD.fullmatch(period))
-            and bool(chunk.get("cik")) and _sec_accession_matches(accession, chunk))
+            and bool(chunk.get("cik")) and sec_accession_matches(accession, chunk))
 
 
 def _amendment_items(frame: re.Match[str]) -> AmendmentScope | None:

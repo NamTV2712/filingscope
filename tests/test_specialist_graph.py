@@ -570,6 +570,108 @@ class StatementRetriever(FakeRetriever):
         return None
 
 
+class BalanceSheetRetriever(FakeRetriever):
+    def __init__(self, chunks: list[dict[str, Any]]):
+        super().__init__(chunks)
+        self.statement_document_ids = frozenset(chunk["document_id"] for chunk in chunks)
+        self.statement_requests: list[tuple[str, ...]] = []
+
+    def retrieve_statement_candidates(self, document_ids, kind, *, top_k):
+        assert kind.value == "instant"
+        self.statement_requests.append(document_ids)
+        return [chunk for chunk in self.chunks if chunk["document_id"] in document_ids][:top_k]
+
+    def get_source_page(self, document, page):
+        return next(chunk["text"] for chunk in self.chunks if chunk["document_id"] == document)
+
+
+_BALANCE_SHEET = (
+    "Consolidated Balance Sheets\n(USD in millions)\nDecember 31,\n2023 2024\nAssets\nCurrent assets:\n"
+    "Cash and cash equivalents $ 200 $ 250\nAccounts receivable, net $ 90 $ 120\n"
+    "Total current assets $ 290 $ 370\nTotal assets $ 500 $ 650\n"
+    "Liabilities and shareholders' equity\nTotal current liabilities $ 180 $ 205\n"
+    "Total shareholders' equity $ 220 $ 280"
+)
+_BALANCE_ACCESSION = "0000320193-25-000333"
+_BALANCE_QUERY = (
+    f"What was Apple's current net accounts receivable as of 2024-12-31 in 10-K {_BALANCE_ACCESSION}, in USD?"
+)
+
+
+def _balance_chunk(**overrides: Any) -> dict[str, Any]:
+    return {
+        **_annual_chunk(chunk_id="aapl-balance"),
+        "doc_type": "10-K", "reporting_periods": [2024], "report_date": "2024-12-31",
+        "cik": "320193", "accession": _BALANCE_ACCESSION,
+        "source_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000333/aapl.htm",
+        "text": _BALANCE_SHEET,
+        **overrides,
+    }
+
+
+def test_document_balance_sheets_bind_each_issuer_to_its_own_accession_and_column() -> None:
+    apple = _balance_chunk()
+    other = _balance_chunk(chunk_id="aapl-old", document_id="AAPL_old", doc_name="AAPL_old",
+                           accession="0000320193-24-000123")
+    msft_accession = "0000950170-26-000555"
+    microsoft = {
+        **_annual_chunk(chunk_id="msft-balance", ticker="MSFT", company="Microsoft Corporation"),
+        "doc_type": "10-K", "report_date": "2025-12-31", "reporting_periods": [2025],
+        "cik": "789019", "accession": msft_accession,
+        "source_url": "https://www.sec.gov/Archives/edgar/data/789019/000095017026000555/msft.htm",
+        "text": _BALANCE_SHEET.replace("2023 2024", "2025 2024").replace(
+            "Accounts receivable, net $ 90 $ 120",
+            "Accounts receivable, net of allowance for doubtful accounts of $7 and $5 $ 205 $ 170",
+        ),
+    }
+    chunks = [other, apple, microsoft]
+    index = BalanceSheetRetriever(chunks)
+    graph = SpecialistResearchGraph(router=ComplexityRouter(CorpusMap.from_chunks(chunks)), retriever=index)
+    result = graph.run(
+        f"What current net accounts receivable in USD did Apple as of 2024-12-31 in 10-K {_BALANCE_ACCESSION} "
+        f"and Microsoft as of 2025-12-31 in 10-K {msft_accession} report?"
+    )
+
+    assert result.route.source_capability == SourceCapability.DIRECT_TABLE
+    assert result.verification.disposition == ResponseDisposition.VERIFIED
+    assert result.usage.tool_calls == 2 and result.usage.retrieval_calls == 0
+    assert index.statement_requests == [(apple["document_id"],), (microsoft["document_id"],)]
+    assert "USD 120,000,000 as of 2024-12-31" in result.answer
+    assert "USD 205,000,000 as of 2025-12-31" in result.answer
+    records = result.ledger_snapshot.evidence_records
+    assert {(record.source_revision, record.table_column) for record in records if record.metric_id} == {
+        (_BALANCE_ACCESSION, 1), (msft_accession, 0),
+    }
+
+
+@pytest.mark.parametrize("overrides", [
+    {"report_date": "2024-12-30"},
+    {"cik": "789019"},
+    {"source_url": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000334/aapl.htm"},
+    {"source_revision": "0000320193-25-000334"},
+    {"text": _BALANCE_SHEET.replace("receivable, net $", "receivable, net and other $")},
+    {"text": _BALANCE_SHEET.replace("Current assets:", "Noncurrent assets:")},
+    {"text": _BALANCE_SHEET.replace("Accounts receivable, net $ 90 $ 120",
+                                   "Accounts receivable, net $ 90 $ 120\nAccounts receivable, net $ 71 $ 99")},
+    {"text": _BALANCE_SHEET.replace("receivable, net $ 90 $ 120", "receivable, net $ 90 EUR 120")},
+])
+def test_document_balance_sheet_rejects_conflicting_identity_scope_or_units(overrides: dict[str, Any]) -> None:
+    chunk = _balance_chunk(**overrides)
+    graph = SpecialistResearchGraph(router=ComplexityRouter(CorpusMap.from_chunks([chunk])),
+                                    retriever=BalanceSheetRetriever([chunk]))
+    assert graph.run(_BALANCE_QUERY).verification.disposition == ResponseDisposition.ABSTAIN
+
+
+def test_document_balance_sheet_rejects_equity_total_with_noncontrolling_interests() -> None:
+    text = _BALANCE_SHEET.replace("Total shareholders' equity",
+                                 "Noncontrolling interests $ 20 $ 25\nTotal shareholders' equity")
+    chunk = _balance_chunk(text=text)
+    graph = SpecialistResearchGraph(router=ComplexityRouter(CorpusMap.from_chunks([chunk])),
+                                    retriever=BalanceSheetRetriever([chunk]))
+    question = _BALANCE_QUERY.replace("current net accounts receivable", "equity attributable to the parent")
+    assert graph.run(question).verification.disposition == ResponseDisposition.ABSTAIN
+
+
 def test_fast_missing_sec_fact_tries_one_table_then_bounded_text_if_needed() -> None:
     chunk = _annual_chunk()
     chunk.update(reporting_periods=["2025"], text="Revenue was USD 120 billion in FY2025.")

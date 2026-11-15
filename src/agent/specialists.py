@@ -36,6 +36,7 @@ from src.generation.grounded_writer import GroundedReportInput
 from src.ingestion.sec_client import SECEdgarClient
 from src.ingestion.company_facts import (
     CompanyFactsResolver,
+    INSTANT_METRICS,
     InlineXbrlProvenance,
     METRIC_CONCEPTS,
     MONETARY_CURRENCIES,
@@ -420,10 +421,7 @@ class TableEvidenceWorker:
         started = time.perf_counter()
         runtime.register_plan()
         runtime.budget_tracker.charge()
-        kind = (
-            PeriodKind.INSTANT if task.metric_id in {"total_assets", "total_liabilities", "cash_and_equivalents"}
-            else PeriodKind.DURATION
-        )
+        kind = PeriodKind.INSTANT if task.metric_id in INSTANT_METRICS else PeriodKind.DURATION
         observations = [SpecialistObservation(key="table_lookup", value="physical_statement_page")]
         evidence_ids: set[str] = set()
         candidates_before = runtime.budget_tracker.candidate_chunks
@@ -1055,6 +1053,7 @@ def _normalize_filing_statements(runtime: SpecialistRuntime) -> tuple[int, int]:
             text, form=form, fiscal_year=fiscal_year, quarter=int(quarter[1]) if quarter else None,
             confirmed_period_end=report_end or xbrl_end,
             infer_annual_starts=runtime.requirements.reporting_interval is not None,
+            exact_balance_sheet=runtime.requirements.has_filing_instants and report_end is not None,
         )
         inspected[key] = statement.recognized
         if not statement.recognized:
@@ -1296,6 +1295,7 @@ def _source_record(
     if isinstance(page, bool) or not isinstance(page, int) or page < 0:
         page = None
     source_url = chunk.get("source_url") or chunk.get("filing_url") or chunk.get("source_repository_url")
+    revision = chunk.get("source_revision") or chunk.get("accession_number") or chunk.get("accession") or chunk.get("filing_date")
     method = str(chunk.get("retrieval_method") or chunk.get("retrieval_method_name") or "dense")
     observations = (RetrievalObservation(method=method, rank=rank),)
     return EvidenceRecord.from_source(
@@ -1321,7 +1321,7 @@ def _source_record(
         retrieval_rank=rank,
         retrieval_observations=observations,
         discovered_by=discovered_by,
-        source_revision=str(chunk.get("source_revision") or chunk.get("accession_number") or chunk.get("filing_date") or "") or None,
+        source_revision=str(revision) if revision else None,
         task_id=task.task_id,
         requirement_ids=task.requirement_ids,
     )

@@ -9,7 +9,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from itertools import islice
 
-from src.ingestion.company_facts import MONETARY_CURRENCIES
+from src.ingestion.company_facts import INSTANT_METRICS, MONETARY_CURRENCIES
 from src.ingestion.period_identity import PeriodIdentity, PeriodKind, period_mentions
 
 
@@ -171,7 +171,33 @@ _ALIGNED_ROW = re.compile(
     rf"\s*(?:{_FOOTNOTE}|\(\d{{1,2}}\)(?=\s+[$€£]))?\s+(.+)$", re.I,
 )
 _VALUE_START = re.compile(rf"^(?:{_CURRENCY_CODE}\b|[$€£]|[−–—-]|\(\s*[$€£]?\s*\d|\d)", re.I)
-_INSTANT_METRICS = frozenset({"total_assets", "total_liabilities", "cash_and_equivalents"})
+_BALANCE_LABELS = {
+    "accounts receivable, net": "current_net_accounts_receivable",
+    "receivables, net": "current_net_accounts_receivable",
+    "total current assets": "current_assets",
+    "total noncurrent assets": "noncurrent_assets",
+    "total non-current assets": "noncurrent_assets",
+    "total current liabilities": "current_liabilities",
+    "inventories": "net_inventory",
+    "inventory": "net_inventory",
+    "property, plant and equipment, net": "net_property_plant_equipment",
+    "property and equipment, net": "net_property_plant_equipment",
+    "total shareholders' equity": "stockholders_equity",
+    "total stockholders' equity": "stockholders_equity",
+}
+_BALANCE_ROW = re.compile(
+    rf"^({'|'.join(re.escape(label) for label in sorted(_BALANCE_LABELS, key=len, reverse=True))})\s+(.+)$", re.I,
+)
+_BALANCE_NOTE_AMOUNTS = rf"\$\s*{_AMOUNT} and \$\s*{_AMOUNT}(?:, respectively)?(?=\s)"
+_RECEIVABLE_ALLOWANCES = re.compile(
+    rf"^(?:trade accounts receivable, less allowances of|accounts receivable, net of allowance for doubtful accounts of) "
+    rf"{_BALANCE_NOTE_AMOUNTS}", re.I,
+)
+_ACCUMULATED_DEPRECIATION = re.compile(
+    rf"^(property, plant and equipment|property and equipment), net of accumulated depreciation of {_BALANCE_NOTE_AMOUNTS}",
+    re.I,
+)
+_NONCONTROLLING_INTEREST = re.compile(r"\b(?:non[- ]?controlling|minority) interests?\b", re.I)
 _QUARTER_MONTHS = {"three": 3, "six": 6, "nine": 9, "twelve": 12}
 
 
@@ -263,6 +289,7 @@ def _parse_dates(header: list[str], years: list[int]) -> list[date | None]:
 def _column_periods(
     header: list[str], *, kind: PeriodKind, fiscal_year: int, quarter: int | None,
     confirmed_period_end: date | None, infer_annual_starts: bool = False,
+    exact_balance_sheet: bool = False,
 ) -> tuple[PeriodIdentity | None, ...]:
     current = header[-1]
     year_labels = period_mentions(current)
@@ -270,7 +297,11 @@ def _column_periods(
     if not years or len(years) > 8:
         return ()
     dates = _parse_dates(header, years)
-    if confirmed_period_end and dates[0] and dates[0] != confirmed_period_end:
+    ascending_balance = bool(
+        exact_balance_sheet and confirmed_period_end and len(years) == 2
+        and years[1] == years[0] + 1 and dates[1] == confirmed_period_end,
+    )
+    if confirmed_period_end and dates[0] and dates[0] != confirmed_period_end and not ascending_balance:
         return ()
     body = " ".join(header)
     months = [_QUARTER_MONTHS[match.casefold()] for match in _DURATION.findall(body)]
@@ -285,7 +316,7 @@ def _column_periods(
         except ValueError:
             return ()
     if quarter is None:
-        if any(left <= right for left, right in zip(years, years[1:])) or months and months != [12]:
+        if (not ascending_balance and any(left <= right for left, right in zip(years, years[1:]))) or months and months != [12]:
             return ()
         anniversary_dates = all(
             left is not None and right is not None and 350 <= (left - right).days <= 380
@@ -295,11 +326,13 @@ def _column_periods(
             _ANNUAL_HEADER.search(body) or months == [12] or len(dates) > 1 and anniversary_dates
         ):
             return ()
-        if (years[0] != fiscal_year or dates[0] and dates[0].month <= 2) and (
-            confirmed_period_end is None or dates[0] != confirmed_period_end
+        current_column = -1 if ascending_balance else 0
+        current_end, current_year = dates[current_column], years[current_column]
+        if (current_year != fiscal_year or current_end and current_end.month <= 2) and (
+            confirmed_period_end is None or current_end != confirmed_period_end
         ):
             return ()
-        if abs(years[0] - fiscal_year) > 1:
+        if abs(current_year - fiscal_year) > 1:
             return ()
         starts = [None] * len(dates)
         if (infer_annual_starts and kind == PeriodKind.DURATION and confirmed_period_end is not None
@@ -309,7 +342,7 @@ def _column_periods(
                 if preceding_end is not None:
                     starts[index] = preceding_end + timedelta(days=1)
         return tuple(PeriodIdentity.from_label(
-            f"FY{fiscal_year + year - years[0]}", kind=kind, start=start, end=end, filing_fiscal_year=fiscal_year,
+            f"FY{fiscal_year + year - current_year}", kind=kind, start=start, end=end, filing_fiscal_year=fiscal_year,
         ) for year, start, end in zip(years, starts, dates, strict=True))
     if abs(years[0] - fiscal_year) > 1:
         return ()
@@ -408,10 +441,49 @@ def _subtotal(body: list[str], columns: int) -> tuple[int, str] | None:
     return expense - 1, lines[-1]
 
 
+def _balance_rows(body: list[str]) -> list[tuple[int, str, str]]:
+    current_assets = False
+    current_assets_complete = False
+    assets_complete = False
+    has_noncontrolling = any(_NONCONTROLLING_INTEREST.search(row) for row in body)
+    rows = []
+    for index, row in enumerate(body):
+        if _statement_kind(row) is not None:
+            break
+        if re.fullmatch(r"current assets:?", row, re.I) and not assets_complete:
+            current_assets = True
+        elif re.match(r"^total current assets\s", row, re.I):
+            current_assets = False
+            current_assets_complete = True
+        elif re.match(r"^total assets\s", row, re.I):
+            current_assets = False
+            assets_complete = True
+        label_text = re.sub(r"^(.+?) [–—] net ", r"\1, net ", row, flags=re.I).replace("’", "'")
+        label_text = _RECEIVABLE_ALLOWANCES.sub("Accounts receivable, net", label_text)
+        label_text = _ACCUMULATED_DEPRECIATION.sub(r"\1, net", label_text)
+        match = _BALANCE_ROW.fullmatch(label_text)
+        if match is None or not _VALUE_START.search(match[2]):
+            continue
+        metric = _BALANCE_LABELS[match[1].casefold()]
+        if metric in {"current_net_accounts_receivable", "net_inventory"} and not current_assets:
+            continue
+        if metric in {"current_assets", "noncurrent_assets", "net_property_plant_equipment"} and assets_complete:
+            continue
+        if metric in {"noncurrent_assets", "net_property_plant_equipment"} and not current_assets_complete:
+            continue
+        if metric == "current_liabilities" and not assets_complete:
+            continue
+        if metric == "stockholders_equity" and (not assets_complete or has_noncontrolling):
+            continue
+        rows.append((index, metric, match[2]))
+    return rows
+
+
 def parse_statement_columns(
     text: str, *, form: str, fiscal_year: int, quarter: int | None = None,
     confirmed_period_end: date | None = None,
     infer_annual_starts: bool = False,
+    exact_balance_sheet: bool = False,
 ) -> StatementParse:
     """Return sourced values and report rows whose column ownership is uncertain."""
     amended = form.upper().endswith("/A")
@@ -423,6 +495,7 @@ def parse_statement_columns(
     if heading is None:
         return StatementParse(False)
     title, kind = heading
+    exact_balance_sheet = exact_balance_sheet and form == "10K" and kind == PeriodKind.INSTANT and not amended
     if any(_GUARANTOR_SCOPE.search(line) for line in lines[:title + 1]):
         return StatementParse(True, ambiguous_rows=(AmbiguousStatementRow(None, title, "nonregistrant_scope"),))
     header_index = None
@@ -443,6 +516,7 @@ def parse_statement_columns(
         header, kind=kind, fiscal_year=fiscal_year, quarter=quarter,
         confirmed_period_end=confirmed_period_end,
         infer_annual_starts=infer_annual_starts,
+        exact_balance_sheet=exact_balance_sheet,
     )
     heading_lines = lines[title + 1:body_start]
     top = " ".join(heading_lines)
@@ -461,20 +535,25 @@ def parse_statement_columns(
         return StatementParse(True, ambiguous_rows=(AmbiguousStatementRow(None, header_index, "currency_unresolved"),))
     change = bool(_CHANGE.search(header[-1]))
     restated = bool(_REVISION.search(top)) or amended
-    candidates = []
+    candidates: list[tuple[int, str, str]] = []
     for row_index, row in enumerate(body):
         if _statement_kind(row) is not None:
             break
         if match := _ALIGNED_ROW.fullmatch(row):
             if _VALUE_START.search(match[2]):
                 candidates.append((row_index, match[1].casefold(), match[2]))
-    if not any(_ALIGNED_LABELS[label] == "revenue" for _, label, _ in candidates):
+    if exact_balance_sheet:
+        candidates.extend(_balance_rows(body))
+    if kind == PeriodKind.DURATION and not any(_ALIGNED_LABELS[label] == "revenue" for _, label, _ in candidates):
         if subtotal := _subtotal(body, len(periods)):
             candidates.append((subtotal[0], "total revenue", subtotal[1]))
     results = []
     ambiguous = []
-    for metric in dict.fromkeys(_ALIGNED_LABELS[label] for _, label, _ in candidates):
-        rows = [candidate for candidate in candidates if _ALIGNED_LABELS[candidate[1]] == metric]
+    by_metric: dict[str, list[tuple[int, str, str]]] = {}
+    for candidate in candidates:
+        label = candidate[1]
+        by_metric.setdefault(_ALIGNED_LABELS.get(label, label), []).append(candidate)
+    for metric, rows in by_metric.items():
         totals = [item for item in rows if item[1].startswith("total ")]
         rows = totals or rows
         for row_index, _, raw in rows:
@@ -491,7 +570,7 @@ def parse_statement_columns(
             for column, (period, amount, cell) in enumerate(zip(periods, amounts, cells)):
                 if period is None or amount is None:
                     continue
-                expected_kind = PeriodKind.INSTANT if metric in _INSTANT_METRICS else PeriodKind.DURATION
+                expected_kind = PeriodKind.INSTANT if metric in INSTANT_METRICS else PeriodKind.DURATION
                 if kind != expected_kind:
                     continue
                 percent = "%" in cell
