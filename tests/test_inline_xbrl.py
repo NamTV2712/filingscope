@@ -7,6 +7,7 @@ import pytest
 
 from src.ingestion.inline_xbrl import Dimension, FactIdentity, extract_numeric_facts, resolve_inline_fact
 from src.ingestion.sec_client import FilingMetadata
+from src.retrieval.canonical_json import sha256_file
 
 
 HTML = """<html xmlns="http://www.w3.org/1999/xhtml"
@@ -83,6 +84,65 @@ def test_inline_extraction_rejects_wrong_context_cik(archive, tmp_path):
     result = extract_numeric_facts(archive, filing, cache_directory=tmp_path / "cache")
     assert result["facts"] == []
     assert result["skipped"]["wrong_context_entity"] == 2
+
+
+def test_inline_extraction_loads_verified_transforms_and_rejects_changed_bytes(archive, tmp_path, monkeypatch):
+    plugin = tmp_path / "plugin"
+    plugin.mkdir()
+    (plugin / "__init__.py").write_text(
+        """from arelle.ModelValue import qname
+from .text2num import to_number
+
+def load_custom(known):
+    known[qname("http://www.sec.gov/inlineXBRL/transformation/2015-08-31", "ixt-sec:numwordsen")] = to_number
+
+__pluginInfo__ = {
+    "name": "SEC test transform",
+    "version": "1",
+    "ModelManager.LoadCustomTransforms": load_custom,
+}
+""",
+        encoding="utf-8",
+    )
+    (plugin / "text2num.py").write_text(
+        """from arelle.formula.XPathContext import FunctionArgType
+
+def to_number(value):
+    if value != "two":
+        raise FunctionArgType(0, "expected a supported number")
+    return "2"
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("src.ingestion.inline_xbrl.SEC_TRANSFORM_FILES", {
+        part.name: sha256_file(part) for part in plugin.iterdir()
+    })
+    transformed = HTML.replace(
+        'xmlns:ixt="http://www.xbrl.org/inlineXBRL/transformation/2020-02-12"',
+        'xmlns:ixt="http://www.sec.gov/inlineXBRL/transformation/2015-08-31"',
+    ).replace('format="ixt:num-dot-decimal">1,230', 'format="ixt:numwordsen">two')
+    transformed = transformed.replace("</body>", """
+ <ix:nonFraction id="invalid" name="us-gaap:Revenues" contextRef="c1" unitRef="usd"
+  decimals="0" format="ixt:numwordsen">several</ix:nonFraction>
+ </body>""")
+    with ZipFile(archive, "r") as original:
+        schema = original.read("sample.xsd")
+    with ZipFile(archive, "w") as bundle:
+        bundle.writestr("sample.htm", transformed)
+        bundle.writestr("sample.xsd", schema)
+    filing = FilingMetadata("AAPL", 320193, "10-Q", "0000320193-25-000100", "2025-05-02", "2025-03-31", "sample.htm")
+
+    parsed = extract_numeric_facts(archive, filing, cache_directory=tmp_path / "cache", sec_transforms=plugin)
+
+    by_anchor = {row["source_anchor"]: row for row in parsed["facts"]}
+    assert by_anchor["rev"]["value"] == "-2000000"
+    assert by_anchor["rev"]["display_value"] == "two"
+    assert "invalid" not in by_anchor
+    assert parsed["skipped"]["unsupported_or_invalid_transform"] == 1
+
+    (plugin / "text2num.py").write_text("raise AssertionError('unexpected execution')", encoding="utf-8")
+    with pytest.raises(ValueError, match=r"checksum mismatch for text2num\.py"):
+        extract_numeric_facts(archive, filing, cache_directory=tmp_path / "cache", sec_transforms=plugin)
 
 
 def test_inline_resolution_checks_duplicate_values_and_source_identity():

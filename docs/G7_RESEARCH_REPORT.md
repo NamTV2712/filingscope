@@ -83,6 +83,7 @@ and faithfulness on a new real-filing cohort remain unmeasured.
 | --- | --- |
 | SEC iXBRL extraction | 20,723 numeric observations, 18,800 identity keys and 10,285 dimensioned observations. Offline cache replay reproduced the manifest byte for byte. |
 | Structured parser agreement | 7,087/7,087 unique Company Facts pairs agreed. There were 67 multiple-value groups and 8 missing counterparts. The Apple PDF control agreed on 6/6 cells. |
+| Pinned SEC transforms | Recovered 81 numeric observations across 14 filings with a byte-identical repeat. All 20,723 original observation payloads matched. Unique exact Company Facts pairs rose to 7,088/7,088. All 204 lookup cases and six PDF cells matched the baseline. [Transform replay](G2_SEC_INLINE_TRANSFORMS.md). |
 | Selected 8-K current reports | Three Item 2.02 archives reproduced offline with zero numeric iXBRL observations. Six HTML exhibit cells matched equivalent periodic Company Facts entries. [8-K replay](G2_SEC_CURRENT_REPORTS.md). |
 | Mixed SEC cohorts | 204 cases across eight categories and three issuer-disjoint splits. Accession-matched structured lookup agreed on 187/187 numeric cases. On the original questions, document-only confirmed 20/187, Company Facts-only 37/187 and hybrid 37/187. All arms withheld 8/8 missing-unit controls. [Mixed cohorts](G2_SEC_MIXED_COHORTS.md) · [Runtime replay](G2_SEC_MIXED_RUNTIME.md). |
 | Explicit reporting intervals | Confirmed answers on the same questions rose to 26/187, 45/187 and 45/187. Both text-enabled arms eliminated five extra prior-year claims. All 122 PDF-pilot outcomes matched. [Interval replay](G3_EXPLICIT_INTERVALS.md). |
@@ -155,7 +156,7 @@ outcomes. These disposition points do not support continuous AURC.
 | Wrong source, period, unit or revision | Historical controls withheld unsupported releases. The G3 prior-year expansion now preserves YTD and CY. |
 | Filing tag versus reported line | Amazon's receivables tag covers a display line with other current assets. The document-only path withheld three affected requests. Structured scores measure agreement with the filed tag on these cases. [Source review](G3_DOCUMENT_BALANCE_SHEETS.md). |
 | Rounded versus precise observations | G2 keeps multiple values visible, including Apple's rounded and precise unrecognized-tax-benefit disclosures. |
-| Missing taxonomy or transformation | G2 recorded 81 skipped numeric transforms and Arelle schema diagnostics. A schema-complete validation pass remains open. |
+| Missing taxonomy or transformation | The pinned SEC profile resolved all 81 skipped numeric transforms. Arelle still reports 110 `IOerror` and 21,644 `missingReferences` diagnostics in the offline replay. [Transform replay](G2_SEC_INLINE_TRANSFORMS.md). |
 | Incomplete data or unavailable filing | Routed LangGraph preserved healthy-source work in the persistent-outage fixture. Both compared workflows withheld the incomplete answer. |
 | Unsupported or mis-cited claim | G1 synthetic controls cover wrong basis and a valid narrative cited to the wrong page. G4 preserved existing prompt-injection and release checks. |
 | Incomplete applicability | Document-only still lacks typed dates for quarter/YTD and annual pairs. The measured amendment path requires an exact accession and explicit item scope in the note. [Exact concept replay](G3_EXACT_CONCEPT_LOOKUPS.md) · [Amendment replay](G4_AMENDMENT_SCOPE.md). |
@@ -198,7 +199,7 @@ reviewer bundle is available. Remaining research gaps include adjudicated mixed
 cohorts and full Inline XBRL taxonomy validation. The Transformers
 4.57.6 compatibility debt remains documented in G0.
 
-The latest offline verification passed 593 tests on Windows with
-three corpus skips and 592 tests with four skips on Linux WSL with
+The latest offline verification passed 594 tests on Windows with
+three corpus skips and 593 tests with four skips on Linux WSL with
 the Inline XBRL extra. Ruff and focused mypy passed. GitHub Actions
 has no run for these local commits.

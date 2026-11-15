@@ -77,6 +77,9 @@ and records diagnostics. It does not certify DTS validation. It skipped
 transforms. The remaining limitations include extra target instances,
 other SEC entity schemes and full XBRL validation. Source URLs and
 archives remain available to inspect omitted cases.
+The [pinned SEC transform replay](G2_SEC_INLINE_TRANSFORMS.md) recovered
+all 81 numeric transforms on this corpus and preserved the original
+observation payloads. Its manifest identifies the opt-in profile.
 
 The PDF check uses pypdf page 0 from the publisher's consolidated
 statements PDF and the twelve-month column ending 2025-09-27. It

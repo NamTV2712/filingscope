@@ -147,6 +147,12 @@ The selected 8-K replay pinned three earnings-report accessions.
 All had zero numeric iXBRL observations. Six financial cells from two
 linked HTML exhibits agreed with the corresponding periodic Company
 Facts entries. [Current reports](G2_SEC_CURRENT_REPORTS.md).
+The optional pinned SEC transform profile recovered 81 numeric
+observations and preserved all 20,723 original observation payloads.
+Unique exact Company Facts pairs rose to 7,088/7,088. The 204 lookup cases
+and six PDF cells matched the baseline. Windows passed 594 tests with
+three skips and WSL passed 593 with four.
+[SEC transformation replay](G2_SEC_INLINE_TRANSFORMS.md).
 The [SEC narrative track](G2_SEC_NARRATIVE.md) measured six
 author-checked questions. All three inventories abstained. The PDF arms
 retrieved evidence for five cases including valid alternative pages.

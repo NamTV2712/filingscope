@@ -16,7 +16,7 @@ from configs.offline_guard import offline_socket_guard
 from configs.settings import settings
 from src.evaluation.benchmark_io import peak_memory_bytes, write_json_atomic
 from src.ingestion.company_facts import normalize_cik
-from src.ingestion.inline_xbrl import extract_numeric_facts
+from src.ingestion.inline_xbrl import SEC_TRANSFORM_FILES, SEC_TRANSFORM_REVISION, extract_numeric_facts
 from src.ingestion.sec_client import EdgarNotFoundError, SECEdgarClient
 from src.ingestion.sec_corpus import (
     FORMS, MAX_ARCHIVE_BYTES, MAX_METADATA_BYTES, SEC_FIRST_FILED,
@@ -60,7 +60,9 @@ def build(args, client: SECEdgarClient | None) -> tuple[dict, dict]:
                 continue
             started = perf_counter()
             with offline_socket_guard():
-                extraction = extract_numeric_facts(archive, filing, cache_directory=args.cache / "arelle")
+                extraction = extract_numeric_facts(
+                    archive, filing, cache_directory=args.cache / "arelle", sec_transforms=args.sec_transforms,
+                )
             resources[accession] = {"extract_ms": round((perf_counter() - started) * 1000, 3)}
             facts_path = args.output / "facts" / f"{accession}.json"
             write_json_atomic(facts_path, extraction)
@@ -78,6 +80,8 @@ def build(args, client: SECEdgarClient | None) -> tuple[dict, dict]:
     }
     if args.current_report_item is not None:
         manifest["current_report_item"] = args.current_report_item
+    if args.sec_transforms is not None:
+        manifest["sec_transforms"] = {"revision": SEC_TRANSFORM_REVISION, "files": SEC_TRANSFORM_FILES}
     telemetry = {"by_accession": resources, "request_attempts": client.request_count if client else 0,
                  "peak_memory_bytes": peak_memory_bytes(), "provider_cost_usd": 0}
     return manifest, telemetry
@@ -102,6 +106,7 @@ def main() -> None:
     parser.add_argument("--per-form", type=int, default=1)
     parser.add_argument("--cache", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--sec-transforms", type=Path, help="Directory containing the pinned SEC Inline Transforms source files")
     parser.add_argument("--acquire", action="store_true")
     args = parser.parse_args()
     ciks = {cik for _, cik in args.issuer}

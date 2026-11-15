@@ -4,10 +4,13 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import asdict, dataclass
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
 from datetime import date
 from decimal import Decimal, InvalidOperation, localcontext
+from hashlib import sha256
 from pathlib import Path, PurePosixPath
+from tempfile import TemporaryDirectory
 from urllib.parse import quote
 from zipfile import ZipFile
 
@@ -21,6 +24,12 @@ PARSER_VERSION = "sec-inline-xbrl-v1"
 SEC_CIK_SCHEME = "http://www.sec.gov/CIK"
 XBRLDI = "http://xbrl.org/2006/xbrldi"
 MAX_UNCOMPRESSED_BYTES = 120 * 1024 * 1024
+SEC_TRANSFORM_REVISION = "4891c4c9889c77af247428ceff4fa7cc52d534ea"
+SEC_TRANSFORM_FILES = {
+    "__init__.py": "sha256:2296586f945ffd95ab37d3d4147c4e45f42ce4e5f397f61143e053208adefbf1",
+    "text2num.py": "sha256:6c9b26354320a2fb34fe380cdc71ff7f8d1cc712811e6b10c661e512f0383409",
+}
+_SEC_TRANSFORM_NAMESPACE = "http://www.sec.gov/inlineXBRL/transformation/2015-08-31"
 
 
 @dataclass(frozen=True)
@@ -172,7 +181,27 @@ def _record(fact, filing: FilingMetadata) -> dict:
     }
 
 
-def extract_numeric_facts(archive: Path, filing: FilingMetadata, *, cache_directory: Path) -> dict:
+@contextmanager
+def _stage_sec_transforms(source: Path | None) -> Iterator[Path | None]:
+    if source is None:
+        yield None
+        return
+    # Stage verified source bytes so Arelle loads only the pinned plugin and its dependency.
+    with TemporaryDirectory(prefix="filingscope-sec-transforms-") as temporary:
+        plugin = Path(temporary) / "transform"
+        plugin.mkdir()
+        for name, expected in SEC_TRANSFORM_FILES.items():
+            with (source / name).open("rb") as stream:
+                contents = stream.read(65_536)
+            if f"sha256:{sha256(contents).hexdigest()}" != expected:
+                raise ValueError(f"SEC Inline Transforms checksum mismatch for {name}")
+            (plugin / name).write_bytes(contents)
+        yield plugin
+
+
+def extract_numeric_facts(
+    archive: Path, filing: FilingMetadata, *, cache_directory: Path, sec_transforms: Path | None = None,
+) -> dict:
     """Extract from a local SEC archive with Arelle's network access disabled."""
     from arelle.FunctionIxt import ixtFunctionNotAvailable
     from arelle.RuntimeOptions import RuntimeOptions
@@ -192,17 +221,23 @@ def extract_numeric_facts(archive: Path, filing: FilingMetadata, *, cache_direct
             raise ValueError("SEC XBRL archive is missing the primary Inline XBRL document")
     date.fromisoformat(filing.filing_date)
     cache_directory.mkdir(parents=True, exist_ok=True)
-    options = RuntimeOptions(
-        entrypointFile=f"{archive.resolve().as_posix()}/{filing.primary_document}",
-        internetConnectivity="offline", keepOpen=True, logFile="logToBuffer",
-        cacheDirectory=str(cache_directory.resolve()),
-    )
     skipped: Counter[str] = Counter()
     facts = []
-    with Session() as session:
+    with _stage_sec_transforms(sec_transforms) as plugin, Session() as session:
+        options = RuntimeOptions(
+            entrypointFile=f"{archive.resolve().as_posix()}/{filing.primary_document}",
+            internetConnectivity="offline", keepOpen=True, logFile="logToBuffer",
+            cacheDirectory=str(cache_directory.resolve()),
+            plugins=plugin.as_posix() if plugin else None, disablePersistentConfig=plugin is not None,
+        )
         if not session.run(options) or len(session.get_models()) != 1:
             raise ValueError("Unable to load Inline XBRL archive")
         model, = session.get_models()
+        if plugin is not None and not any(
+            name.namespaceURI == _SEC_TRANSFORM_NAMESPACE and name.localName == "numwordsen"
+            for name in model.modelManager.customTransforms
+        ):
+            raise ValueError("Arelle did not load the pinned SEC Inline Transforms")
         diagnostics = dict(Counter(map(str, model.errors)))
         for fact in model.facts:
             if fact.localName != "nonFraction" or fact.isNil:
