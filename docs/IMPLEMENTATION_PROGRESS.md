@@ -121,8 +121,10 @@ error separately from support for the original statement.
 
 ## G2 SEC data and benchmark cohorts
 
-G2 is **PARTIALLY_COMPLETE**. The verified extraction covers 17 real
-SEC filings and 20,723 numeric observations. The offline manifest
+G2 passed the data, provenance, reproducibility, leakage and regression
+checks. The benchmark labels remain development-exposed and provisional.
+The original verified extraction covers 17 SEC filings and 20,723 numeric
+observations. The offline manifest
 reproduced byte for byte. There were 7,087 exact unique-value Company
 Facts pairs and 6/6 exact PDF controls. Pilot/development/validation
 contain 32/100/72 provisional lookups with disjoint issuer groups.
@@ -153,6 +155,12 @@ Unique exact Company Facts pairs rose to 7,088/7,088. The 204 lookup cases
 and six PDF cells matched the baseline. Windows passed 594 tests with
 three skips and WSL passed 593 with four.
 [SEC transformation replay](G2_SEC_INLINE_TRANSFORMS.md).
+The separate revision diagnostic verified 8/8 original and restated
+Massimo statement cells and 12/12 bridge cells with exact anchors.
+Four signed adjustments reconciled and all 16 mismatched identities
+were withheld. Redfin's six tagged annual recast cells matched. Its
+nine quarterly cells were verified in HTML and had no tags in the table.
+[Revision and recast replay](G2_SEC_REVISIONS.md).
 The [SEC narrative track](G2_SEC_NARRATIVE.md) measured six
 author-checked questions. All three inventories abstained. The PDF arms
 retrieved evidence for five cases including valid alternative pages.
@@ -289,7 +297,7 @@ release-risk criteria. Offline fixtures exercise insufficient sample
 size, missing judgments and known threshold violations. The historical
 report reproduced byte for byte. [Release risk gate](G6_RELEASE_RISK_GATE.md).
 The [draft G6 exposure inventory](G6_EXPOSURE_INVENTORY.md) consolidates
-68 CIKs and 91 local document IDs for the reviewer to verify. Both
+70 CIKs and 91 local document IDs for the reviewer to verify. Both
 offline runs produced identical inventory and source receipt hashes.
 The [G6 prediction receipt](G6_PREDICTION_RECEIPT.md) binds prediction
 and freeze hashes to a Git commit the reviewer records before label release.
@@ -307,7 +315,9 @@ portfolio statements reflect the verified scope. Independent scoring
 retains its documented blocker.
 [Research report](G7_RESEARCH_REPORT.md).
 
-The executable experiments and publication deliverables are recorded.
-G6 is `PARTIALLY_COMPLETE / PROVISIONAL_NOT_INDEPENDENT` pending an
-eligible reviewer bundle. When it arrives, follow the
-[reviewer protocol](G6_EVALUATION_READINESS.md).
+G0–G5 and G7 met their development gates, seven of the eight roadmap
+milestones. G6 completed the internal review, public replay and
+reviewer handoff under the v4 fallback. Its independent run stays
+`PARTIALLY_COMPLETE / PROVISIONAL_NOT_INDEPENDENT`. The review records
+the denominator and evidence provenance for each result.
+[Reviewer protocol](G6_EVALUATION_READINESS.md).

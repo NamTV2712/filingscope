@@ -17,7 +17,7 @@ claim, report that claim as inconclusive. Reviewer independence and
 the exposed-membership crosswalk must be confirmed before the freeze.
 The [frozen release-risk criterion](G6_RELEASE_RISK_GATE.md) provides
 machine-readable coverage and risk thresholds for adjudicated scoring.
-The [draft exposure inventory](G6_EXPOSURE_INVENTORY.md) provides 68
+The [draft exposure inventory](G6_EXPOSURE_INVENTORY.md) provides 70
 CIKs and 91 local document IDs for reviewer verification.
 The [committed prediction receipt](G6_PREDICTION_RECEIPT.md) gives
 reviewers a Git-verifiable prediction hash before label release.
@@ -118,6 +118,13 @@ citations, Context Precision@10 of 22/88 and Gold Evidence Recall@10
 of 9/9 in each document-enabled arm. The descriptive Wilson upper
 bound on incorrect release was 29.91%. This review is internal and
 development-exposed. [Individual outcomes and evidence](G4_AMENDMENT_SCOPE.md).
+
+Codex also checked the 90 released balance-sheet claims and citations
+from the document-only replay. All matched their source tables. Three
+Amazon receivables questions were withheld because the display row
+includes other current assets. The structured score measures agreement
+with the issuer's tags on those questions.
+[Balance-sheet review](G3_DOCUMENT_BALANCE_SHEETS.md).
 
 ## Public FinRank replay
 

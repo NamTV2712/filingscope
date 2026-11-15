@@ -8,7 +8,9 @@ verification, then measures each addition against a reproducible benchmark.
 The local backend uses a bounded FAST/RESEARCH router, LangGraph specialists,
 an evidence ledger, and deterministic claim, numeric and citation verification.
 The offline SEC Inline XBRL pipeline reproduced 20,723 numeric observations
-across 17 filings. Routed LangGraph reproduced 21/21 grounded answers on the
+across 17 filings and recovered 81 more with the optional pinned SEC
+transforms. [SEC replay](docs/G2_SEC_INLINE_TRANSFORMS.md).
+Routed LangGraph reproduced 21/21 grounded answers on the
 answerable M13 development-exposed cases. Its 0/21 incorrect releases have a
 descriptive Wilson 95% upper bound of 15.46%.
 
@@ -16,6 +18,7 @@ The Groq GPT-OSS 120B comparison measured closed-book and filing-context
 answers on a 26-question development pilot. A separate candidate-level
 comparison measured Groq relevance observations on SEC filing pages.
 The same candidate set was evaluated with TypeSafe Jev 1.14.
+G6 records an internal source review and a reproducible reviewer handoff.
 Independent final evaluation awaits a reviewer-held cohort.
 On a public FinRank slice with two filing PDFs, Adaptive and routed
 LangGraph each withheld all 130 questions. [Public replay](docs/G6_FINRANK_PUBLIC_REVIEW.md).

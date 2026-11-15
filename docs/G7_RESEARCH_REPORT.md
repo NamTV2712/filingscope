@@ -66,6 +66,7 @@ The Python policy determines candidate acceptance and final release.
 | Development-exposed | M13, Q3/Q5/Q7 and Q8 controls | Paired runtime, source isolation and verifier regression. The repeated use of these cohorts limits inference. |
 | SEC 2025 provisional | 17 filings, eight issuers, 32/100/72 auto-XBRL pilot/development/validation lookups | Source-aligned parser and structured lookup tests. The cohort split excludes issuer/accession/fact/revision-family overlap within these groups. [G2 report](G2_SEC_DATA.md). |
 | SEC 2025 runtime pilot | 26 PDF-transcribed questions from five filings and four issuers | Identical source-track questions and frozen citation locators. Issuers overlap with earlier cohorts. [Runtime pilot](G2_RUNTIME_REPLAY.md). |
+| SEC revision diagnostic | Four filings across two issuers, four restatement bridges and five recast period rows | Author-reviewed statement, adjustment and presentation provenance. The 17-filing benchmark retains its membership. [Revision replay](G2_SEC_REVISIONS.md). |
 | Public applicability | Pinned FinAgent v1.1.1, 133 questions | 35 cases matched issuer/form, and 10 matched an excerpt in one frozen SEC filing. No full answer benchmark. [Benchmark matrix](G2_SEC_DATA.md#benchmark-compatibility). |
 | Public FinRank replay | Devon and EOG FY2024 Form 10-K PDFs, 130 questions | Adaptive and routed both released 0/130. Source-page alignment was available for 31 records. [FinRank review](G6_FINRANK_PUBLIC_REVIEW.md). |
 | Independent final | Reviewer-held cohort pending | No independent performance or release-risk estimate. [G6 handoff](G6_EVALUATION_READINESS.md). |
@@ -84,6 +85,7 @@ and faithfulness on a new real-filing cohort remain unmeasured.
 | SEC iXBRL extraction | 20,723 numeric observations, 18,800 identity keys and 10,285 dimensioned observations. Offline cache replay reproduced the manifest byte for byte. |
 | Structured parser agreement | 7,087/7,087 unique Company Facts pairs agreed. There were 67 multiple-value groups and 8 missing counterparts. The Apple PDF control agreed on 6/6 cells. |
 | Pinned SEC transforms | Recovered 81 numeric observations across 14 filings with a byte-identical repeat. All 20,723 original observation payloads matched. Unique exact Company Facts pairs rose to 7,088/7,088. All 204 lookup cases and six PDF cells matched the baseline. [Transform replay](G2_SEC_INLINE_TRANSFORMS.md). |
+| Original, restated and recast observations | 8/8 main-statement amounts and 12/12 bridge cells matched. All 16 wrong-accession and wrong-revision requests were withheld. Redfin's six tagged annual cells matched. Nine quarterly cells were verified against their untagged HTML table. [Revision replay](G2_SEC_REVISIONS.md). |
 | Selected 8-K current reports | Three Item 2.02 archives reproduced offline with zero numeric iXBRL observations. Six HTML exhibit cells matched equivalent periodic Company Facts entries. [8-K replay](G2_SEC_CURRENT_REPORTS.md). |
 | Mixed SEC cohorts | 204 cases across eight categories and three issuer-disjoint splits. Accession-matched structured lookup agreed on 187/187 numeric cases. On the original questions, document-only confirmed 20/187, Company Facts-only 37/187 and hybrid 37/187. All arms withheld 8/8 missing-unit controls. [Mixed cohorts](G2_SEC_MIXED_COHORTS.md) · [Runtime replay](G2_SEC_MIXED_RUNTIME.md). |
 | Explicit reporting intervals | Confirmed answers on the same questions rose to 26/187, 45/187 and 45/187. Both text-enabled arms eliminated five extra prior-year claims. All 122 PDF-pilot outcomes matched. [Interval replay](G3_EXPLICIT_INTERVALS.md). |
@@ -154,6 +156,7 @@ outcomes. These disposition points do not support continuous AURC.
 | Failure | Observed evidence and handling |
 | --- | --- |
 | Wrong source, period, unit or revision | Historical controls withheld unsupported releases. The G3 prior-year expansion now preserves YTD and CY. |
+| Filing amendment versus accounting presentation | A restating Massimo amendment and a Part III Redfin amendment share the same form suffix. The comparison uses each issuer's explanatory note and the exact financial source cells. [Revision replay](G2_SEC_REVISIONS.md). |
 | Filing tag versus reported line | Amazon's receivables tag covers a display line with other current assets. The document-only path withheld three affected requests. Structured scores measure agreement with the filed tag on these cases. [Source review](G3_DOCUMENT_BALANCE_SHEETS.md). |
 | Rounded versus precise observations | G2 keeps multiple values visible, including Apple's rounded and precise unrecognized-tax-benefit disclosures. |
 | Missing taxonomy or transformation | The pinned SEC profile resolved all 81 skipped numeric transforms. Arelle still reports 110 `IOerror` and 21,644 `missingReferences` diagnostics in the offline replay. [Transform replay](G2_SEC_INLINE_TRANSFORMS.md). |
@@ -185,8 +188,9 @@ outcomes. These disposition points do not support continuous AURC.
   checks. Reproduced 21/21 grounded answers on 21 answerable M13
   development-exposed cases.
 - Built a content-addressed SEC Inline XBRL pipeline that reproduced
-  20,723 numeric observations from 17 filings offline and verified
-  7,087 identity-matched values against SEC Company Facts.
+  20,804 numeric observations from 17 filings offline with the pinned
+  SEC transforms and verified 7,088 identity-matched values against
+  SEC Company Facts.
 - Reduced scoped Dense rank p50 from 4.25 ms to 1.16 ms while
   preserving all top-10 IDs on 30 paired historical requests.
 
@@ -199,7 +203,7 @@ reviewer bundle is available. Remaining research gaps include adjudicated mixed
 cohorts and full Inline XBRL taxonomy validation. The Transformers
 4.57.6 compatibility debt remains documented in G0.
 
-The latest offline verification passed 594 tests on Windows with
-three corpus skips and 593 tests with four skips on Linux WSL with
-the Inline XBRL extra. Ruff and focused mypy passed. GitHub Actions
-has no run for these local commits.
+The latest offline verification passed 594 tests with three corpus
+skips on both Windows and Linux WSL with the Inline XBRL extra. Ruff
+and focused mypy passed. GitHub Actions has no run for these local
+commits.
