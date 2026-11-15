@@ -56,3 +56,15 @@ has SHA-256 `79d5e02886b95c5ba0f8bc4c9a48e40ed8e69e39651c31f1c4a92f1da476fc91`.
 **KEEP** the draft and source receipts for reviewer handoff. The G6
 independent run awaits the verified crosswalk, eligible corpus, frozen
 questions and reviewer-held labels.
+
+## Revision diagnostic update
+
+The [revision diagnostic](G2_SEC_REVISIONS.md) adds Massimo Group and
+Redfin. The generator reads their pinned manifest and records all four
+accessions. The new draft covers 70 issuer CIKs and 91 local document
+IDs. Two offline runs produced identical hashes for both files.
+
+| Artifact | SHA-256 |
+| --- | --- |
+| [Updated draft](../.local/g6/revision-exposure/draft-exposed.jsonl) | `9a9fb4a7b2fc56d5ed9f02a6b7e349386fed3a70813975128866052e60d5e547` |
+| [Updated source receipt](../.local/g6/revision-exposure/report.json) | `7999f7b14b8dcc9ff3878fb800c145d114a7601b99e93408d5be5163e24c3825` |

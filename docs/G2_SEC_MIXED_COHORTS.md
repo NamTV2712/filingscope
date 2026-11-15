@@ -58,7 +58,8 @@ for EUR operating income in the frozen extract and record the available
 USD observation as a distractor. Their labels describe the extract's
 contents. The validation revision case checks the items Tesla's 10-K/A
 explicitly amended. It measures filing scope. Positive numeric
-restatement coverage is pending.
+restatement and segment recast cases are in the separate
+[revision replay](G2_SEC_REVISIONS.md).
 
 The eight narrative answers and Tesla revision answer are author-checked
 against the cited HTML excerpts. The remaining 195 labels use the

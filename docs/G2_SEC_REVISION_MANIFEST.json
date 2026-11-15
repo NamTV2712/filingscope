@@ -1,0 +1,145 @@
+{
+  "arelle_version": "2.47.4",
+  "cutoff": "2025-05-20",
+  "filings": [
+    {
+      "accession_number": "0001641172-25-000763",
+      "amendment_relationship": null,
+      "archive": {
+        "sha256": "sha256:827dfdba76fad08f0b3ff38e47c4fc9b26ff896d195072976d6af7e0d8da5510",
+        "size": 645107,
+        "url": "https://www.sec.gov/Archives/edgar/data/1952853/000164117225000763/0001641172-25-000763-xbrl.zip"
+      },
+      "cik": 1952853,
+      "dimensioned_observations": 183,
+      "facts_sha256": "sha256:d9f84065a4c7528aeee547626df3760d621e1205b230a32c5ee005bb815b83f0",
+      "filing_date": "2025-03-26",
+      "form_type": "10-K",
+      "numeric_observations": 653,
+      "primary_document": "form10-k.htm",
+      "report_date": "2024-12-31",
+      "skipped": {
+        "nil_or_non_numeric": 275
+      },
+      "source_url": "https://www.sec.gov/Archives/edgar/data/1952853/000164117225000763/form10-k.htm",
+      "ticker": "MAMO"
+    },
+    {
+      "accession_number": "0001641172-25-011711",
+      "amendment_relationship": {
+        "original_accession": "0001641172-25-000763",
+        "status": "UNIQUE_SAME_PERIOD_FORM"
+      },
+      "archive": {
+        "sha256": "sha256:fc69b71d9c6fba908db9bf8b1cdfef207e155e92fb4b96d6d4131c4b4495c355",
+        "size": 646634,
+        "url": "https://www.sec.gov/Archives/edgar/data/1952853/000164117225011711/0001641172-25-011711-xbrl.zip"
+      },
+      "cik": 1952853,
+      "dimensioned_observations": 282,
+      "facts_sha256": "sha256:ad997e2051ac2655e5877e1209bf8395cc0bbccdaf9c211670ed43daa983f37b",
+      "filing_date": "2025-05-20",
+      "form_type": "10-K/A",
+      "numeric_observations": 798,
+      "primary_document": "form10-ka.htm",
+      "report_date": "2024-12-31",
+      "skipped": {
+        "nil_or_non_numeric": 281
+      },
+      "source_url": "https://www.sec.gov/Archives/edgar/data/1952853/000164117225011711/form10-ka.htm",
+      "ticker": "MAMO"
+    },
+    {
+      "accession_number": "0001382821-25-000046",
+      "amendment_relationship": null,
+      "archive": {
+        "sha256": "sha256:965d29810b97db1b79642ccc92659403db2280097c5cb448f1246770093526ab",
+        "size": 489790,
+        "url": "https://www.sec.gov/Archives/edgar/data/1382821/000138282125000046/0001382821-25-000046-xbrl.zip"
+      },
+      "cik": 1382821,
+      "dimensioned_observations": 983,
+      "facts_sha256": "sha256:40bc9bc1c3467f70cad2868df596921064ac86febcfab4f76e52ec1c650d149a",
+      "filing_date": "2025-02-27",
+      "form_type": "10-K",
+      "numeric_observations": 1671,
+      "primary_document": "rdfn-20241231.htm",
+      "report_date": "2024-12-31",
+      "skipped": {
+        "nil_or_non_numeric": 184
+      },
+      "source_url": "https://www.sec.gov/Archives/edgar/data/1382821/000138282125000046/rdfn-20241231.htm",
+      "ticker": "RDFN"
+    },
+    {
+      "accession_number": "0001104659-25-039439",
+      "amendment_relationship": {
+        "original_accession": "0001382821-25-000046",
+        "status": "UNIQUE_SAME_PERIOD_FORM"
+      },
+      "archive": {
+        "sha256": "sha256:7c4d278bed32606b7c534c64a2e78738aa3b6eb9dc9d719083e2b49d9c11eb47",
+        "size": 198518,
+        "url": "https://www.sec.gov/Archives/edgar/data/1382821/000110465925039439/0001104659-25-039439-xbrl.zip"
+      },
+      "cik": 1382821,
+      "dimensioned_observations": 12,
+      "facts_sha256": "sha256:027d1df78fa14bb1e097a0f2923bffe85d101ebdc1f6aeb2c048cbdca8d70221",
+      "filing_date": "2025-04-25",
+      "form_type": "10-K/A",
+      "numeric_observations": 58,
+      "primary_document": "rdfn-20241231x10ka.htm",
+      "report_date": "2024-12-31",
+      "skipped": {
+        "nil_or_non_numeric": 54
+      },
+      "source_url": "https://www.sec.gov/Archives/edgar/data/1382821/000110465925039439/rdfn-20241231x10ka.htm",
+      "ticker": "RDFN"
+    }
+  ],
+  "first_filed": "2025-01-01",
+  "forms": [
+    "10-K",
+    "10-K/A"
+  ],
+  "issuers": [
+    {
+      "cik": "0001952853",
+      "company_facts": {
+        "sha256": "sha256:6fc82207180e55557e37400eceba3fb05f9147ed5c094ff3eedddcb1f2c58d0a",
+        "size": 646078,
+        "url": "https://data.sec.gov/api/xbrl/companyfacts/CIK0001952853.json"
+      },
+      "submissions": {
+        "sha256": "sha256:ef4fbd72d331e53821a39a9eb9907b793ab26202846513c12bce8c9dffd4df18",
+        "size": 17450,
+        "url": "https://data.sec.gov/submissions/CIK0001952853.json"
+      },
+      "ticker": "MAMO"
+    },
+    {
+      "cik": "0001382821",
+      "company_facts": {
+        "sha256": "sha256:a4a5fee8fce440e083b7bc878fc0cd83c5e514217816de167bf362f335b8c915",
+        "size": 1904124,
+        "url": "https://data.sec.gov/api/xbrl/companyfacts/CIK0001382821.json"
+      },
+      "submissions": {
+        "sha256": "sha256:cc1324f659d68908d09e9d1169ed86596d40246b57e2669d16a8991edca2d175",
+        "size": 155093,
+        "url": "https://data.sec.gov/submissions/CIK0001382821.json"
+      },
+      "ticker": "RDFN"
+    }
+  ],
+  "max_per_form_per_issuer": 1,
+  "schema": "filingscope-sec-ixbrl-corpus-v1",
+  "sec_transforms": {
+    "files": {
+      "__init__.py": "sha256:2296586f945ffd95ab37d3d4147c4e45f42ce4e5f397f61143e053208adefbf1",
+      "text2num.py": "sha256:6c9b26354320a2fb34fe380cdc71ff7f8d1cc712811e6b10c661e512f0383409"
+    },
+    "revision": "4891c4c9889c77af247428ceff4fa7cc52d534ea"
+  },
+  "unavailable_filings": []
+}

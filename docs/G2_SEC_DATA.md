@@ -90,6 +90,10 @@ unnecessary for the measured page.
 [Apple 10-K](https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/aapl-20250927.htm),
 [Apple FY2025 statements PDF](https://www.apple.com/newsroom/pdfs/fy2025-q4/FY25_Q4_Consolidated_Financial_Statements.pdf).
 
+The [revision replay](G2_SEC_REVISIONS.md) checks a real FY2024 restatement
+and segment recast. It validates four original/adjustment/restated
+bridges, six tagged annual recast cells and nine untagged quarterly cells.
+
 ## Benchmark compatibility
 
 | Dataset and pinned release | License and evidence | G2 use |
@@ -191,10 +195,10 @@ the original content-addressed cache.
 **KEEP** the offline numeric extraction and accession-matched comparison.
 **EXPERIMENT** with the new provisional cohorts. **DEFER** full taxonomy
 validation, adjudicated mixed cohorts and replacing production Company
-Facts. G2 is **PARTIALLY_COMPLETE** on the benchmark breadth and
-independent review requirements. The engineering regression gate passed.
-G3 can use the existing historical replay and these provisional data
-controls without reviewer-held labels.
+Facts. The initial regression gate passed. The mixed cohort and revision
+follow-ups cover all eight G2 categories and meet the roadmap's data,
+provenance and replay requirements. The development labels remain
+provisional. [Current milestone status](IMPLEMENTATION_PROGRESS.md#g2-sec-data-and-benchmark-cohorts).
 
 The G2 baseline was local `main` at `560cbbc`. The three pre-existing
 independent/FinRank script changes remain outside this milestone.

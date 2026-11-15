@@ -18,7 +18,7 @@ from src.evaluation.finagent_benchmark import load_finagent
 from src.evaluation.independent_final import Filing, Membership
 from src.ingestion.sec_client import SECEdgarClient
 from src.ingestion.sec_corpus import MAX_METADATA_BYTES, SourceCache
-from src.retrieval.canonical_json import canonical_json_bytes, sha256_file
+from src.retrieval.canonical_json import canonical_json_bytes, canonical_sha256, sha256_file
 
 # FinanceBench company labels use short names, including delisted issuers.
 FINANCEBENCH_TICKERS = {
@@ -33,6 +33,8 @@ HISTORICAL_CIKS = {**TICKER_CIK_OVERRIDES, "ATVI": 718877, "FL": 850209, "CTRA":
 FINANCEBENCH_MANIFEST_HASH = "sha256:7fa1bbc5ca0298ebce98e7aea369acc2bb4c6a23615b6f18ef8ffa7ace281dee"
 FINRANK_HASH = "sha256:e9295f680bd6085362486c90c170bce243be7f85ed18074d6ba21cb75141ac78"
 SEC_TICKER_MAP_HASH = "sha256:391effc6a807ae1752c9d2c351dbecab8f15aa1c59b035a9a28f7955a94feb0f"
+G2_REVISION_MANIFEST = Path("docs/G2_SEC_REVISION_MANIFEST.json")
+G2_REVISION_MANIFEST_HASH = "sha256:09d15e83411f4b6fa74bbd36a5d53ceace044866105d969be78a816d2ddf547e"
 
 
 def _resolve(tickers: set[str], current: dict[str, int]) -> dict[str, int]:
@@ -69,6 +71,10 @@ def _prepare(financebench: Path, g2: Path, finagent: Path, finrank: Path, extern
     manifest = _load_manifest(g2)
     g2_filings = manifest["filings"]
     g2_issuers = {row["ticker"]: int(row["cik"]) for row in manifest["issuers"]}
+    revision_manifest = json.loads(G2_REVISION_MANIFEST.read_bytes())
+    if canonical_sha256(revision_manifest) != G2_REVISION_MANIFEST_HASH:
+        raise ValueError("G2 revision manifest differs from the recorded snapshot")
+    revision_accessions = {row["accession_number"]: row["cik"] for row in revision_manifest["filings"]}
     finagent_ciks = _resolve({ticker for row in load_finagent(finagent) for ticker in row.tickers}, ticker_map)
     finrank_rows = [json.loads(line) for line in finrank.read_text(encoding="utf-8").splitlines() if line.strip()]
     finrank_ciks = _resolve({row["ticker"] for row in finrank_rows}, ticker_map)
@@ -81,6 +87,7 @@ def _prepare(financebench: Path, g2: Path, finagent: Path, finrank: Path, extern
         _membership("FinanceBench_P1_P5_M13_Q2_Q7", _issuer_group(financebench_ciks, ticker_map) | set(SEC_ISSUERS.values()),
                     (row["doc_name"] for row in docs), SEC_CUTOFF),
         _membership("G2_G3_G5_SEC_pilot", g2_issuers.values(), (pdf.name for pdf in PDFS), manifest["cutoff"]),
+        _membership("G2_SEC_revision_diagnostic", revision_accessions.values(), (), revision_manifest["cutoff"]),
         _membership("FinAgent_v1.1.1", _issuer_group(finagent_ciks, ticker_map), (), manifest["cutoff"]),
         _membership("FinRank_public_and_local_sources", _issuer_group(finrank_ciks, ticker_map) | {row.cik for row in external},
                     (row.document_id for row in external), max(row.filed.isoformat() for row in external)),
@@ -88,7 +95,8 @@ def _prepare(financebench: Path, g2: Path, finagent: Path, finrank: Path, extern
     return memberships, {
         "status": "DRAFT_FOR_REVIEWER_VERIFICATION",
         "sources": {name: sha256_file(path) for name, path in {
-            "financebench": financebench, "g2_sec": g2, "finagent": finagent, "finrank": finrank,
+            "financebench": financebench, "g2_sec": g2, "g2_sec_revisions": G2_REVISION_MANIFEST,
+            "finagent": finagent, "finrank": finrank,
             "finrank_local_filing_inventory": external_inventory,
         }.items()},
         "sec_ticker_map": ticker_receipt,
@@ -96,6 +104,7 @@ def _prepare(financebench: Path, g2: Path, finagent: Path, finrank: Path, extern
         "financebench_document_ids_by_ticker": dict(sorted(financebench_docs.items())),
         "g2_issuers": g2_issuers,
         "g2_accessions": {row["accession_number"]: row["cik"] for row in g2_filings},
+        "g2_revision_accessions": revision_accessions,
         "finagent_issuers": finagent_ciks, "finrank_issuers": finrank_ciks,
         "also_excluded_current_ciks": {ticker: ticker_map[ticker] for ticker, cik in HISTORICAL_CIKS.items()
                                        if ticker in ticker_map and ticker_map[ticker] != cik},
