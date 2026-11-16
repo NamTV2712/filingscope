@@ -345,3 +345,21 @@ Both arms reproduced zero releases, 107 unsupported and 23 abstentions on 130
 IDs, with mapped-page recall counts of 6/31 and 5/31. The loopback Apple HTTP
 smoke checks FY2024 revenue and FY2030 abstention. Clean-checkout verification
 and exact-SHA workflow are recorded at the following milestone.
+
+### D1 full public-cohort diagnosis
+
+D0 commit `54ea2b6` passed the exact-SHA backend workflow
+[43821704981](https://github.com/NamTV2712/filingscope/actions/runs/43821704981).
+Its detached clean checkout reproduced 594 tests with three corpus skips,
+both Apple HTTP cases, and the 130-case public predict/score counts. The clean
+replay outputs are `.local/d0-clean/data/d0-clean-{predictions,scores}.json`.
+
+Added a reproducible diagnostic runner, four boundary tests and
+`D1_FINRANK_DIAGNOSTICS.md`. Captured 260 stable baseline rows and 62 raw-page
+location interventions. Each arm kept 21 unsupported and 10 abstained cases
+when all mapped pages were supplied. Native routing rejects 88 metric, 16
+period and three advisory requests in each arm. Extractor errors can overlap.
+The raw artifact `data/independent-final/finrank-2025/d1-diagnostics-final.json`
+has SHA-256 `847d10e4c274af52bac0594223092db1dfacae8a7a76240412eb95e6b6fbe9f6`.
+The diagnostic preserves unresolved causes and unavailable adaptive verifier
+detail explicitly. Four focused tests and Ruff passed.
