@@ -15,6 +15,7 @@ from src.decision.filing_disclosures import (
     business_disclosure_source_matches, filing_amendment_scopes, filing_industry_relations, filing_segment_disclosures,
     is_segment_list_question, requested_amendment_scope, sec_accession_matches, segment_kind_matches, segment_signature,
 )
+from src.decision.filing_tables import DISCLOSURE_METRIC_IDS, disclosure_cell_matches, filing_identity_matches
 from src.decision.models import (
     CoverageStatus,
     EvidenceCoverage,
@@ -153,7 +154,9 @@ def _normalized_facts(
     structured = chunk.get("source_type") == "XBRL_FACT"
     statement_balance = (not structured and metric.metric_id in INSTANT_METRICS
                          and chunk.get("filing_page_checked") is True)
-    if concepts is not None and not statement_balance and (not structured or chunk.get("financial_concept") not in concepts):
+    disclosure_table = (not structured and metric.metric_id in DISCLOSURE_METRIC_IDS
+                        and chunk.get("filing_page_checked") is True and filing_identity_matches(dict(chunk)))
+    if concepts is not None and not statement_balance and not disclosure_table and (not structured or chunk.get("financial_concept") not in concepts):
         return ()
     source_url = chunk.get("source_url") or chunk.get("source_repository_url") or chunk.get("filing_url")
     return tuple(
@@ -165,6 +168,10 @@ def _normalized_facts(
         and fact.entity_id == entity_id
         and fact.metric_id == metric.metric_id
         and (not statement_balance or fact.table_row is not None and fact.table_column is not None)
+        and (metric.metric_id not in DISCLOSURE_METRIC_IDS or structured or (
+            disclosure_table and fact.table_row is not None and fact.table_column is not None
+            and disclosure_cell_matches(fact) and fact.filing_accession == chunk.get("accession_number")
+        ))
         and (approved is not None and fact.period_identity is None
              or fact.period_identity is not None and fact.period_identity.label == fact.period)
         and _kind_matches(fact, metric)
@@ -227,7 +234,7 @@ def _facts_from_chunk(
     )
     observations: list[PeriodValuePair] = []
     if metric.quantitative:
-        if metric.metric_id in CONSOLIDATED_METRIC_CONCEPTS:
+        if metric.metric_id in DISCLOSURE_METRIC_IDS or metric.metric_id in CONSOLIDATED_METRIC_CONCEPTS:
             # These mappings authorize accession-bound structured facts.
             # Unscoped text can contain differently based expense components.
             return ()

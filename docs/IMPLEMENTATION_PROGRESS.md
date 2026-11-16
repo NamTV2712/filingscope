@@ -378,3 +378,17 @@ and correctly withheld 8/8 controls. Four focused tests and Ruff passed.
 `D2_TRANSFER_EXPOSURE.json` supplements the G6 exposure crosswalk. The runner
 reports numeric/page agreement separately from post-prediction source review
 and binds optional reviews to prediction, freeze, answer and operand cells.
+
+### D3 filing-bound disclosure cells
+
+D2 commit `f858f63` passed exact-SHA backend workflow
+[43863397878](https://github.com/NamTV2712/filingscope/actions/runs/43863397878).
+Added scoped annual revenue-table reading with subtotal checks across all
+year columns, explicit units and conditional cell identity metadata. Both
+architectures verified the original Devon commodity split against the filed
+oil/gas/NGL rows. The oil answer is USD 9,368 million, with the public label
+discrepancy retained. Raw development smoke is
+`data/independent-final/finrank-2025/d3-smoke.json`. The targeted parser,
+normalization, ledger and ranker tests passed. `D3_FILING_TABLE_CELLS.md`
+records the source and method. Exact committed-suite results and CI are
+recorded at the next milestone.

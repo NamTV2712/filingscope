@@ -118,7 +118,10 @@ _EVIDENCE_ID_FIELDS = (
     "derived_from_evidence_ids",
     "calculation_id",
 )
-_CELL_ID_FIELDS = ("period_identity", "original_scale", "table_row", "table_column")
+_CELL_ID_FIELDS = (
+    "period_identity", "original_scale", "table_row", "table_column", "table_title", "row_label",
+    "row_group", "unit_source_page", "filing_accession",
+)
 
 
 class EvidenceRecord(BaseModel):
@@ -140,6 +143,11 @@ class EvidenceRecord(BaseModel):
     original_scale: str | None = None
     table_row: int | None = Field(default=None, ge=0)
     table_column: int | None = Field(default=None, ge=0)
+    table_title: str | None = None
+    row_label: str | None = None
+    row_group: str | None = None
+    unit_source_page: int | None = Field(default=None, ge=0)
+    filing_accession: str | None = None
     section: str | None = None
     page: int | None = Field(default=None, ge=0)
     table_id: str | None = None
@@ -321,6 +329,11 @@ class FinancialFact(BaseModel):
     original_scale: str | None = None
     table_row: int | None = Field(default=None, ge=0)
     table_column: int | None = Field(default=None, ge=0)
+    table_title: str | None = None
+    row_label: str | None = None
+    row_group: str | None = None
+    unit_source_page: int | None = Field(default=None, ge=0)
+    filing_accession: str | None = None
     raw_value: str | None = None
     normalized_value: str | None = None
     unit: str | None = None
@@ -354,6 +367,11 @@ class FinancialFact(BaseModel):
             "original_scale": record.original_scale,
             "table_row": record.table_row,
             "table_column": record.table_column,
+            "table_title": record.table_title,
+            "row_label": record.row_label,
+            "row_group": record.row_group,
+            "unit_source_page": record.unit_source_page,
+            "filing_accession": record.filing_accession,
             "raw_value": record.raw_value,
             "normalized_value": record.normalized_value,
             "unit": record.unit,

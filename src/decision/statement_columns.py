@@ -54,6 +54,10 @@ class StatementValue:
     value_kind: str = "amount"
     raw_cell: str | None = None
     restated: bool = False
+    table_title: str | None = None
+    row_label: str | None = None
+    row_group: str | None = None
+    unit_source_page: int | None = None
 
     @property
     def base_amount(self) -> Decimal:

@@ -71,6 +71,9 @@ class _RecordingRetriever:
     def get_source_page(self, document: str, page_number: int) -> str | None:
         return self.index.get_source_page(document, page_number)
 
+    def get_document_unit_declaration(self, document: str):
+        return self.index.get_document_unit_declaration(document)
+
     @property
     def statement_document_ids(self) -> frozenset[str]:
         return self.index.statement_document_ids

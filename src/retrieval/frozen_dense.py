@@ -44,6 +44,9 @@ class FrozenDenseRetriever:
     def get_source_page(self, document: str, page_number: int) -> str | None:
         return self.pdf_pages.get(document, page_number) if self.pdf_pages is not None else None
 
+    def get_document_unit_declaration(self, document: str):
+        return self.pdf_pages.monetary_declaration(document) if self.pdf_pages is not None else None
+
     def retrieve_statement_candidates(
         self, document_ids: tuple[str, ...], kind: PeriodKind, *, top_k: int,
     ) -> list[dict[str, Any]]:

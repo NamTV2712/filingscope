@@ -148,6 +148,11 @@ class EvidenceFact(BaseModel):
     original_scale: str | None = None
     table_row: int | None = None
     table_column: int | None = None
+    table_title: str | None = None
+    row_label: str | None = None
+    row_group: str | None = None
+    unit_source_page: int | None = None
+    filing_accession: str | None = None
     value_kind: str | None = None
     document_id: str
     page_number: int | None = None

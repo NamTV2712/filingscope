@@ -9,6 +9,7 @@ from src.decision.company_catalog import CompanyCatalog, normalize_entity
 from src.decision.filing_disclosures import (
     AMENDMENT_SCOPE_METRIC, business_disclosure_issuer_text, requested_amendment_scope,
 )
+from src.decision.filing_tables import DISCLOSURE_METRICS, commodity_split_question
 from src.decision.models import (
     EvidenceEntity,
     EvidenceRequirement,
@@ -33,12 +34,13 @@ _AMENDMENT_SCOPE = MetricRequirement(
 
 
 _METRIC_DEFINITIONS: tuple[MetricRequirement, ...] = (
+    *DISCLOSURE_METRICS,
     MetricRequirement(metric_id=ENERGY_METRIC, display_name=ENERGY_LABEL, aliases=ENERGY_ALIASES),
     MetricRequirement(metric_id="revenue", display_name="revenue", aliases=(
         "total net sales", "total revenue", "net sales", "revenues", "revenue", "sales",
     )),
     MetricRequirement(metric_id="contract_revenue", display_name="revenue from contracts with customers", aliases=(
-        "revenue from contracts with customers", "revenue from contract with customer",
+        "revenue from contracts with customers", "revenues from contracts with customers", "revenue from contract with customer",
         "revenue from contract with customer, excluding assessed tax",
         "revenue from contract with customer excluding assessed tax",
     )),
@@ -156,7 +158,7 @@ _NONSTANDARD_BASIS = re.compile(
     re.I,
 )
 _COST_OF_REVENUE = re.compile(r"\bcost of (?:revenues?|sales)\b", re.I)
-_CONTRACT_REVENUE = re.compile(r"\brevenue from contracts? with customers?(?:,? excluding assessed tax)?\b", re.I)
+_CONTRACT_REVENUE = re.compile(r"\brevenues? from contracts? with customers?(?:,? excluding assessed tax)?\b", re.I)
 _CONTRACT_REVENUE_OTHER_BASIS = re.compile(r"\bincluding (?:assessed |sales )?tax(?:es)?\b", re.I)
 _COMPONENT_SCOPE = re.compile(
     r"\b(?:excluding|adjusted|discontinued operations|domestic|foreign|federal|state|deferred|subsidiar(?:y|ies))\b"
@@ -244,6 +246,11 @@ def permits_energy_segment_lookup(question: str, *, assertion: bool = False) -> 
 def _metrics(question: str) -> tuple[MetricRequirement, ...]:
     folded = question.casefold().replace("’", "'")
     revenue_text = mask_revenue_components(folded)
+    for metric in DISCLOSURE_METRICS:
+        for alias in sorted(metric.aliases, key=len, reverse=True):
+            revenue_text = re.sub(rf"(?<![\w]){re.escape(alias)}(?![\w])", " ", revenue_text, flags=re.I)
+    if commodity_split_question(question):
+        revenue_text = re.sub(r"\b(?:sales|revenues?)\s+(?:split|breakdown)\s+by\s+commodity\b", " ", revenue_text)
     found: dict[str, tuple[int, int]] = {}
     aliases = sorted(
         [
@@ -271,6 +278,8 @@ def _metrics(question: str) -> tuple[MetricRequirement, ...]:
         remainder = _ENERGY_METRIC_RE.sub(" ", folded)
         if not re.search(r"\brevenues?\b|\bsales\b", remainder):
             ordered_ids.remove("revenue")
+    if commodity_split_question(question):
+        ordered_ids = list(dict.fromkeys((*ordered_ids, "oil_sales", "gas_sales", "ngl_sales")))
     return tuple(
         next(metric for metric in _METRIC_DEFINITIONS if metric.metric_id == metric_id)
         for metric_id in ordered_ids

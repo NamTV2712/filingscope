@@ -27,6 +27,7 @@ from src.decision.models import (
 )
 from src.decision.policy import EvidenceDecisionLayer
 from src.decision.requirement_extractor import permits_energy_segment_lookup
+from src.decision.filing_tables import filing_identity_matches, parse_revenue_table
 from src.decision.statement_columns import parse_statement_columns, statement_report_date
 from src.generation.answer_generator import (
     AnswerGenerationResult,
@@ -1055,6 +1056,10 @@ def _normalize_filing_statements(runtime: SpecialistRuntime) -> tuple[int, int]:
             infer_annual_starts=runtime.requirements.reporting_interval is not None,
             exact_balance_sheet=runtime.requirements.has_filing_instants and report_end is not None,
         )
+        if not statement.recognized and filing_identity_matches(chunk):
+            get_declaration = getattr(runtime.retriever, "get_document_unit_declaration", None)
+            declaration = get_declaration(document) if callable(get_declaration) else None
+            statement = parse_revenue_table(text, form=form, fiscal_year=fiscal_year, declaration=declaration)
         inspected[key] = statement.recognized
         if not statement.recognized:
             continue
@@ -1067,6 +1072,9 @@ def _normalize_filing_statements(runtime: SpecialistRuntime) -> tuple[int, int]:
                        else f"{cell.currency} {cell.base_amount:,f}"),
                 raw_value=cell.raw_cell, currency=None if cell.value_kind == "percent" else cell.currency,
                 scale="unit", original_scale=cell.scale, table_row=cell.row_index, table_column=cell.column_index,
+                table_title=cell.table_title, row_label=cell.row_label, row_group=cell.row_group,
+                unit_source_page=cell.unit_source_page,
+                filing_accession=chunk.get("accession_number") if cell.table_title else None,
                 value_kind=cell.value_kind, document_id=document, page_number=page, source_url=chunk["source_url"],
             )
             for cell in statement.values if not cell.restated
@@ -1398,6 +1406,8 @@ def _numeric_source_record(
         original_scale=fact.original_scale or fact.scale,
         table_row=fact.table_row,
         table_column=fact.table_column,
+        table_title=fact.table_title, row_label=fact.row_label, row_group=fact.row_group,
+        unit_source_page=fact.unit_source_page, filing_accession=fact.filing_accession,
         section=base.section,
         page=base.page,
         table_id=base.table_id or (f"{base.document_id}:statement:{base.page}" if fact.table_row is not None else None),
