@@ -321,3 +321,27 @@ reviewer handoff under the v4 fallback. Its independent run stays
 `PARTIALLY_COMPLETE / PROVISIONAL_NOT_INDEPENDENT`. The review records
 the denominator and evidence provenance for each result.
 [Reviewer protocol](G6_EVALUATION_READINESS.md).
+
+## Offline research demo D0–D8
+
+This work targets the user-authorized local English CPU demo and zero paid API
+calls. Each completed milestone is committed and pushed to main, followed by
+the backend workflow for that exact SHA. The final gate is 12/16 grounded
+Ford/Chevron positives, 8/8 withheld controls and at least two newly supported
+original routed FinRank IDs. The transfer cohort is an internal evaluation.
+
+### D0 baseline packaging
+
+Reviewed and published the three corpus/public-runner helpers against their
+G6 hashes. Corrected the optional observer environment variable names. Added
+`DEMO_REPRODUCTION.md` with setup, artifact preparation and offline commands.
+Ran the locked Arelle offline suite (594 passed, three missing-corpus skips),
+Ruff, configured mypy and `uv lock --check --offline`. Raw prediction and score
+outputs are `data/independent-final/finrank-2025/d0-predictions.json` and
+`d0-scores.json`. Their SHA-256 values are respectively
+`91502da96bed448ef11a4c941ff167e131b88688caa8986754b3c9153d5d378a` and
+`b2d02359cd348866e488707874e3782a3811ae0530c845e37abb15ff113a6d4b`.
+Both arms reproduced zero releases, 107 unsupported and 23 abstentions on 130
+IDs, with mapped-page recall counts of 6/31 and 5/31. The loopback Apple HTTP
+smoke checks FY2024 revenue and FY2030 abstention. Clean-checkout verification
+and exact-SHA workflow are recorded at the following milestone.

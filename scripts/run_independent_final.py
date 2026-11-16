@@ -34,6 +34,12 @@ def _dependencies() -> dict[str, str]:
 
 
 def _predict(bundle: Path, freeze: Freeze, corpus: Corpus, questions: list[Question]) -> dict:
+    return predict_filing_questions(bundle, corpus, questions, git_sha=freeze.git_sha,
+                                    cutoff=freeze.filing_through.isoformat(), threads=freeze.threads)
+
+
+def predict_filing_questions(bundle: Path, corpus: Corpus, questions: list[Question], *,
+                             git_sha: str, cutoff: str, threads: int) -> dict:
     import torch
 
     from scripts.run_multi_agent_ablation import _PolicyLayer, _RecordingRetriever
@@ -49,7 +55,7 @@ def _predict(bundle: Path, freeze: Freeze, corpus: Corpus, questions: list[Quest
     from src.retrieval.pdf_page_cache import FrozenPdfPages
 
     started = time.perf_counter()
-    torch.set_num_threads(freeze.threads)
+    torch.set_num_threads(threads)
     index = bundle / "index"
     read_pinned(index / "index_manifest.json", corpus.index_manifest_sha256)
     embedding = json.loads(read_pinned(index / "embedding_manifest.json", corpus.embedding_manifest_sha256))
@@ -74,7 +80,7 @@ def _predict(bundle: Path, freeze: Freeze, corpus: Corpus, questions: list[Quest
     issuers = {ticker: item["cik"] for ticker, item in sec_manifest["issuers"].items()}
     if not set(issuers.values()) <= {filing.cik for filing in corpus.filings}:
         raise ValueError("SEC snapshots include issuers outside the frozen corpus")
-    sec = CompanyFactsReplay(bundle / "sec", issuers, latest_filed=freeze.filing_through.isoformat())
+    sec = CompanyFactsReplay(bundle / "sec", issuers, latest_filed=cutoff)
     ticker_by_cik = {cik: ticker for ticker, cik in issuers.items()}
     tickers = {chunk["company"]: ticker_by_cik[int(chunk["cik"])] for chunk in chunks if int(chunk["cik"]) in ticker_by_cik}
     router = ComplexityRouter(CorpusMap.from_chunks(chunks, index_generation_id=corpus.index_id))
@@ -94,7 +100,7 @@ def _predict(bundle: Path, freeze: Freeze, corpus: Corpus, questions: list[Quest
             row["retrieved_sources"] = sorted(observation.retrieved_sources)
             predictions[arm][question.case_id] = dict(row, latency_ms=round(elapsed, 3))
     return {
-        "git_sha": freeze.git_sha,
+        "git_sha": git_sha,
         "created_at_utc": datetime.now(UTC).isoformat(),
         "python": platform.python_version(),
         "platform": platform.platform(),
