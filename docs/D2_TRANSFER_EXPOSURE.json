@@ -1,0 +1,11 @@
+{
+  "cohort": "D2_internal_Ford_Chevron_FY2024",
+  "issuer_ciks": [37996, 93410],
+  "document_ids": ["F_FY2024_10K", "CVX_FY2024_10K"],
+  "through": "2025-02-21",
+  "accessions": ["0000037996-25-000013", "0000093410-25-000009"],
+  "status": "INTERNAL_DEVELOPMENT_EXPOSED",
+  "questions_sha256": "sha256:22b657f715a4138454235b3851e5e525545693ba38d4a3fa52314034bf39e49f",
+  "labels_sha256": "sha256:d58f7ba84b4c369ddf3c7d11c5d1337b15404717f8ea4ee769ef97823c0966f3",
+  "freeze_sha256": "sha256:1ad8829b83d7858dde590e0a30e86e17c6560e46945a54f06008ac334a27950d"
+}

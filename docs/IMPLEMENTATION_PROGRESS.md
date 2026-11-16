@@ -363,3 +363,18 @@ The raw artifact `data/independent-final/finrank-2025/d1-diagnostics-final.json`
 has SHA-256 `847d10e4c274af52bac0594223092db1dfacae8a7a76240412eb95e6b6fbe9f6`.
 The diagnostic preserves unresolved causes and unavailable adaptive verifier
 detail explicitly. Four focused tests and Ruff passed.
+
+### D2 frozen transfer cohort
+
+D1 commit `712d4e8` passed exact-SHA workflow
+[43822203627](https://github.com/NamTV2712/filingscope/actions/runs/43822203627).
+Prepared source-reviewed Ford/Chevron FY2024 PDFs and a 24-question internal
+cohort before runtime edits. Its SHA-256 freeze is
+`1ad8829b83d7858dde590e0a30e86e17c6560e46945a54f06008ac334a27950d`.
+The label-free baseline used immutable D0 imports while labels were physically
+outside the bundle. Each arm released zero answers on 16 answerable cases
+and correctly withheld 8/8 controls. Four focused tests and Ruff passed.
+`D2_TRANSFER_COHORT.md` records inputs, source hashes and reproduction commands.
+`D2_TRANSFER_EXPOSURE.json` supplements the G6 exposure crosswalk. The runner
+reports numeric/page agreement separately from post-prediction source review
+and binds optional reviews to prediction, freeze, answer and operand cells.
