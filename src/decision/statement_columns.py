@@ -580,8 +580,13 @@ def parse_statement_columns(
     for metric, rows in by_metric.items():
         totals = [item for item in rows if item[1].startswith("total ")]
         rows = totals or rows
-        for row_index, label, raw in rows:
+        for row_index, _, raw in rows:
             source_row = body_start + row_index
+            row_label = None
+            if scoped_balance_sheet:
+                row = body[row_index]
+                label_match = _ALIGNED_ROW.fullmatch(row) or _BALANCE_ROW.fullmatch(row)
+                row_label = label_match[1] if label_match else row.removesuffix(raw).strip()
             cells = _statement_cells(raw)
             if len(rows) != 1 or len(cells) != len(periods) + int(change):
                 ambiguous.append(AmbiguousStatementRow(metric, source_row, "row_or_column_ownership_ambiguous"))
@@ -616,6 +621,6 @@ def parse_statement_columns(
                     body[row_index], top, period, physical_rows[source_row] if scoped_balance_sheet else source_row,
                     column, value_kind, cell, restated,
                     table_title=lines[title] if scoped_balance_sheet else None,
-                    row_label=label if scoped_balance_sheet else None,
+                    row_label=row_label,
                 ))
     return StatementParse(True, tuple(results), tuple(ambiguous))

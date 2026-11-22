@@ -52,6 +52,7 @@ def test_scoped_balance_uses_original_row_and_excludes_subsidiary_table():
     assert cells["cash_and_equivalents"].amount == Decimal(25)
     assert cells["cash_and_equivalents"].row_index == 6
     assert cells["total_liabilities"].amount == Decimal(60)
+    assert cells["total_liabilities"].row_label == "Total Liabilities"
     assert cells["total_assets"].period_identity.end == date(2024, 12, 31)
 
 
