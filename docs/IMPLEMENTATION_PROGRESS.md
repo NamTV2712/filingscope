@@ -433,3 +433,19 @@ model revision and accession metadata. Document-only bundles work with an
 empty Company Facts inventory. The runtime imports no benchmark questions or
 labels. Focused tests check shared graph/HTTP output, invalid artifacts and
 the independent protocol. Offline startup loaded both real filing bundles.
+
+### D7 browser evidence links
+
+D6 commit `b04ce34` passed [backend CI](https://github.com/NamTV2712/filingscope/actions/runs/44978110334).
+The Sources view links to physical PDF pages from the active bundle and
+displays accession, cell identity and a separate units declaration when
+available. The Calculations view links the two numeric inputs. The customer
+disclosure shows its comparator, basis and period. The loopback PDF endpoint
+checks the requested document against the bundle and verifies its bytes.
+
+Chromium exercised lookup, percentage, customer bound and evidence gap at
+1440×900 and 390×844 with outside DNS disabled and the Python offline socket
+guard active. It opened the cited PDF in a new tab at page 56 for all three
+released answers. Local browser receipts and screenshots are under
+`.local/d7-browser/`. The targeted HTTP suite also checks missing IDs and
+changed PDF bytes.

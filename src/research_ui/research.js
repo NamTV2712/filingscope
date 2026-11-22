@@ -81,6 +81,21 @@ function externalLink(url, name) {
   }
 }
 
+function localFilingLink(url, name) {
+  if (!url) return null;
+  try {
+    const target = new URL(url, window.location.origin);
+    if (target.origin !== window.location.origin || !/^\/api\/filings\/[A-Za-z0-9_.%-]+\.pdf$/.test(target.pathname)) return null;
+    const link = node("a", name);
+    link.href = target.href;
+    link.target = "_blank";
+    link.rel = "noopener";
+    return link;
+  } catch {
+    return null;
+  }
+}
+
 function selectTab(id, focus = false) {
   for (const tab of tabs) {
     const active = tab.id === `tab-${id}`;
@@ -215,12 +230,27 @@ function renderSources(result) {
     item.append(node("p", location.join(" · "), "meta"));
     if (source.document && source.document !== source.company) item.append(node("p", source.document, "meta"));
     if (source.value) item.append(node("p", [source.metric, source.value, source.unit].filter(Boolean).join(" · ")));
+    if (source.table_title) item.append(node("p", source.table_title, "meta"));
+    const cell = [source.row_group, source.row_label && `Row ${source.row_label}`,
+      source.table_column == null ? null : `Column ${source.table_column + 1}`].filter(Boolean);
+    if (cell.length) item.append(node("p", cell.join(" · "), "meta"));
+    if (source.original_scale) item.append(node("p", `Reported in ${source.original_scale} ${source.unit || ""}`.trim(), "meta"));
+    for (const bound of source.bounds || []) {
+      const relations = {"<=": "≤", "<": "<", ">": ">", ">=": "≥", "=": "=", "~": "approximately"};
+      item.append(node("p", [bound.scope, `${relations[bound.relation] || bound.relation} ${bound.value}%`, bound.basis, bound.period].filter(Boolean).join(" · ")));
+    }
+    if (source.excerpt) item.append(node("pre", source.excerpt, "source-excerpt"));
     if (source.accession) {
       const revision = source.revision_policy ? ` · Requested basis ${label(source.revision_policy)}` : "";
-      item.append(node("p", `Accession ${source.accession} · ${label(source.revision)}${revision}`, "meta"));
+      const revisionName = source.revision ? ` · ${label(source.revision)}` : "";
+      item.append(node("p", `Accession ${source.accession}${revisionName}${revision}`, "meta"));
       item.append(node("p", [source.tag, source.start, source.end, source.filed && `Filed ${source.filed}`].filter(Boolean).join(" · "), "meta"));
     }
     const links = node("div", null, "reference-row");
+    for (const link of [localFilingLink(source.local_url, "Open cited PDF page"),
+      localFilingLink(source.unit_source_url, `Units declaration · page ${source.unit_source_page}`)]) {
+      if (link) links.append(link);
+    }
     for (const link of [externalLink(source.url, "Open source filing"), externalLink(source.facts_url, "Open SEC Company Facts")]) {
       if (link) links.append(link);
     }
@@ -279,12 +309,17 @@ function renderCalculations(result, sources) {
     item.tabIndex = -1;
     item.append(node("h3", [label(calculation.operation), calculation.period].filter(Boolean).join(" · ")));
     item.append(badge(label(calculation.status), calculation.status === "verified" ? "good" : "warn"));
-    item.append(node("p", `${calculation.formula} = ${calculation.result} ${calculation.unit || ""}`));
+    const suffix = calculation.unit === "%" ? "%" : calculation.unit ? ` ${calculation.unit}` : "";
+    item.append(node("p", `${calculation.formula} = ${calculation.result}${suffix}`));
     item.append(node("p", calculation.rounding, "meta"));
     const inputs = node("ul");
-    for (const input of calculation.inputs) {
-      const row = node("li", input.value);
-      if (sources.has(input.source_id)) row.append(" · ", reference(sources.get(input.source_id)));
+    for (const [index, input] of calculation.inputs.entries()) {
+      const role = calculation.operation === "percentage" ? ["Numerator", "Denominator"][index] : null;
+      const source = sources.get(input.source_id);
+      const [whole, fraction] = input.value.split(".");
+      const value = whole.replace(/\B(?=(\d{3})+$)/g, ",") + (fraction == null ? "" : `.${fraction}`);
+      const row = node("li", [role, role && source?.metric, [source?.unit, value].filter(Boolean).join(" ")].filter(Boolean).join(" · "));
+      if (source) row.append(" · ", reference(source));
       inputs.append(row);
     }
     item.append(inputs);
@@ -389,14 +424,37 @@ async function readResearch(response, progress) {
   return result;
 }
 
-for (const example of document.querySelectorAll("[data-example]")) {
-  example.addEventListener("click", () => {
-    question.value = example.dataset.example;
-    question.setCustomValidity("");
-    mode.value = example.dataset.mode;
-    question.focus();
-  });
+byId("example-questions").addEventListener("click", (event) => {
+  const example = event.target.closest("[data-example]");
+  if (!example) return;
+  question.value = example.dataset.example;
+  question.setCustomValidity("");
+  mode.value = example.dataset.mode;
+  question.focus();
+});
+
+async function loadWorkspace() {
+  try {
+    const response = await fetch("/api/workspace");
+    if (!response.ok) throw new Error("Source inventory could not be loaded.");
+    const workspace = await response.json();
+    if (!workspace.bundle) return;
+    byId("scope-description").textContent = `${workspace.documents} filing PDFs covering ${workspace.companies.join(", ")}. Filed through ${workspace.cutoff}.`;
+    if (workspace.examples?.length) {
+      byId("example-questions").replaceChildren(...workspace.examples.map((example) => {
+        const button = node("button", example.question);
+        button.type = "button";
+        button.dataset.example = example.question;
+        button.dataset.mode = example.mode;
+        return button;
+      }));
+      question.placeholder = `e.g. ${workspace.examples[0].question}`;
+    }
+  } catch {
+    byId("scope-description").textContent = "Source inventory could not be loaded. Reload the workspace to check available filings.";
+  }
 }
+loadWorkspace();
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();

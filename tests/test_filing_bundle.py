@@ -113,6 +113,33 @@ def test_empty_company_facts_bundle_has_shared_http_and_graph_output(bundle):
     ]
 
 
+def test_pdf_link_serves_only_the_verified_workspace_document(bundle):
+    directory, _ = bundle
+    runtime = load_filing_runtime(directory)
+    with LocalResearchServer(0, runtime.graph, filing_runtime=runtime) as server:
+        worker = Thread(target=server.serve_forever, daemon=True)
+        worker.start()
+        try:
+            pdf_url = server.url + "/api/filings/fixture.pdf"
+            with urllib.request.urlopen(pdf_url, timeout=10) as response:
+                assert response.headers.get_content_type() == "application/pdf"
+                assert response.headers["Content-Disposition"] == 'inline; filename="fixture.pdf"'
+                assert response.read() == (directory / "filings/fixture.pdf").read_bytes()
+            for path in ("/api/filings/missing.pdf", "/api/filings/%2e%2e%2fcorpus.json.pdf"):
+                with pytest.raises(urllib.error.HTTPError) as error:
+                    urllib.request.urlopen(server.url + path, timeout=10)
+                assert error.value.code == 404
+                error.value.close()
+            (directory / "filings/fixture.pdf").write_bytes(b"changed file")
+            with pytest.raises(urllib.error.HTTPError) as error:
+                urllib.request.urlopen(pdf_url, timeout=10)
+            assert error.value.code == 409
+            error.value.close()
+        finally:
+            server.shutdown()
+            worker.join(timeout=10)
+
+
 @pytest.mark.parametrize("relative", ["filings/fixture.pdf", "pages.jsonl", "index/embedded_chunks.jsonl",
                                     "index/corpus_chunks.jsonl", "index/embedding_manifest.json", "sec/manifest.json"])
 def test_changed_source_or_index_artifact_fails_before_research(bundle, relative):

@@ -80,6 +80,7 @@ select { border: 1px solid var(--field); border-radius: 6px; padding: 7px 8px; b
 .entry > * + *, .source-card > * + * { margin-top: 8px; }
 .source-card:focus { outline: 2px solid var(--green); }
 .meta { font-size: .83rem; }
+.source-excerpt { white-space: pre-wrap; overflow-wrap: anywhere; font-size: .82rem; padding: 10px; border-radius: 5px; background: var(--canvas); }
 .reference-row { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: .84rem; }
 .source-list, .entry-list { display: grid; gap: 10px; }
 .table-wrap { overflow-x: auto; }

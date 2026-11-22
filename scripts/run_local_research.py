@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
+import re
 from decimal import Decimal
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import Lock
 from typing import Any
+from urllib.parse import quote, unquote, urlsplit
 
 from src.agent.research_progress import ResearchProgress
 from src.agent.specialist_graph import SpecialistResearchGraph
@@ -61,7 +64,8 @@ class ResearchHandler(BaseHTTPRequestHandler):
             and self.headers.get("Origin", self.server.url) == self.server.url
         )
 
-    def _headers(self, status: HTTPStatus, content_type: str, length: int | None = None) -> None:
+    def _headers(self, status: HTTPStatus, content_type: str, length: int | None = None,
+                 *, disposition: str | None = None) -> None:
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Cache-Control", "no-store")
@@ -70,6 +74,8 @@ class ResearchHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Security-Policy", "default-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'")
         if length is not None:
             self.send_header("Content-Length", str(length))
+        if disposition is not None:
+            self.send_header("Content-Disposition", disposition)
         self.end_headers()
 
     def _error(self, status: HTTPStatus, message: str) -> None:
@@ -81,6 +87,12 @@ class ResearchHandler(BaseHTTPRequestHandler):
         if not self._is_local():
             self._error(HTTPStatus.FORBIDDEN, "Open the workspace at its loopback address.")
             return
+        if self.path == "/api/workspace":
+            self._workspace()
+            return
+        if self.path.startswith("/api/filings/"):
+            self._filing_pdf()
+            return
         if self.path not in ASSETS:
             self._error(HTTPStatus.NOT_FOUND, "Page not found.")
             return
@@ -88,6 +100,71 @@ class ResearchHandler(BaseHTTPRequestHandler):
         body = (ASSET_DIR / filename).read_bytes()
         self._headers(HTTPStatus.OK, content_type, len(body))
         self.wfile.write(body)
+
+    def _filing_pdf(self) -> None:
+        runtime = self.server.filing_runtime
+        path = urlsplit(self.path)
+        document = unquote(path.path.removeprefix("/api/filings/").removesuffix(".pdf"))
+        if (runtime is None or path.query or not path.path.endswith(".pdf")
+                or document not in runtime.documents):
+            self._error(HTTPStatus.NOT_FOUND, "Filing not found in this workspace.")
+            return
+        try:
+            content = runtime.documents[document].read_bytes()
+        except OSError:
+            self._error(HTTPStatus.NOT_FOUND, "The local filing PDF is unavailable.")
+            return
+        if f"sha256:{hashlib.sha256(content).hexdigest()}" != runtime.document_hashes[document]:
+            self._error(HTTPStatus.CONFLICT, "The local filing changed after verification. Reload the verified bundle.")
+            return
+        self._headers(HTTPStatus.OK, "application/pdf", len(content), disposition=f'inline; filename="{document}.pdf"')
+        self.wfile.write(content)
+
+    def _workspace(self) -> None:
+        runtime = self.server.filing_runtime
+        result: dict[str, Any] = {"bundle": runtime is not None}
+        if runtime is not None:
+            documents = runtime.router.corpus_map.documents
+            names = sorted({name for document in documents for name in document.company_names})
+            result.update({"companies": names, "documents": len(runtime.documents), "cutoff": runtime.cutoff})
+            first = next((document for document in documents if document.company_names and document.filing_periods), None)
+            if first is not None:
+                company = first.company_names[0]
+                years = re.findall(r"(?:19|20)\d{2}", " ".join(first.filing_periods))
+                if years:
+                    year = max(years)
+                    result["examples"] = [
+                        {"question": f"What were {company}'s total assets at December 31, {year}?", "mode": "auto"},
+                        {"question": f"At December 31, {year}, what percentage of {company}'s total assets was cash and cash equivalents?", "mode": "auto"},
+                        {"question": f"What were {company}'s total assets in FY2030?", "mode": "auto"},
+                    ]
+        content = json.dumps(result).encode("utf-8")
+        self._headers(HTTPStatus.OK, "application/json; charset=utf-8", len(content))
+        self.wfile.write(content)
+
+    def _source_links(self, result: dict[str, Any]) -> dict[str, Any]:
+        runtime = self.server.filing_runtime
+        if runtime is None:
+            return result
+        for source in result["sources"]:
+            document = source["document"]
+            if document not in runtime.documents:
+                continue
+            base = f"/api/filings/{quote(document, safe='')}.pdf"
+            page = source["page"]
+            source["local_url"] = base + (f"#page={page}" if isinstance(page, int) and page >= 1 else "")
+            if source.get("unit_source_page") is not None:
+                source["unit_source_url"] = base + f"#page={source['unit_source_page']}"
+            if isinstance(page, int) and page >= 1 and source.get("row_label") and source.get("value"):
+                text = runtime.pages.get(document, page - 1) or ""
+                label = " ".join(source["row_label"].casefold().split())
+                row_index = source.get("table_row")
+                rows = text.splitlines()
+                if type(row_index) is int and 0 <= row_index < len(rows):
+                    row = " ".join(rows[row_index].split())
+                    if row.casefold().startswith(label):
+                        source["excerpt"] = row[:1000]
+        return result
 
     def _request_input(self) -> tuple[str, str] | None:
         if self.headers.get_content_type() != "application/json":
@@ -142,7 +219,7 @@ class ResearchHandler(BaseHTTPRequestHandler):
                                 getattr(provider.generator, "model_id", "injected"), usage.attempted_calls, usage.responses,
                                 usage.observed_input_tokens, usage.observed_output_tokens, usage.reported_cost_usd,
                                 usage.cost_upper_bound_usd, usage.missing_usage_responses, usage.budget_breached)
-                self._event({"type": "result", "result": public_result(execution)})
+                self._event({"type": "result", "result": self._source_links(public_result(execution))})
             except (ConnectionError, TimeoutError):
                 return
             except Exception as error:

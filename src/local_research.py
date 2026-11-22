@@ -40,13 +40,22 @@ def _source(record: EvidenceRecord, citation: int | None) -> dict[str, Any]:
         "metric": record.metric,
         "value": record.raw_value,
         "unit": record.unit,
+        "original_scale": record.original_scale,
+        "table_title": record.table_title,
+        "row_label": record.row_label,
+        "row_group": record.row_group,
+        "table_row": record.table_row,
+        "table_column": record.table_column,
+        "unit_source_page": record.unit_source_page + 1 if record.unit_source_page is not None else None,
         "url": _public_url(record.source_url),
-        "accession": xbrl.accession if xbrl else None,
+        "accession": xbrl.accession if xbrl else record.filing_accession,
         "revision": xbrl.revision_kind if xbrl else None,
         "revision_policy": xbrl.revision_policy if xbrl else None,
         "tag": xbrl.tag if xbrl else None,
-        "start": xbrl.period_start if xbrl else None,
-        "end": xbrl.period_end if xbrl else None,
+        "start": xbrl.period_start if xbrl else record.period_identity.start.isoformat()
+        if record.period_identity and record.period_identity.start else None,
+        "end": xbrl.period_end if xbrl else record.period_identity.end.isoformat()
+        if record.period_identity and record.period_identity.end else None,
         "facts_url": _public_url(xbrl.company_facts_url) if xbrl else None,
     }
     if isinstance(xbrl, InlineXbrlProvenance):
@@ -141,12 +150,22 @@ def public_result(result: SpecialistExecution) -> dict[str, Any]:
                 if chunk_id in source_ids_by_chunk
             )),
         })
+    sources = [_source(record, numbers.get(record.evidence_id)) for record in primary]
+    for source, record in zip(sources, primary, strict=True):
+        bounds = [
+            {"relation": fact.relation, "value": (fact.value or "").removeprefix(fact.relation).removesuffix("%"), "basis": fact.basis,
+             "scope": fact.subject_scope, "period": fact.period}
+            for finding in coverage.findings for fact in finding.facts
+            if fact.evidence_id == record.chunk_id and getattr(fact, "relation", None) is not None
+        ] if coverage else []
+        if bounds:
+            source["bounds"] = bounds
     return {
         "status": result.status,
         "route": result.selected_path,
         "source_capability": result.route.source_capability,
         "answer": result.answer if supported_answer else INSUFFICIENT_EVIDENCE_ANSWER,
-        "sources": [_source(record, numbers.get(record.evidence_id)) for record in primary],
+        "sources": sources,
         "coverage": rows,
         "coverage_sufficient": coverage.sufficient if coverage else None,
         "coverage_issues": tuple(dict.fromkeys((
