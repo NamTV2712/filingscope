@@ -20,10 +20,28 @@ comparison measured Groq relevance observations on SEC filing pages.
 The same candidate set was evaluated with TypeSafe Jev 1.14.
 G6 records an internal source review and a reproducible reviewer handoff.
 Independent final evaluation awaits a reviewer-held cohort.
-On a public FinRank slice with two filing PDFs, Adaptive and routed
-LangGraph each withheld all 130 questions. [Public replay](docs/G6_FINRANK_PUBLIC_REVIEW.md).
+On the 130-question Devon/EOG FinRank slice, the D0 baseline withheld
+every question. The offline demo release answers two original questions in
+each arm with support checked against the filing. On the separate internal
+Ford/Chevron set, routed LangGraph grounds 16/16 answerable cases and
+correctly withholds eight controls. [Release results](docs/D8_OFFLINE_DEMO_RESULTS.md).
 The [research report](docs/G7_RESEARCH_REPORT.md) covers the implemented
 architecture, results, limitations and reproduction commands.
+
+## Run the offline demo
+
+After [environment setup and artifact preparation](docs/DEMO_REPRODUCTION.md),
+serve the verified Devon/EOG bundle on loopback. Open
+`http://127.0.0.1:8765` and try the questions in the reproduction guide.
+
+```powershell
+$env:HF_HUB_OFFLINE = '1'
+$env:TRANSFORMERS_OFFLINE = '1'
+uv run --offline --locked --extra ixbrl python -m scripts.run_local_research --bundle data/independent-final/finrank-2025
+```
+
+Omit `--bundle` to open the historical FinanceBench/Apple workspace. The
+bundle view links cited rows and calculation inputs to physical PDF pages.
 
 ## P0 retrieval baseline
 

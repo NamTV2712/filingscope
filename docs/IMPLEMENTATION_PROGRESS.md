@@ -449,3 +449,16 @@ guard active. It opened the cited PDF in a new tab at page 56 for all three
 released answers. Local browser receipts and screenshots are under
 `.local/d7-browser/`. The targeted HTTP suite also checks missing IDs and
 changed PDF bytes.
+
+### D8 release check
+
+D7 commit `2b94646` passed [backend CI](https://github.com/NamTV2712/filingscope/actions/runs/44978415699).
+The source-review fixes `5919409` and `1fa4074` passed
+[backend CI](https://github.com/NamTV2712/filingscope/actions/runs/44978537513)
+and [backend CI](https://github.com/NamTV2712/filingscope/actions/runs/44978774976).
+The released answers were reviewed against the original PDF cells and notes.
+Routed research grounded 16/16 transfer positives, withheld 8/8 controls, and
+grounded two new original FinRank IDs on the 130-question slice. The 612 mixed
+SEC scores and the historical and pilot comparisons had no outcome changes.
+The release report binds the runtime commit, prediction and review digests,
+timings and reproduction evidence. [D8 results](D8_OFFLINE_DEMO_RESULTS.md).

@@ -1,0 +1,26 @@
+[
+  {
+    "document_id": "DVN_FY2024_10K",
+    "company": "Devon Energy Corporation",
+    "ticker": "DVN",
+    "cik": 1090012,
+    "fiscal_year": 2024,
+    "form": "10-K",
+    "filed": "2025-02-19",
+    "accession": "0000950170-25-022844",
+    "source_url": "https://www.sec.gov/Archives/edgar/data/1090012/000095017025022844/dvn-20241231.htm",
+    "document_sha256": "sha256:2eecf238a8b0b797c67c8c8b553d02f751c85bb34caa214a5829b53d56cde649"
+  },
+  {
+    "document_id": "EOG_FY2024_10K",
+    "company": "EOG Resources, Inc.",
+    "ticker": "EOG",
+    "cik": 821189,
+    "fiscal_year": 2024,
+    "form": "10-K",
+    "filed": "2025-02-27",
+    "accession": "0000821189-25-000011",
+    "source_url": "https://www.sec.gov/Archives/edgar/data/821189/000082118925000011/eog-20241231.htm",
+    "document_sha256": "sha256:f86f3b4a2419b08850066cdbf66380682241176dd51fcf215b6e052069dbce7c"
+  }
+]

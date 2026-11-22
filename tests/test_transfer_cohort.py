@@ -50,7 +50,7 @@ def test_label_free_loading_never_opens_the_missing_label_file(tmp_path):
 def test_scoring_requires_complete_membership_and_real_citation_markers():
     question = Question(case_id="fixture", category="lookup", question="What were Fixture assets?", issuer_ciks=(1,))
     label = {"case_id": "fixture", "category": "lookup", "answerable": True, "value": "12000000", "kind": "amount", "evidence": [{"source": "fixture#p0"}]}
-    observed = {"answer": "Assets were USD 12 million. [Source 1]", "disposition": "VERIFIED", "citation_sources": ["fixture#p0"], "latency_ms": 1.0}
+    observed = {"answer": "Assets were USD 12 million for FY2024. [Source 1]", "disposition": "VERIFIED", "citation_sources": ["fixture#p0"], "latency_ms": 1.0}
     predictions = {arm: {"fixture": dict(observed)} for arm in ARMS}
     assert score_predictions([question], [label], predictions)["results"][ARMS[0]]["overall"]["numeric_and_locator_correct"] == 1
     predictions[ARMS[0]]["fixture"]["answer"] = "Assets were USD 12 million. [Source 2]"

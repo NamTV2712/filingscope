@@ -6,11 +6,10 @@ import argparse
 import json
 import re
 import subprocess
-from collections import Counter
 from pathlib import Path
 
 from configs.offline_guard import offline_socket_guard
-from src.evaluation.answer_metrics import numeric_fact_signatures
+from src.evaluation.answer_metrics import score_numeric_answer
 from src.evaluation.benchmark_io import write_json_atomic
 from src.evaluation.independent_final import ARMS, Corpus, Question, read_pinned
 from src.retrieval.canonical_json import canonical_sha256, sha256_file
@@ -47,7 +46,7 @@ def score_predictions(questions: list[Question], labels: list[dict], predictions
             numeric_exact = citation_complete = None
             if label["answerable"]:
                 expected = f"{label['value']}%" if label["kind"] == "percent" else f"USD {label['value']}"
-                numeric_exact = bool(Counter(numeric_fact_signatures(expected)) <= Counter(numeric_fact_signatures(answer)))
+                numeric_exact = score_numeric_answer(answer, expected)["exact_match"] is True
                 sources = prediction["citation_sources"]
                 cited = {sources[int(index) - 1] for index in re.findall(r"\[Source ([1-9]\d*)\]", answer) if int(index) <= len(sources)}
                 citation_complete = bool(label["evidence"]) and all(row["source"] in cited for row in label["evidence"])
