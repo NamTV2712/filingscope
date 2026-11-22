@@ -155,3 +155,10 @@ def test_normal_research_entry_point_verifies_each_commodity_cell():
     cells = [record for record in result.ledger_snapshot.evidence_records if record.table_title]
     assert len(cells) == 3 and all(record.row_group == "Oil, gas and NGL sales" for record in cells)
     assert result.verification.supported_claim_count == 3
+
+
+def test_revenue_sources_question_cannot_release_only_a_total():
+    extractor = EvidenceRequirementExtractor.from_document_rows([chunk()])
+    result = extractor.extract("Example Corporation FY2024 midstream sales sources?")
+    assert "revenue_sources_require_separate_disclosure" in result.unsupported_reasons
+    assert extractor.extract("What were Example Corporation's FY2024 midstream sales?").supported

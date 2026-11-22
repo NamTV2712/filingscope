@@ -392,6 +392,10 @@ class EvidenceRequirementExtractor:
             unsupported_reasons.append("company_not_resolved")
         if not metrics:
             unsupported_reasons.append("metric_not_recognized")
+        if any(metric in DISCLOSURE_METRICS for metric in metrics) and re.search(
+            r"\bsources?\s*\?|\b(?:what|which)\s+(?:are|were)\s+the\s+sources?\s+of\b", question, re.I,
+        ):
+            unsupported_reasons.append("revenue_sources_require_separate_disclosure")
         if relative_period:
             unsupported_reasons.append("relative_period_not_supported")
         if cumulative_unresolved:
