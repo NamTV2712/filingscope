@@ -90,6 +90,17 @@ class OperationRequirement(BaseModel):
     metric_id: str | None = None
     requires_period_alignment: bool = False
     requires_unit_compatibility: bool = False
+    numerator_metric_id: str | None = None
+    denominator_metric_id: str | None = None
+
+    @model_serializer(mode="wrap")
+    def _serialize(self, handler):
+        data = handler(self)
+        if self.numerator_metric_id is None:
+            data.pop("numerator_metric_id", None)
+        if self.denominator_metric_id is None:
+            data.pop("denominator_metric_id", None)
+        return data
 
 
 class QuestionRequirements(BaseModel):
@@ -108,6 +119,7 @@ class QuestionRequirements(BaseModel):
     reporting_interval: ReportingInterval | None = None
     quarter_ytd: QuarterYtdLookup | None = None
     fiscal_year_pair: FiscalYearPair | None = None
+    statement_date: date | None = None
 
     @property
     def has_filing_instants(self) -> bool:
@@ -121,6 +133,8 @@ class QuestionRequirements(BaseModel):
     @model_serializer(mode="wrap")
     def _serialize(self, handler):
         data = handler(self)
+        if self.statement_date is None:
+            data.pop("statement_date", None)
         if self.reporting_interval is None:
             data.pop("reporting_interval", None)
         if self.quarter_ytd is None:

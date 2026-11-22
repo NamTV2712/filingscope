@@ -214,7 +214,8 @@ def normalize_currency(unit: str) -> str | None:
 
 
 def requested_currencies(question: str) -> frozenset[str]:
-    return frozenset(re.findall(r"\b[A-Z]{3}\b", question)) & MONETARY_CURRENCIES
+    codes = frozenset(re.findall(r"\b[A-Z]{3}\b", question)) & MONETARY_CURRENCIES
+    return codes | ({"EUR"} if re.search(r"\b(?:in|to) euros?\b", question, re.I) else set())
 
 
 def _date(value: Any) -> date:

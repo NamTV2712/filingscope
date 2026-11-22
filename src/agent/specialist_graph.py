@@ -262,7 +262,8 @@ class SpecialistResearchGraph:
                 raise ValueError("research plan exceeds the selected retrieval-call budget")
             if route.source_capability in _DIRECT_LOOKUP and (
                 route.selected_path != ExecutionPath.FAST
-                or len(route.research_plan.tasks) != (2 if requirements.requires_period_pair else 1)
+                or len(route.research_plan.tasks) != (len(requirements.evidence) if requirements.statement_date is not None
+                                                     else 2 if requirements.requires_period_pair else 1)
             ):
                 raise ValueError("a direct source lookup requires the complete FAST task set")
         if ledger is not None and ledger.request_id != request_id:
@@ -733,7 +734,7 @@ class SpecialistResearchGraph:
         if (
             state["route"].selected_path == ExecutionPath.FAST
             and any(
-                item.operation in {"growth", "difference"}
+                item.operation in {"growth", "difference", "percentage"}
                 for item in context.requirements.operations
             )
         ):
@@ -1168,7 +1169,7 @@ def _render_calculation_entries(runtime: SpecialistRuntime) -> list[tuple[Derive
         if not citations:
             continue
         revision = runtime.xbrl_revision_policy if runtime.require_structured_facts else None
-        entries.append((calculation, calculation_sentence(calculation, citations, revision)))
+        entries.append((calculation, calculation_sentence(calculation, citations, revision, runtime.requirements)))
     return entries
 
 

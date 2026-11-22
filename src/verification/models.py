@@ -36,6 +36,7 @@ class CalculationOperation(StrEnum):
     SUBTRACTION = "subtraction"
     DIFFERENCE = "difference"
     PERCENTAGE_GROWTH = "percentage_growth"
+    PERCENTAGE = "percentage"
 
 
 class CalculationOperand(BaseModel):

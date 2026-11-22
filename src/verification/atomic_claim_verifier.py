@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable
+from decimal import Decimal
 from typing import Any
 
 from src.decision.company_catalog import CompanyCatalog
@@ -14,6 +15,7 @@ from src.decision.filing_disclosures import (
     segment_kind_matches, segment_signature,
 )
 from src.decision.models import CoverageStatus, EvidenceFact, MetricRequirement, QuestionRequirements
+from src.decision.percentages import percentage_cells, percentage_statement
 from src.decision.period_value_parser import extract_period_value_mentions, period_matches
 from src.decision.policy import EvidenceDecisionLayer
 from src.decision.requirement_extractor import (
@@ -26,8 +28,10 @@ from src.ingestion.period_identity import reported_as_of_date
 from src.ingestion.segment_revenue import ENERGY_ENTITY, ENERGY_METRIC, ENERGY_PERIOD, ENERGY_SECTION, is_energy_evidence
 from src.verification.claim_verifier import ClaimLevelVerifier, _BRACKET_RE, _FALLBACK_RE, _GROWTH_RE, _split_clauses
 from src.verification.models import (
-    CitationStatus, ClaimAssessment, ClaimDraft, ClaimStatus, ResponseDisposition, VerificationResult,
+    CalculationOperand, CalculationOperation, CalculationRequest, CitationStatus, ClaimAssessment,
+    ClaimDraft, ClaimStatus, ResponseDisposition, VerificationResult,
 )
+from src.verification.numerical_verifier import NumericalOperationVerifier
 
 
 _CONJUNCTION = re.compile(r",?\s+\b(?:and|but|while|whereas)\s+", re.I)
@@ -146,6 +150,8 @@ class AtomicClaimVerifier(ClaimLevelVerifier):
         explicit_metrics = asserted_scope.metrics
         if any(metric.metric_id == "customer_concentration" for metric in question_requirements.metrics):
             return self._customer_bound_assessment(draft, question_requirements, layer, cited_chunks, evidence_ids)
+        if any(operation.operation == "percentage" for operation in question_requirements.operations):
+            return self._percentage_assessment(draft, question_requirements, layer, cited_chunks, evidence_ids)
         consolidated_lookup = question_requirements.fiscal_year_pair is not None or question_requirements.has_filing_instants
         if (requested_amendment_scope(question)
                 or (len(draft.metric_ids) == 1 and draft.metric_ids[0] in BUSINESS_DISCLOSURE_METRICS
@@ -191,6 +197,7 @@ class AtomicClaimVerifier(ClaimLevelVerifier):
                 reason_codes=("cited_source_revision_does_not_match_claim",),
             )
         if (question_requirements.reporting_interval is not None or question_requirements.requires_period_pair
+                or question_requirements.statement_date is not None
                 or question_requirements.has_filing_instants):
             coverage = layer.analyzer.analyze(question_requirements, cited_chunks)
             facts = [fact for finding in coverage.findings if finding.status == CoverageStatus.FOUND for fact in finding.facts]
@@ -389,6 +396,8 @@ class AtomicClaimVerifier(ClaimLevelVerifier):
         layer: EvidenceDecisionLayer, catalog: CompanyCatalog, cited_chunks: list[dict[str, Any]],
     ) -> ClaimAssessment:
         calculation = draft.operation is not None or assessment.calculation is not None
+        if assessment.calculation is not None and assessment.calculation.operation == CalculationOperation.PERCENTAGE:
+            return assessment.model_copy(update={"claim_type": "calculation"})
         if "disclosed_customer_relation_matches" in assessment.reason_codes:
             return assessment.model_copy(update={"claim_type": "qualitative"})
         comparison = "growth_direction_matches_cited_values" in assessment.reason_codes
@@ -455,6 +464,38 @@ class AtomicClaimVerifier(ClaimLevelVerifier):
         return assessment.model_copy(update={
             "claim_type": claim_type, "supporting_evidence_ids": sources, "requirement_ids": requirements,
         })
+
+    @staticmethod
+    def _percentage_assessment(draft, requirements, layer, chunks, evidence_ids) -> ClaimAssessment:
+        operation = next(item for item in requirements.operations if item.operation == "percentage")
+        coverage = layer.analyzer.analyze(requirements, chunks)
+        cells = percentage_cells(operation, coverage.findings) if coverage.sufficient else None
+        match = re.search(r"\brepresented (-?\d{1,12}\.\d{2})% of\b", _text(draft.statement))
+        check = None
+        if cells and match and len(requirements.entities) == 1:
+            metrics = {metric.metric_id: metric.display_name for metric in requirements.metrics}
+            value = Decimal(match[1])
+            left, right = cells
+            sentence = percentage_statement(requirements.entities[0].canonical_name, metrics[left.metric_id],
+                                            metrics[right.metric_id], value, left.period or "")
+            if _text(draft.statement).casefold() == _text(sentence).casefold() and set(evidence_ids) == {
+                left.evidence_id, right.evidence_id,
+            }:
+                check = NumericalOperationVerifier().verify(CalculationRequest(
+                    operation=CalculationOperation.PERCENTAGE,
+                    operands=tuple(CalculationOperand(value=Decimal(cell.numeric_value), currency=cell.currency, scale=cell.scale)
+                                   for cell in cells),
+                    reported_value=value, reported_kind="percent",
+                ))
+        supported = check is not None and check.passed
+        return ClaimAssessment(
+            claim_id=draft.claim_id, statement=draft.statement,
+            status=ClaimStatus.SUPPORTED if supported else ClaimStatus.UNSUPPORTED,
+            citation_status=CitationStatus.VALID, citations=draft.citations, evidence_ids=evidence_ids,
+            supporting_evidence_ids=evidence_ids if supported else (), calculation=check,
+            requirement_ids=tuple(item.requirement_id for item in requirements.evidence) if supported else (),
+            reason_codes=("percentage_verified" if supported else "percentage_operands_or_result_not_supported",),
+        )
 
     @staticmethod
     def _customer_bound_assessment(draft, requirements, layer, chunks, evidence_ids) -> ClaimAssessment:

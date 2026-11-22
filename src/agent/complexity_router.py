@@ -15,7 +15,7 @@ from src.decision.models import QuestionRequirements
 from src.decision.requirement_extractor import (
     EvidenceRequirementExtractor, mask_contract_revenue, permits_energy_segment_lookup, requires_nonstandard_reporting_basis,
 )
-from src.ingestion.company_facts import CONSOLIDATED_METRIC_CONCEPTS, METRIC_CONCEPTS, requested_revision_policies
+from src.ingestion.company_facts import CONSOLIDATED_METRIC_CONCEPTS, INSTANT_METRICS, METRIC_CONCEPTS, requested_revision_policies
 from src.ingestion.segment_revenue import ENERGY_ENTITY, ENERGY_METRIC, ENERGY_PERIOD
 from src.research.corpus_map import CorpusMap
 from src.research.planner import (
@@ -273,6 +273,14 @@ class ComplexityRouter:
                         for document in self.corpus_map.documents_for_company(requirement.entity_id))
                     for requirement in requirements.evidence)
         )
+        has_balance_sheets |= bool(
+            requirements.statement_date is not None and self.corpus_map is not None and source_inventory is not None
+            and all(metric.metric_id in INSTANT_METRICS for metric in requirements.metrics)
+            and all(any(document.document_id in source_inventory.statement_documents and "10k" in document.form_types
+                        and len(document.accessions) == 1
+                        for document in self.corpus_map.documents_for_company(entity.entity_id))
+                    for entity in requirements.entities)
+        )
         if predictive:
             complexity = ComplexityClass.UNSUPPORTED
             path = ExecutionPath.UNSUPPORTED
@@ -325,7 +333,7 @@ class ComplexityRouter:
             path = ExecutionPath.RESEARCH
             reason_codes.append("cross_entity_or_explicit_comparison")
         elif _NUMERICAL_RE.search(question) or any(
-            operation.operation in {"growth", "difference", "ratio", "average"}
+            operation.operation in {"growth", "difference", "ratio", "average", "percentage"}
             for operation in requirements.operations
         ):
             complexity = ComplexityClass.NUMERICAL
@@ -531,6 +539,10 @@ class ComplexityRouter:
             return SourceCapability.TEXT_RAG
         question = state["question"]
         requirements = state["requirements"]
+        if requirements.statement_date is not None and len(plan.tasks) == len(requirements.evidence) and plan.tasks and all(
+            inventory.statement_documents.intersection(task.target_document_ids) for task in plan.tasks
+        ):
+            return SourceCapability.DIRECT_TABLE
         if requirements.has_filing_instants and len(plan.tasks) == len(requirements.evidence):
             if set(requirements.companies).issubset(inventory.xbrl_entities) and not requires_statement_source(question):
                 return SourceCapability.DIRECT_XBRL

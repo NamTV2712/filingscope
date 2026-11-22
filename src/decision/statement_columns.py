@@ -135,7 +135,7 @@ _FINANCIAL_TITLE = re.compile(
     r"financial position|cash flows)|balance sheets?|income statements)\b", re.I,
 )
 _ISSUER_NAME = re.compile(r"\b(?:inc|incorporated|corporation|company|plc|limited|llc|ltd)\b", re.I)
-_TABLE_SCALE = re.compile(r"\b(?:in )?(thousands|millions|billions)(?=\s*[,)]|\s+except|\s*$|\s+(?:19|20)\d{2})", re.I)
+_TABLE_SCALE = re.compile(r"\b(?:in )?(thousands|millions|billions)(?=\s*[,)]|\s+except|\s+of dollars\b|\s*$|\s+(?:19|20)\d{2})", re.I)
 _MONTHS = "January February March April May June July August September October November December".split()
 _MONTH_NUMBERS = {
     alias.casefold(): number
@@ -172,7 +172,7 @@ _ALIGNED_LABELS = {
 }
 _ALIGNED_ROW = re.compile(
     rf"^({'|'.join(re.escape(label) for label in sorted(_ALIGNED_LABELS, key=len, reverse=True))})"
-    rf"\s*(?:{_FOOTNOTE}|\(\d{{1,2}}\)(?=\s+[$€£]))?\s+(.+)$", re.I,
+    rf"(?:\d{{1,2}}(?=\s+[$€£]))?\s*(?:{_FOOTNOTE}|\(Note\s+\d+\)|\(\d{{1,2}}\)(?=\s+[$€£]))?\s+(.+)$", re.I,
 )
 _VALUE_START = re.compile(rf"^(?:{_CURRENCY_CODE}\b|[$€£]|[−–—-]|\(\s*[$€£]?\s*\d|\d)", re.I)
 _BALANCE_LABELS = {
@@ -225,6 +225,8 @@ def _statement_kind(line: str) -> PeriodKind | None:
         return None
     prefix = line[:match.start()].strip()
     suffix = re.sub(r"\((?:loss|unaudited)\)", "", line[match.end():], flags=re.I).strip(" :")
+    if suffix.casefold() == "financial table of contents":
+        suffix = ""
     if prefix and (len(prefix) > 65 or not _ISSUER_NAME.search(prefix)):
         return None
     if suffix and (len(suffix) > 65 or not _ISSUER_NAME.search(suffix)):
@@ -302,8 +304,8 @@ def _column_periods(
         return ()
     dates = _parse_dates(header, years)
     ascending_balance = bool(
-        exact_balance_sheet and confirmed_period_end and len(years) == 2
-        and years[1] == years[0] + 1 and dates[1] == confirmed_period_end,
+        exact_balance_sheet and len(years) == 2 and dates[1] is not None
+        and years[1] == years[0] + 1 and (confirmed_period_end is None or dates[1] == confirmed_period_end),
     )
     if confirmed_period_end and dates[0] and dates[0] != confirmed_period_end and not ascending_balance:
         return ()
@@ -488,6 +490,7 @@ def parse_statement_columns(
     confirmed_period_end: date | None = None,
     infer_annual_starts: bool = False,
     exact_balance_sheet: bool = False,
+    scoped_balance_sheet: bool = False,
 ) -> StatementParse:
     """Return sourced values and report rows whose column ownership is uncertain."""
     amended = form.upper().endswith("/A")
@@ -495,10 +498,21 @@ def parse_statement_columns(
     if form not in {"10K", "10Q", "20F", "40F"} or (form == "10Q") != (quarter is not None):
         return StatementParse(False)
     lines = list(_statement_lines(text))
+    physical_rows: list[int] = []
+    if scoped_balance_sheet:
+        # Overprinted PDF text can duplicate each line without adding another cell.
+        lines = []
+        for page_row, raw in enumerate(text.splitlines()):
+            normalized = " ".join(raw.replace("\ufffd", " ").split())
+            if normalized and (not lines or lines[-1] != normalized):
+                lines.append(normalized)
+                physical_rows.append(page_row)
     heading = _statement_heading(lines)
     if heading is None:
         return StatementParse(False)
     title, kind = heading
+    if scoped_balance_sheet and (kind != PeriodKind.INSTANT or "consolidated" not in lines[title].casefold()):
+        return StatementParse(False)
     exact_balance_sheet = exact_balance_sheet and form == "10K" and kind == PeriodKind.INSTANT and not amended
     if any(_GUARANTOR_SCOPE.search(line) for line in lines[:title + 1]):
         return StatementParse(True, ambiguous_rows=(AmbiguousStatementRow(None, title, "nonregistrant_scope"),))
@@ -527,6 +541,12 @@ def parse_statement_columns(
     scales = {item.casefold() for line in heading_lines
               for item in _TABLE_SCALE.findall(_SHARE_COUNT_SCALE.sub("", line))}
     body = lines[body_start:]
+    if scoped_balance_sheet:
+        final_row = next((index for index, line in enumerate(body)
+                          if re.match(r"total liabilities and (?:stockholders['’]? |shareholders['’]? )?equity\b", line, re.I)), None)
+        if final_row is None:
+            return StatementParse(True, ambiguous_rows=(AmbiguousStatementRow(None, title, "statement_total_missing"),))
+        body = body[:final_row + 1]
     context = " ".join((top, *body[:18]))
     codes = set(re.findall(rf"\b(?:{_CURRENCY_CODE})\b", context))
     marks = {code for mark, code in _CURRENCY_MARKS.items() if mark in context}
@@ -560,7 +580,7 @@ def parse_statement_columns(
     for metric, rows in by_metric.items():
         totals = [item for item in rows if item[1].startswith("total ")]
         rows = totals or rows
-        for row_index, _, raw in rows:
+        for row_index, label, raw in rows:
             source_row = body_start + row_index
             cells = _statement_cells(raw)
             if len(rows) != 1 or len(cells) != len(periods) + int(change):
@@ -593,6 +613,9 @@ def parse_statement_columns(
                 value_kind = "percent" if percent else "currency_per_share" if metric == "earnings_per_share" else "amount"
                 results.append(StatementValue(
                     metric, period.label, amount, "%" if percent else currency, scale if value_kind == "amount" else "units",
-                    body[row_index], top, period, source_row, column, value_kind, cell, restated,
+                    body[row_index], top, period, physical_rows[source_row] if scoped_balance_sheet else source_row,
+                    column, value_kind, cell, restated,
+                    table_title=lines[title] if scoped_balance_sheet else None,
+                    row_label=label if scoped_balance_sheet else None,
                 ))
     return StatementParse(True, tuple(results), tuple(ambiguous))

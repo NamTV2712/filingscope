@@ -86,6 +86,11 @@ def _release_supported(
         return INSUFFICIENT_EVIDENCE_ANSWER, result
     required = {item.requirement_id for item in requirements.evidence}
     covered = {item for claim in supported for item in claim.requirement_ids}
+    if any(operation.operation == "percentage" for operation in requirements.operations) and not (
+        len(supported) == 1 and covered == required and supported[0].calculation is not None
+        and supported[0].calculation.operation == CalculationOperation.PERCENTAGE
+    ):
+        return INSUFFICIENT_EVIDENCE_ANSWER, _disposition(result, ResponseDisposition.ABSTAIN, "percentage_requires_both_operands")
     if requirements.reporting_interval is not None and len(supported) != 1:
         result = _disposition(result, ResponseDisposition.ABSTAIN, "explicit_interval_requires_one_claim")
         return INSUFFICIENT_EVIDENCE_ANSWER, result

@@ -26,6 +26,7 @@ from src.decision.models import (
     QuestionRequirements,
 )
 from src.decision.policy import EvidenceDecisionLayer
+from src.decision.percentages import percentage_cells, percentage_value
 from src.decision.requirement_extractor import permits_energy_segment_lookup
 from src.decision.filing_tables import filing_identity_matches, parse_revenue_table
 from src.decision.statement_columns import parse_statement_columns, statement_report_date
@@ -1054,7 +1055,9 @@ def _normalize_filing_statements(runtime: SpecialistRuntime) -> tuple[int, int]:
             text, form=form, fiscal_year=fiscal_year, quarter=int(quarter[1]) if quarter else None,
             confirmed_period_end=report_end or xbrl_end,
             infer_annual_starts=runtime.requirements.reporting_interval is not None,
-            exact_balance_sheet=runtime.requirements.has_filing_instants and report_end is not None,
+            exact_balance_sheet=(runtime.requirements.has_filing_instants and report_end is not None
+                                 or runtime.requirements.statement_date is not None and filing_identity_matches(chunk)),
+            scoped_balance_sheet=runtime.requirements.statement_date is not None,
         )
         if not statement.recognized and filing_identity_matches(chunk):
             get_declaration = getattr(runtime.retriever, "get_document_unit_declaration", None)
@@ -1074,7 +1077,7 @@ def _normalize_filing_statements(runtime: SpecialistRuntime) -> tuple[int, int]:
                 scale="unit", original_scale=cell.scale, table_row=cell.row_index, table_column=cell.column_index,
                 table_title=cell.table_title, row_label=cell.row_label, row_group=cell.row_group,
                 unit_source_page=cell.unit_source_page,
-                filing_accession=chunk.get("accession_number") if cell.table_title else None,
+                filing_accession=chunk.get("accession_number") if cell.table_title or runtime.requirements.statement_date else None,
                 value_kind=cell.value_kind, document_id=document, page_number=page, source_url=chunk["source_url"],
             )
             for cell in statement.values if not cell.restated
@@ -1114,6 +1117,36 @@ class FinancialReasoner:
         calculations: list[DerivedCalculation] = []
         notes: list[SpecialistObservation] = []
         for operation in runtime.requirements.operations:
+            if operation.operation == "percentage":
+                cells = percentage_cells(operation, runtime.coverage.findings)
+                if cells is None:
+                    continue
+                records = [next((record for record in snapshot.evidence_records
+                                 if record.chunk_id == cell.evidence_id and record.metric_id == cell.metric_id
+                                 and record.table_row == cell.table_row and record.table_column == cell.table_column), None)
+                           for cell in cells]
+                if any(record is None for record in records):
+                    continue
+                numerator, denominator = cells
+                result_value = percentage_value(numerator, denominator)
+                if result_value is None:
+                    continue
+                entity = next(item for item in runtime.requirements.entities if item.entity_id == numerator.entity_id)
+                calculation = DerivedCalculation.create(
+                    request_id=runtime.request_id, operation="percentage", formula="numerator / denominator × 100",
+                    input_evidence_ids=tuple(record.evidence_id for record in records),
+                    normalized_inputs=tuple(cell.numeric_value for cell in cells), result=result_value,
+                    metric_id=numerator.metric_id, denominator_metric_id=denominator.metric_id,
+                    company=entity.canonical_name, fiscal_period=numerator.period, unit="%",
+                    rounding_policy="Decimal ROUND_HALF_UP to 2 places after normalization",
+                    validation_status=CalculationValidationStatus.VALID,
+                    task_ids=tuple(sorted({task for record in records for task in record.task_ids})),
+                    requirement_ids=tuple(sorted({slot.requirement_id for slot in runtime.requirements.evidence
+                                                  if slot.metric_id in {numerator.metric_id, denominator.metric_id}})),
+                )
+                runtime.ledger.add_calculation(calculation)
+                calculations.append(calculation)
+                continue
             if operation.operation not in {"growth", "difference"}:
                 continue
             if operation.operation == "growth" and re.search(r"\bcagr\b|compound annual", runtime.requirements.question, re.I):

@@ -404,3 +404,21 @@ On the original FinRank Devon top-customer question, routed research returned
 the disclosed upper limit of 10% of FY2024 sales revenue, citing physical PDF
 page 56. Raw public smoke results are in
 `data/independent-final/finrank-2025/d4-smoke.json`.
+
+### D5 same-period financial percentages
+
+D4 commit `407b6aa` passed [backend CI](https://github.com/NamTV2712/filingscope/actions/runs/44977511027).
+The requirement extractor assigns separate numerator and denominator metrics.
+Coverage binds both to distinct cells in the same filed table and reporting
+interval. The reasoner retains both ledger records and calculates a Decimal
+result. The verifier recomputes from the cited cells before release.
+
+The source-bound balance reader recognizes overprinted PDF rows, attached
+footnotes and both year-column orders. It stops at total liabilities and
+equity to exclude subordinate tables. On Devon's FY2024 disclosure, routed
+research returned 29.79% for marketing and midstream revenue divided by
+revenue from contracts with customers, using USD 4,743 million and
+USD 15,919 million. It withheld the alternative total-revenue request when
+the two requested cells could not be bound to that basis. Focused tests
+cover a subordinate-table distractor, both cell references, zero denominator,
+wrong date, incompatible currency and modified answers.

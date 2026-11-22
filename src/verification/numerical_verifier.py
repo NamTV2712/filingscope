@@ -74,6 +74,11 @@ class NumericalOperationVerifier:
             elif operation == CalculationOperation.DIFFERENCE:
                 expected = abs(base_values[0] - base_values[1])
                 expected_kind = "amount"
+            elif operation == CalculationOperation.PERCENTAGE:
+                if base_values[1] <= 0:
+                    return _unverifiable(request, "nonpositive_percentage_denominator")
+                expected = base_values[0] / base_values[1] * Decimal(100)
+                expected_kind = "percent"
             else:
                 baseline = base_values[0]
                 if baseline <= 0:

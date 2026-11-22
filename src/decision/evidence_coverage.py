@@ -376,7 +376,8 @@ class EvidenceCoverageAnalyzer:
         quarter_ytd = requirements.quarter_ytd
         fiscal_year_pair = requirements.fiscal_year_pair
         filing_instants = requirements.has_filing_instants
-        needs_typed_period = interval is not None or requirements.requires_period_pair or filing_instants
+        needs_typed_period = (interval is not None or requirements.requires_period_pair or filing_instants
+                              or requirements.statement_date is not None)
         nonstandard_basis = requires_nonstandard_reporting_basis(
             requirements.question, requirements.metrics, consolidated_only=fiscal_year_pair is not None or filing_instants,
         )
@@ -452,6 +453,15 @@ class EvidenceCoverageAnalyzer:
                         metric_seen[requirement.requirement_id] = True
                     for fact in normalized:
                         if not period_matches(requirement.period, fact.period):
+                            continue
+                        if requirements.statement_date is not None and (
+                            fact.period_identity is None or fact.period_identity.end != requirements.statement_date
+                            or fact.period_identity.kind != "instant"
+                            or (chunk.get("source_type") != "XBRL_FACT" and (
+                                not filing_identity_matches(dict(chunk)) or fact.filing_accession != chunk.get("accession_number")
+                                or fact.table_row is None or fact.table_column is None
+                            ))
+                        ):
                             continue
                         if needs_typed_period:
                             accessions = {value for key in ("accession", "accession_number")
@@ -671,6 +681,12 @@ class EvidenceCoverageAnalyzer:
         gaps: list[str] = []
         found = [finding for finding in findings if finding.status == CoverageStatus.FOUND]
         for operation in requirements.operations:
+            if operation.operation == "percentage":
+                from src.decision.percentages import percentage_cells
+
+                if percentage_cells(operation, findings) is None:
+                    gaps.append("percentage:incompatible_or_missing_filing_cells")
+                continue
             if not operation.requires_period_alignment and not operation.requires_unit_compatibility:
                 continue
             selected = [

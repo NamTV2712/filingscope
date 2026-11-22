@@ -142,11 +142,21 @@ def fact_sentence(requirements: QuestionRequirements, fact: EvidenceFact, revisi
     return f"{entity} reported {metric} of {fact.value}{period}{basis}."
 
 
-def calculation_sentence(calculation: DerivedCalculation, citations: list[int], revision: RevisionPolicy | None) -> str:
+def calculation_sentence(calculation: DerivedCalculation, citations: list[int], revision: RevisionPolicy | None,
+                         requirements: QuestionRequirements | None = None) -> str:
     value = format(calculation.result, "f")
     if "." in value:
         value = value.rstrip("0").rstrip(".")
     markers = " ".join(f"[Source {number}]" for number in citations)
+    if calculation.operation == "percentage" and requirements is not None:
+        from src.decision.percentages import percentage_statement
+
+        metrics = {metric.metric_id: metric.display_name for metric in requirements.metrics}
+        sentence = percentage_statement(
+            calculation.company or "The company", metrics[calculation.metric_id],
+            metrics[calculation.denominator_metric_id], calculation.result, calculation.fiscal_period or "",
+        )
+        return f"{sentence} {markers}"
     basis = ""
     if revision is not None:
         basis = " using the revised filing values" if revision == RevisionPolicy.LATEST else " using the original filing values"
@@ -167,6 +177,10 @@ class DeterministicWriter:
     def write(self, report: GroundedReportInput) -> AnswerGenerationResult:
         started = time.perf_counter()
         if not report.sufficient:
+            return no_answer()
+        if any(operation.operation == "percentage" for operation in report.requirements.operations) and not any(
+            calculation.operation == "percentage" for calculation in report.calculations
+        ):
             return no_answer()
         arithmetic = report.arithmetic
         if arithmetic:
@@ -215,7 +229,7 @@ class DeterministicWriter:
             if not all(item in evidence_numbers for item in calculation.input_evidence_ids):
                 continue
             citations = sorted({evidence_numbers[item] for item in calculation.input_evidence_ids})
-            entries.append((calculation, calculation_sentence(calculation, citations, report.revision_policy)))
+            entries.append((calculation, calculation_sentence(calculation, citations, report.revision_policy, report.requirements)))
         return entries
 
 

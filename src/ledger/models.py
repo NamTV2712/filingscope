@@ -438,6 +438,7 @@ class DerivedCalculation(BaseModel):
     normalized_inputs: tuple[str, ...] = Field(min_length=2)
     result: Decimal
     metric_id: str = Field(min_length=1)
+    denominator_metric_id: str | None = None
     company: str | None = None
     fiscal_period: str | None = None
     unit: str | None = None
@@ -505,8 +506,14 @@ def _calculation_identity(
     calculation: DerivedCalculation | Mapping[str, Any],
 ) -> dict[str, Any]:
     if isinstance(calculation, DerivedCalculation):
-        return {field: getattr(calculation, field) for field in _CALCULATION_ID_FIELDS}
-    return {field: calculation.get(field) for field in _CALCULATION_ID_FIELDS}
+        identity = {field: getattr(calculation, field) for field in _CALCULATION_ID_FIELDS}
+        denominator = calculation.denominator_metric_id
+    else:
+        identity = {field: calculation.get(field) for field in _CALCULATION_ID_FIELDS}
+        denominator = calculation.get("denominator_metric_id")
+    if denominator is not None:
+        identity["denominator_metric_id"] = denominator
+    return identity
 
 
 class GeneratedClaim(BaseModel):

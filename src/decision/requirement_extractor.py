@@ -17,6 +17,7 @@ from src.decision.models import (
     OperationRequirement,
     QuestionRequirements,
 )
+from src.decision.percentages import percentage_operands, requested_statement_date, requests_percentage
 from src.ingestion.company_facts import (
     CONSOLIDATED_METRIC_CONCEPTS, INSTANT_METRICS, requested_currencies, requested_revision_policies,
 )
@@ -367,6 +368,10 @@ class EvidenceRequirementExtractor:
             periods = (prior_period, period)
         relative_period = bool(_RELATIVE_PERIOD_RE.search(question))
 
+        percentage = percentage_operands(question, metrics)
+        statement_date = requested_statement_date(question) if metrics and all(
+            metric.metric_id in INSTANT_METRICS for metric in metrics
+        ) else None
         operations: list[str] = []
         quantitative = any(metric.quantitative for metric in metrics)
         if _GROWTH_RE.search(question):
@@ -379,6 +384,8 @@ class EvidenceRequirementExtractor:
         if not operations:
             operations.append("lookup")
         operations = list(dict.fromkeys(operations))
+        if percentage is not None:
+            operations = ["percentage"]
 
         unsupported_reasons: list[str] = []
         if not entities:
@@ -418,6 +425,10 @@ class EvidenceRequirementExtractor:
             or requires_nonstandard_reporting_basis(question, metrics, consolidated_only=True)
         ):
             unsupported_reasons.append("as_of_filing_scope_unresolved")
+        if percentage is not None and (len(entities) != 1 or len(periods) != 1):
+            unsupported_reasons.append("percentage_requires_one_entity_and_period")
+        if percentage is None and quantitative and operations == ["lookup"] and requests_percentage(question):
+            unsupported_reasons.append("percentage_operands_unresolved")
         currencies = requested_currencies(question)
         if len(currencies) > 1:
             unsupported_reasons.append("multiple_requested_currencies")
@@ -473,12 +484,14 @@ class EvidenceRequirementExtractor:
         operation_requirements = tuple(
             OperationRequirement(
                 operation=operation,
-                metric_id=metrics[0].metric_id if len(metrics) == 1 else None,
+                metric_id=percentage[0] if operation == "percentage" else metrics[0].metric_id if len(metrics) == 1 else None,
+                numerator_metric_id=percentage[0] if operation == "percentage" else None,
+                denominator_metric_id=percentage[1] if operation == "percentage" else None,
                 requires_period_alignment=(
-                    quantitative and (operation == "compare" or operation in {"growth", "difference", "ratio", "average"})
+                    quantitative and (operation == "compare" or operation in {"growth", "difference", "ratio", "average", "percentage"})
                 ),
                 requires_unit_compatibility=(
-                    quantitative and operation in {"compare", "growth", "difference", "ratio", "average"}
+                    quantitative and operation in {"compare", "growth", "difference", "ratio", "average", "percentage"}
                 ),
             )
             for operation in operations
@@ -497,4 +510,5 @@ class EvidenceRequirementExtractor:
             reporting_interval=interval,
             quarter_ytd=quarter_ytd,
             fiscal_year_pair=fiscal_year_pair,
+            statement_date=statement_date,
         )
