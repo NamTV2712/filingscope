@@ -99,6 +99,12 @@ def _topic_sentences(
     if not isinstance(text, str):
         return {}
     company = entity.canonical_name.rstrip('.')
+    if fact.metric_id == "customer_concentration":
+        from src.decision.filing_bounds import filing_customer_bounds
+
+        return {bound.signature: bound.sentence(company)
+                for bound in filing_customer_bounds(text, (entity.canonical_name, entity.matched_alias))
+                if bound.period == fact.period and bound.relation == fact.relation and bound.basis == fact.basis}
     if fact.metric_id == "industry":
         return {
             (industry, positive): f"{company} {'operates in' if positive else 'does not operate in'} the {industry} industry."

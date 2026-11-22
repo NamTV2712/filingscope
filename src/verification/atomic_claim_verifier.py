@@ -144,6 +144,8 @@ class AtomicClaimVerifier(ClaimLevelVerifier):
         statement = _text(draft.statement)
         asserted_scope = layer.extractor.extract(statement)
         explicit_metrics = asserted_scope.metrics
+        if any(metric.metric_id == "customer_concentration" for metric in question_requirements.metrics):
+            return self._customer_bound_assessment(draft, question_requirements, layer, cited_chunks, evidence_ids)
         consolidated_lookup = question_requirements.fiscal_year_pair is not None or question_requirements.has_filing_instants
         if (requested_amendment_scope(question)
                 or (len(draft.metric_ids) == 1 and draft.metric_ids[0] in BUSINESS_DISCLOSURE_METRICS
@@ -387,6 +389,8 @@ class AtomicClaimVerifier(ClaimLevelVerifier):
         layer: EvidenceDecisionLayer, catalog: CompanyCatalog, cited_chunks: list[dict[str, Any]],
     ) -> ClaimAssessment:
         calculation = draft.operation is not None or assessment.calculation is not None
+        if "disclosed_customer_relation_matches" in assessment.reason_codes:
+            return assessment.model_copy(update={"claim_type": "qualitative"})
         comparison = "growth_direction_matches_cited_values" in assessment.reason_codes
         if assessment.status != ClaimStatus.SUPPORTED and _UNCERTAINTY.search(draft.statement):
             claim_type = "uncertainty"
@@ -451,6 +455,38 @@ class AtomicClaimVerifier(ClaimLevelVerifier):
         return assessment.model_copy(update={
             "claim_type": claim_type, "supporting_evidence_ids": sources, "requirement_ids": requirements,
         })
+
+    @staticmethod
+    def _customer_bound_assessment(draft, requirements, layer, chunks, evidence_ids) -> ClaimAssessment:
+        from src.decision.filing_bounds import asserted_customer_bound, filing_customer_bounds
+
+        asserted = asserted_customer_bound(_text(draft.statement))
+        scope = layer.extractor.extract(_text(draft.statement))
+        aliases = tuple(alias for entity in requirements.entities for alias in (entity.canonical_name, entity.matched_alias))
+        coverage = layer.analyzer.analyze(requirements, chunks)
+        eligible = {fact.evidence_id for finding in coverage.findings if finding.status == CoverageStatus.FOUND
+                    for fact in finding.facts}
+        supported = tuple(sorted({chunk["chunk_id"] for chunk in chunks
+                                  if chunk.get("chunk_id") in eligible and any(
+                                      bound.signature == asserted
+                                      for bound in filing_customer_bounds(chunk.get("text", ""), aliases))}))
+        canonical = set()
+        for chunk in chunks:
+            for bound in filing_customer_bounds(chunk.get("text", ""), aliases):
+                for entity in requirements.entities:
+                    for name in (entity.canonical_name.rstrip('.'), entity.matched_alias.rstrip('.')):
+                        canonical.add(_words(bound.sentence(name)))
+        matches = bool(asserted and supported and set(supported) == set(evidence_ids)
+                       and tuple(item.entity_id for item in scope.entities) == tuple(item.entity_id for item in requirements.entities)
+                       and asserted[0] in requirements.periods and _words(_text(draft.statement)) in canonical)
+        return ClaimAssessment(
+            claim_id=draft.claim_id, statement=draft.statement,
+            status=ClaimStatus.SUPPORTED if matches else ClaimStatus.UNSUPPORTED,
+            citation_status=CitationStatus.VALID, citations=draft.citations, evidence_ids=evidence_ids,
+            supporting_evidence_ids=supported if matches else (),
+            requirement_ids=tuple(item.requirement_id for item in requirements.evidence) if matches else (),
+            claim_type="qualitative", reason_codes=("disclosed_customer_relation_matches" if matches else "customer_relation_not_supported",),
+        )
 
     def _calculation_sources(
         self, draft: ClaimDraft, question_requirements: QuestionRequirements,

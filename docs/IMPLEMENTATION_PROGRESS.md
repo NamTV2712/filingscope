@@ -392,3 +392,15 @@ discrepancy retained. Raw development smoke is
 normalization, ledger and ranker tests passed. `D3_FILING_TABLE_CELLS.md`
 records the source and method. Exact committed-suite results and CI are
 recorded at the next milestone.
+
+### D4 filing disclosure bounds
+
+D3 commit `c5fd530` passed [backend CI](https://github.com/NamTV2712/filingscope/actions/runs/43863754019).
+Its clean runtime checkout passed 613 tests with three missing-corpus skips.
+The customer-concentration reader retains the relation, fiscal period and
+sales basis in evidence. The verifier checks the cited disclosure against the
+asserted relation and rejects exact percentages claimed from an upper bound.
+On the original FinRank Devon top-customer question, routed research returned
+the disclosed upper limit of 10% of FY2024 sales revenue, citing physical PDF
+page 56. Raw public smoke results are in
+`data/independent-final/finrank-2025/d4-smoke.json`.

@@ -91,11 +91,43 @@ class FrozenDenseRetriever:
         topics = {metric.metric_id for metric in ranker.extractor.extract(query).metrics} if ranker is not None else set()
         industry_lookup = "industry" in topics
         segment_lookup = len(topics) == 1 and topics <= BUSINESS_DISCLOSURE_METRICS and is_segment_list_question(query)
-        pool_size = max(top_k, STATEMENT_CANDIDATE_POOL) if wanted or industry_lookup or segment_lookup else top_k
+        bound_lookup = topics == {"customer_concentration"}
+        pool_size = max(top_k, STATEMENT_CANDIDATE_POOL) if wanted or industry_lookup or segment_lookup or bound_lookup else top_k
         local_order = [int(position) for position in np.argsort(-scores, kind="stable")[:pool_size]
                        if np.isfinite(scores[position])]
         order = local_order if positions is None else [int(positions[position]) for position in local_order]
         dense_scores = dict(zip(order, scores[local_order], strict=True))
+        if ranker is not None and bound_lookup:
+            from src.decision.filing_bounds import filing_customer_bounds
+            from src.ingestion.chunker import count_tokens
+
+            requirements = ranker.extractor.extract(query)
+            matched_pages = {}
+            scanned_pages = set()
+            for position in order:
+                chunk = self.chunks[position]
+                document, page = chunk.get("doc_name"), chunk.get("page_number")
+                if not isinstance(document, str) or type(page) is not int or chunk.get("doc_type") != "10-K":
+                    continue
+                if (document, page) in scanned_pages:
+                    continue
+                scanned_pages.add((document, page))
+                entity = ranker.extractor.catalog.metadata_entity_id(chunk.get("ticker"), chunk.get("company"), document)
+                if entity not in requirements.companies:
+                    continue
+                source = ranker.pages.get(document, page) or ""
+                aliases = ranker.extractor.catalog.aliases_for(entity)
+                if any(bound.period in requirements.periods for bound in filing_customer_bounds(source, aliases)):
+                    matched_pages[position] = source
+            order.sort(key=lambda position: position not in matched_pages)
+            return [
+                {**self.chunks[position], "text": matched_pages[position], "token_count": count_tokens(matched_pages[position]),
+                 "score": float(dense_scores[position]),
+                 "score_kind": "dense", "retrieval_method": "filing_disclosure"}
+                if position in matched_pages else
+                {**self.chunks[position], "score": float(dense_scores[position]), "score_kind": "dense"}
+                for position in order[:top_k]
+            ]
         if ranker is not None and wanted:
             ranked = sorted(order, key=lambda position: -ranker.priority(self.chunks[position], wanted))
             if ranked[:top_k] != order[:top_k]:

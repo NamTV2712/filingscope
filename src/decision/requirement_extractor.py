@@ -244,6 +244,10 @@ def permits_energy_segment_lookup(question: str, *, assertion: bool = False) -> 
 
 
 def _metrics(question: str) -> tuple[MetricRequirement, ...]:
+    from src.decision.filing_bounds import CUSTOMER_CONCENTRATION, customer_concentration_question
+
+    if customer_concentration_question(question):
+        return (CUSTOMER_CONCENTRATION,)
     folded = question.casefold().replace("’", "'")
     revenue_text = mask_revenue_components(folded)
     for metric in DISCLOSURE_METRICS:

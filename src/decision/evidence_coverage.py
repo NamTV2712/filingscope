@@ -233,6 +233,16 @@ def _facts_from_chunk(
         or chunk.get("filing_url")
     )
     observations: list[PeriodValuePair] = []
+    if metric.metric_id == "customer_concentration":
+        from src.decision.filing_bounds import filing_customer_bounds
+
+        return tuple(EvidenceFact(
+            evidence_id=chunk_id, entity_id=entity_id, metric_id=metric.metric_id,
+            period=bound.period, value_kind="topic", document_id=document_id,
+            page_number=page_number, source_url=str(source_url) if source_url else None,
+            value=f"{bound.relation}{bound.value}%",
+            relation=bound.relation, basis=bound.basis, subject_scope=bound.scope,
+        ) for bound in filing_customer_bounds(text, issuer_aliases) if page_number is not None)
     if metric.quantitative:
         if metric.metric_id in DISCLOSURE_METRIC_IDS or metric.metric_id in CONSOLIDATED_METRIC_CONCEPTS:
             # These mappings authorize accession-bound structured facts.
@@ -488,7 +498,7 @@ class EvidenceCoverageAnalyzer:
                 text = chunk.get("text")
                 if not isinstance(text, str):
                     continue
-                if not _contains_alias(text, metric.aliases):
+                if not _contains_alias(text, metric.aliases) and metric.metric_id != "customer_concentration":
                     continue
                 metric_seen[requirement.requirement_id] = True
                 text_periods = [

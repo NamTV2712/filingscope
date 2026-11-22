@@ -154,6 +154,9 @@ class EvidenceFact(BaseModel):
     unit_source_page: int | None = None
     filing_accession: str | None = None
     value_kind: str | None = None
+    relation: str | None = None
+    basis: str | None = None
+    subject_scope: str | None = None
     document_id: str
     page_number: int | None = None
     source_url: str | None = None
