@@ -31,11 +31,12 @@ MAX_QUESTION_LENGTH = 1000
 
 
 class LocalResearchServer(ThreadingHTTPServer):
-    def __init__(self, port: int, graph: SpecialistResearchGraph, *, stage_traces: bool = False):
+    def __init__(self, port: int, graph: SpecialistResearchGraph, *, stage_traces: bool = False, filing_runtime=None):
         super().__init__(("127.0.0.1", port), ResearchHandler)
         self.graph = graph
         self.research_lock = Lock()
         self.stage_traces = stage_traces
+        self.filing_runtime = filing_runtime
 
     @property
     def url(self) -> str:
@@ -173,6 +174,7 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument("--bundle", type=Path, help="Load a verified filing bundle instead of the historical P1 workspace")
     parser.add_argument("--p1-run", type=Path, default=P1_RUN)
     parser.add_argument("--statement-pages", type=Path, help="Pinned pypdf page cache for table normalization")
     parser.add_argument("--retrieval-policy", choices=("statement", "dense"), default="statement",
@@ -230,27 +232,38 @@ def main() -> None:
     from src.retrieval.pdf_page_cache import FrozenPdfPages
 
     torch.set_num_threads(args.threads)
-    print("Loading the frozen FinanceBench index and SEC snapshots…", flush=True)
-    chunks = load_frozen_corpus(args.p1_run)
-    vectors = load_frozen_vectors(args.p1_run, chunks)
-    sec = CompanyFactsReplay(args.sec_dir, SEC_ISSUERS, latest_filed=SEC_CUTOFF)
-    page_path = args.statement_pages or (P1_PAGE_CACHE if P1_PAGE_CACHE.is_file() else None)
-    pages = FrozenPdfPages.from_run(page_path, args.p1_run) if page_path is not None else None
-    router = ComplexityRouter(CorpusMap.from_chunks(chunks, index_generation_id=P1_INDEX_ID))
-    statement_ranker = FinancialStatementRanker(pages, router.extractor) if pages and args.retrieval_policy == "statement" else None
-    graph = SpecialistResearchGraph(
-        router=router,
-        retriever=FrozenDenseRetriever(
-            chunks, vectors, Embedder(device="cpu", revision=P1_EMBEDDING_REVISION),
-            pdf_pages=pages, statement_ranker=statement_ranker,
-        ),
-        sec_client=sec,
-        generator=generator,
-        provider_limits=provider_limits,
-        max_correction_passes=args.max_correction_passes,
-        ticker_by_company=COMPANY_TICKERS,
-    )
-    with LocalResearchServer(args.port, graph, stage_traces=args.stage_traces) as server:
+    filing_runtime = None
+    if args.bundle is not None:
+        from src.runtime.filing_bundle import load_filing_runtime
+
+        print("Loading the verified filing bundle…", flush=True)
+        filing_runtime = load_filing_runtime(
+            args.bundle, retrieval_policy=args.retrieval_policy, generator=generator, provider_limits=provider_limits,
+            max_correction_passes=args.max_correction_passes,
+        )
+        graph = filing_runtime.graph
+    else:
+        print("Loading the frozen FinanceBench index and SEC snapshots…", flush=True)
+        chunks = load_frozen_corpus(args.p1_run)
+        vectors = load_frozen_vectors(args.p1_run, chunks)
+        sec = CompanyFactsReplay(args.sec_dir, SEC_ISSUERS, latest_filed=SEC_CUTOFF)
+        page_path = args.statement_pages or (P1_PAGE_CACHE if P1_PAGE_CACHE.is_file() else None)
+        pages = FrozenPdfPages.from_run(page_path, args.p1_run) if page_path is not None else None
+        router = ComplexityRouter(CorpusMap.from_chunks(chunks, index_generation_id=P1_INDEX_ID))
+        statement_ranker = FinancialStatementRanker(pages, router.extractor) if pages and args.retrieval_policy == "statement" else None
+        graph = SpecialistResearchGraph(
+            router=router,
+            retriever=FrozenDenseRetriever(
+                chunks, vectors, Embedder(device="cpu", revision=P1_EMBEDDING_REVISION),
+                pdf_pages=pages, statement_ranker=statement_ranker,
+            ),
+            sec_client=sec,
+            generator=generator,
+            provider_limits=provider_limits,
+            max_correction_passes=args.max_correction_passes,
+            ticker_by_company=COMPANY_TICKERS,
+        )
+    with LocalResearchServer(args.port, graph, stage_traces=args.stage_traces, filing_runtime=filing_runtime) as server:
         print(f"FilingScope is ready at {server.url}", flush=True)
         try:
             server.serve_forever()

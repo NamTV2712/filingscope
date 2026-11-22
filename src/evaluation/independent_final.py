@@ -18,6 +18,7 @@ from src.evaluation.benchmark_io import wilson_rate
 from src.evaluation.multi_agent_ablation import (
     AblationObservation, evaluate_observation, paired_grounded_exact, summarize_ablation,
 )
+from src.runtime.filing_models import Corpus, Filing
 
 
 Hash = Annotated[str, StringConstraints(pattern=r"^sha256:[a-f0-9]{64}$")]
@@ -76,35 +77,6 @@ class Membership(_Record):
     issuer_ciks: tuple[Cik, ...] = Field(min_length=1)
     document_ids: tuple[Identifier, ...]
     through: date
-
-
-class Filing(_Record):
-    document_id: Identifier
-    cik: Cik
-    filed: date
-    form: Nonempty
-    accession: Annotated[str, StringConstraints(pattern=r"^\d{10}-\d{2}-\d{6}$")]
-    source_url: Annotated[str, StringConstraints(pattern=r"^https://www\.sec\.gov/Archives/")]
-    document_sha256: Hash
-
-    @model_validator(mode="after")
-    def validate_locator(self):
-        accession = self.accession.replace("-", "")
-        expected = f"https://www.sec.gov/Archives/edgar/data/{self.cik}/{accession}/"
-        if not self.source_url.startswith(expected) or not self.source_url.removeprefix(expected):
-            raise ValueError("SEC URL must identify the frozen registrant and accession")
-        return self
-
-
-class Corpus(_Record):
-    index_id: Identifier
-    fingerprint: Hash
-    index_manifest_sha256: Hash
-    embedding_manifest_sha256: Hash
-    chunks_sha256: Hash
-    pages_sha256: Hash
-    sec_manifest_sha256: Hash
-    filings: tuple[Filing, ...] = Field(min_length=1)
 
 
 class Question(_Record):

@@ -422,3 +422,14 @@ USD 15,919 million. It withheld the alternative total-revenue request when
 the two requested cells could not be bound to that basis. Focused tests
 cover a subordinate-table distractor, both cell references, zero denominator,
 wrong date, incompatible currency and modified answers.
+
+### D6 shared filing bundle runtime
+
+D5 commit `11d0438` passed [backend CI](https://github.com/NamTV2712/filingscope/actions/runs/44978019097).
+Added `--bundle` to the loopback workspace. Benchmark prediction and the
+workspace assemble their graph from the same verified filing artifacts. The
+loader checks PDF, page, chunk, index, vector and snapshot hashes and pins the
+model revision and accession metadata. Document-only bundles work with an
+empty Company Facts inventory. The runtime imports no benchmark questions or
+labels. Focused tests check shared graph/HTTP output, invalid artifacts and
+the independent protocol. Offline startup loaded both real filing bundles.

@@ -44,51 +44,12 @@ def predict_filing_questions(bundle: Path, corpus: Corpus, questions: list[Quest
 
     from scripts.run_multi_agent_ablation import _PolicyLayer, _RecordingRetriever
     from scripts.run_specialist_architectures import observe
-    from src.agent.complexity_router import ComplexityRouter
-    from src.agent.specialist_graph import SpecialistResearchGraph
-    from src.evaluation.company_facts_replay import CompanyFactsReplay
-    from src.research.corpus_map import CorpusMap
-    from src.retrieval.embedder import MODEL_NAME, Embedder
-    from src.retrieval.financial_statement_ranker import FinancialStatementRanker
-    from src.retrieval.frozen_artifacts import load_frozen_corpus, load_frozen_vectors
-    from src.retrieval.frozen_dense import FrozenDenseRetriever
-    from src.retrieval.pdf_page_cache import FrozenPdfPages
+    from src.runtime.filing_bundle import load_filing_runtime
 
     started = time.perf_counter()
     torch.set_num_threads(threads)
-    index = bundle / "index"
-    read_pinned(index / "index_manifest.json", corpus.index_manifest_sha256)
-    embedding = json.loads(read_pinned(index / "embedding_manifest.json", corpus.embedding_manifest_sha256))
-    if embedding["embedding_model_id"] != MODEL_NAME:
-        raise ValueError("The final corpus must use the frozen Nomic embedding model")
-    if sha256_file(index / "corpus_chunks.jsonl") != corpus.chunks_sha256:
-        raise ValueError("Corpus chunk file differs from the reviewer freeze")
-    chunks = load_frozen_corpus(index, index_id=corpus.index_id, fingerprint=corpus.fingerprint)
-    documents = {item.document_id: item for item in corpus.filings}
-    if {chunk["document_id"] for chunk in chunks} != documents.keys():
-        raise ValueError("Indexed documents must match the frozen filing inventory")
-    for chunk in chunks:
-        filing = documents[chunk["document_id"]]
-        if chunk["doc_name"] != filing.document_id or int(chunk["cik"]) != filing.cik or chunk["source_url"] != filing.source_url:
-            raise ValueError("Indexed chunk provenance disagrees with the frozen filing inventory")
-    for filing in corpus.filings:
-        if sha256_file(bundle / "filings" / f"{filing.document_id}.pdf") != filing.document_sha256:
-            raise ValueError("A source PDF differs from the frozen filing inventory")
-    pages = FrozenPdfPages(bundle / "pages.jsonl", expected_sha256=corpus.pages_sha256)
-    vectors = load_frozen_vectors(index, chunks, fingerprint=corpus.fingerprint)
-    sec_manifest = json.loads(read_pinned(bundle / "sec/manifest.json", corpus.sec_manifest_sha256))
-    issuers = {ticker: item["cik"] for ticker, item in sec_manifest["issuers"].items()}
-    if not set(issuers.values()) <= {filing.cik for filing in corpus.filings}:
-        raise ValueError("SEC snapshots include issuers outside the frozen corpus")
-    sec = CompanyFactsReplay(bundle / "sec", issuers, latest_filed=cutoff)
-    ticker_by_cik = {cik: ticker for ticker, cik in issuers.items()}
-    tickers = {chunk["company"]: ticker_by_cik[int(chunk["cik"])] for chunk in chunks if int(chunk["cik"]) in ticker_by_cik}
-    router = ComplexityRouter(CorpusMap.from_chunks(chunks, index_generation_id=corpus.index_id))
-    retriever = _RecordingRetriever(FrozenDenseRetriever(
-        chunks, vectors, Embedder(device="cpu", revision=P1_EMBEDDING_REVISION), pdf_pages=pages,
-        statement_ranker=FinancialStatementRanker(pages, router.extractor),
-    ))
-    graph = SpecialistResearchGraph(router=router, retriever=retriever, sec_client=sec, ticker_by_company=tickers)
+    runtime = load_filing_runtime(bundle, corpus=corpus, cutoff=cutoff, retriever_wrapper=_RecordingRetriever)
+    graph, router, retriever, sec = runtime.graph, runtime.router, runtime.retriever, runtime.sec
     policy = _PolicyLayer(router.extractor)
     setup_ms = (time.perf_counter() - started) * 1000
     predictions = {arm: {} for arm in ARMS}
